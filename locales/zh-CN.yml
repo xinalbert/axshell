@@ -90,3 +90,5 @@ completed: "已完成"
 failed: "失败"
 cancelled: "已取消"
 session: "会话"
+
+software_builtin: "软件内置"

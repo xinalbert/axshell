@@ -90,3 +90,5 @@ completed: "Completed"
 failed: "Failed"
 cancelled: "Cancelled"
 session: "Session"
+
+software_builtin: "Built-in"

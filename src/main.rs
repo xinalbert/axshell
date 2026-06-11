@@ -1434,7 +1434,7 @@ impl Ashell {
                                         .gap_3()
                                         .child(
                                             div()
-                                                .w(px(180.))
+                                                .w(px(240.))
                                                 .child(t!("ui_font_family").to_string()),
                                         )
                                         .child(
@@ -1452,6 +1452,8 @@ impl Ashell {
                                                         || !names.contains(&current)
                                                     {
                                                         t!("system_default").to_string()
+                                                    } else if current == "Maple Mono NF CN" {
+                                                        format!("Maple Mono NF CN ({})", t!("software_builtin"))
                                                     } else {
                                                         current
                                                     }
@@ -1465,7 +1467,7 @@ impl Ashell {
                                                                 .read(cx)
                                                                 .ui_font_family
                                                                 .to_string();
-                                                            let names =
+                                                            let mut names =
                                                                 cx.text_system().all_font_names();
                                                             menu = menu.min_w(200.).max_h(
                                                                 px(320.),
@@ -1496,6 +1498,19 @@ impl Ashell {
                                                                     },
                                                                 )),
                                                             );
+                                                            
+                                                            let maple_font = "Maple Mono NF CN".to_string();
+                                                            if names.contains(&maple_font) {
+                                                                names.retain(|n| n != &maple_font);
+                                                                menu = menu.item(
+                                                                    PopupMenuItem::new(format!("{} ({})", maple_font, t!("software_builtin")))
+                                                                        .checked(current == maple_font)
+                                                                        .on_click(window.listener_for(&view, move |this, _, window, cx| {
+                                                                            this.change_ui_font_family("Maple Mono NF CN", window, cx);
+                                                                        }))
+                                                                ).separator();
+                                                            }
+                                                            
                                                             for name in names {
                                                                 let checked =
                                                                     name == current;
@@ -1531,7 +1546,7 @@ impl Ashell {
                                         .gap_3()
                                         .child(
                                             div()
-                                                .w(px(180.))
+                                                .w(px(240.))
                                                 .child(t!("terminal_font_family").to_string()),
                                         )
                                         .child(
@@ -1539,9 +1554,12 @@ impl Ashell {
                                                 .small()
                                                 .icon(IconName::ChevronsUpDown)
                                                 .label({
-                                                    view.read(cx)
-                                                        .terminal_font_family
-                                                        .to_string()
+                                                    let current = view.read(cx).terminal_font_family.to_string();
+                                                    if current == "Maple Mono NF CN" {
+                                                        format!("Maple Mono NF CN ({})", t!("software_builtin"))
+                                                    } else {
+                                                        current
+                                                    }
                                                 })
                                                 .dropdown_menu_with_anchor(
                                                     Anchor::BottomRight,
@@ -1552,11 +1570,24 @@ impl Ashell {
                                                                 .read(cx)
                                                                 .terminal_font_family
                                                                 .to_string();
-                                                            let names =
+                                                            let mut names =
                                                                 cx.text_system().all_font_names();
                                                             menu = menu.min_w(200.).max_h(
                                                                 px(320.),
                                                             ).scrollable(true);
+                                                            
+                                                            let maple_font = "Maple Mono NF CN".to_string();
+                                                            if names.contains(&maple_font) {
+                                                                names.retain(|n| n != &maple_font);
+                                                                menu = menu.item(
+                                                                    PopupMenuItem::new(format!("{} ({})", maple_font, t!("software_builtin")))
+                                                                        .checked(current == maple_font)
+                                                                        .on_click(window.listener_for(&view, move |this, _, _window, cx| {
+                                                                            this.change_terminal_font_family("Maple Mono NF CN", cx);
+                                                                        }))
+                                                                ).separator();
+                                                            }
+
                                                             for name in names {
                                                                 let checked =
                                                                     name == current;
