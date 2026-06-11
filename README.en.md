@@ -8,6 +8,15 @@
 
 This project focuses on providing a high-performance and visually appealing shell workspace by combining local and remote environments with a rich set of built-in features. 
 
+## 🚀 v0.3 Massive Update!
+
+The brand-new v0.3 introduces comprehensive upgrades to both architecture and user experience:
+- ✨ **Global Real-Time Font Sizing** (Thanks to [@ancion](https://github.com/ancion) for [PR #6](https://github.com/rust-kotlin/ashell/pull/6)): Customize your global UI fonts and terminal rendering fonts independently. Adjust text size with real-time scaling and automatic persistence.
+- ✨ **Concurrent SFTP Transfers**: A dedicated Transfers dialog now supports highly optimized, concurrent file uploads and downloads with precise progress, speed, and ETA calculations.
+- ✨ **Persistent Workspace State**: Your sidebar width adjustments, terminal themes, font settings, and file visibility preferences are completely restored upon your next launch!
+- ✨ **Intelligent SSH Disconnect/Reconnect**: Greatly enhanced SSH connection resilience. Provides a beautiful and localized overlay for one-click re-connection on unexpected disconnections.
+- ✨ **Hot-Swappable i18n System**: Deeply optimized internationalization. Switch instantly between English and Simplified Chinese without restarting the application.
+
 ## Download
 
 You can download the latest pre-compiled releases for macOS, Windows, and Linux from the [GitHub Releases page](https://github.com/rust-kotlin/ashell/releases/latest).
