@@ -292,6 +292,7 @@ dependencies = [
  "chrono",
  "directories",
  "flate2",
+ "futures",
  "gpui",
  "gpui-component",
  "gpui-component-assets",

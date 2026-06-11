@@ -61,6 +61,18 @@ pub enum BackendEvent {
         tab_id: String,
         reason: String,
     },
+    TransferProgress {
+        #[allow(dead_code)]
+        tab_id: String,
+        id: String,
+        transferred: u64,
+        total: Option<u64>,
+        state: TransferState,
+    },
+    TransferStarted {
+        tab_id: String,
+        info: TransferInfo,
+    },
     Closed {
         tab_id: String,
         reason: String,
@@ -187,7 +199,7 @@ impl TerminalTab {
         tab.connected = false;
         tab.sftp = Some(SftpUiState {
             current_path: "/".into(),
-            status: "sftp connecting...".into(),
+            status: t!("sftp_connecting").to_string(),
             entries: Vec::new(),
             selected_path: None,
             preview: None,
@@ -425,6 +437,7 @@ impl EventListener for TerminalListener {
     }
 }
 
+use rust_i18n::t;
 fn new_term(
     cols: u16,
     rows: u16,
@@ -647,4 +660,39 @@ fn modifier_code(keystroke: &Keystroke) -> u32 {
         modifier_code |= 1 << 2;
     }
     modifier_code + 1
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum TransferType {
+    Upload,
+    Download,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum TransferState {
+    Running,
+    Paused,
+    Completed,
+    Failed(String),
+    Cancelled,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct TransferInfo {
+    pub id: String,
+    pub name: String,
+    pub source: String,
+    pub target: String,
+    pub kind: TransferType,
+    pub total_bytes: Option<u64>,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct Transfer {
+    pub tab_id: String,
+    pub tab_title: String,
+    pub info: TransferInfo,
+    pub transferred: u64,
+    pub total: Option<u64>,
+    pub state: TransferState,
 }
