@@ -1,0 +1,210 @@
+use gpui::{Anchor, Context, IntoElement, SharedString, Window, px};
+use gpui_component::{
+    ActiveTheme as _, IconName, Sizable as _, Theme, ThemeMode, ThemeRegistry,
+    button::{Button, ButtonVariants as _},
+    menu::{DropdownMenu as _, PopupMenuItem},
+};
+use rust_i18n::t;
+
+use crate::Ashell;
+
+pub(crate) fn set_theme_font_names(theme: &mut Theme, ui_font_family: &str) {
+    theme.font_family = ui_font_family.into();
+    theme.mono_font_family = ui_font_family.into();
+}
+
+impl Ashell {
+    pub(crate) fn switch_theme_mode(&mut self, mode: ThemeMode, window: &mut Window, cx: &mut Context<Self>) {
+        self.follow_system_theme = false;
+        self.theme_mode = mode;
+        self.apply_theme_preferences(window, cx);
+        self.status = format!("theme mode: {}", cx.theme().mode.name()).into();
+        self.persist_theme_preferences();
+        cx.notify();
+    }
+
+    pub(crate) fn apply_theme(&mut self, name: SharedString, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(theme_config) = ThemeRegistry::global(cx).themes().get(&name).cloned() else {
+            self.status = format!("theme not found: {name}").into();
+            cx.notify();
+            return;
+        };
+
+        if theme_config.mode.is_dark() {
+            self.dark_theme_name = name.clone();
+        } else {
+            self.light_theme_name = name.clone();
+        }
+        self.apply_theme_preferences(window, cx);
+        self.status = format!("theme: {name}").into();
+        self.persist_theme_preferences();
+        window.refresh();
+        cx.notify();
+    }
+
+    pub(crate) fn set_follow_system_theme(
+        &mut self,
+        follow: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.follow_system_theme = follow;
+        if follow {
+            self.status = "theme mode: system".into();
+        } else {
+            self.status = format!("theme mode: {}", cx.theme().mode.name()).into();
+        }
+        self.apply_theme_preferences(window, cx);
+        self.persist_theme_preferences();
+        cx.notify();
+    }
+
+    pub(crate) fn set_display_language(&mut self, locale: &str, window: &mut Window, cx: &mut Context<Self>) {
+        self.config.set_locale(locale);
+        let mut active_locale = locale.to_string();
+        if active_locale == "system" {
+            active_locale = sys_locale::get_locale().unwrap_or_else(|| "en".to_string());
+            if active_locale.starts_with("zh") {
+                active_locale = "zh-CN".to_string();
+            } else {
+                active_locale = "en".to_string();
+            }
+        }
+        rust_i18n::set_locale(&active_locale);
+        gpui_component::set_locale(&active_locale);
+        if let Err(err) = self.config.save() {
+            tracing::warn!("failed to save language preferences: {err:#}");
+        }
+        window.refresh();
+        cx.notify();
+    }
+
+    pub(crate) fn apply_theme_preferences(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let light_theme = ThemeRegistry::global(cx)
+            .themes()
+            .get(&self.light_theme_name)
+            .cloned()
+            .unwrap_or_else(|| ThemeRegistry::global(cx).default_light_theme().clone());
+        let dark_theme = ThemeRegistry::global(cx)
+            .themes()
+            .get(&self.dark_theme_name)
+            .cloned()
+            .unwrap_or_else(|| ThemeRegistry::global(cx).default_dark_theme().clone());
+        let theme = Theme::global_mut(cx);
+        theme.light_theme = light_theme;
+        theme.dark_theme = dark_theme;
+        theme.font_size = px(self.ui_font_size);
+        set_theme_font_names(theme, &self.ui_font_family);
+
+        if self.follow_system_theme {
+            Theme::sync_system_appearance(Some(window), cx);
+        } else {
+            Theme::change(self.theme_mode, Some(window), cx);
+        }
+    }
+
+    pub(crate) fn persist_theme_preferences(&mut self) {
+        let theme_mode_str = match self.theme_mode {
+            ThemeMode::Light => "light",
+            ThemeMode::Dark => "dark",
+        };
+        self.config.set_theme_preferences(
+            self.follow_system_theme,
+            theme_mode_str,
+            self.light_theme_name.to_string(),
+            self.dark_theme_name.to_string(),
+        );
+        if let Err(err) = self.config.save() {
+            tracing::warn!("failed to save theme preferences: {err:#}");
+        }
+    }
+
+    pub(crate) fn theme_dropdown(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let view = cx.entity();
+        let themes = ThemeRegistry::global(cx)
+            .sorted_themes()
+            .into_iter()
+            .cloned()
+            .collect::<Vec<_>>();
+        let light_themes = themes
+            .iter()
+            .filter(|theme| !theme.mode.is_dark())
+            .map(|theme| theme.name.clone())
+            .collect::<Vec<_>>();
+        let dark_themes = themes
+            .iter()
+            .filter(|theme| theme.mode.is_dark())
+            .map(|theme| theme.name.clone())
+            .collect::<Vec<_>>();
+        let follow_system = self.follow_system_theme;
+        let is_dark_mode = cx.theme().mode.is_dark();
+        let light_theme_name = self.light_theme_name.clone();
+        let dark_theme_name = self.dark_theme_name.clone();
+        let icon = if follow_system {
+            IconName::Sun
+        } else if is_dark_mode {
+            IconName::Moon
+        } else {
+            IconName::Sun
+        };
+
+        Button::new("theme-dropdown")
+            .ghost()
+            .small()
+            .icon(icon)
+            .dropdown_menu_with_anchor(Anchor::BottomRight, move |mut menu, window, _| {
+                menu = menu
+                    .min_w(220.)
+                    .item(
+                        PopupMenuItem::new(t!("follow_system"))
+                            .checked(follow_system)
+                            .on_click(window.listener_for(&view, |this, _, window, cx| {
+                                this.set_follow_system_theme(true, window, cx)
+                            })),
+                    )
+                    .item(
+                        PopupMenuItem::new(t!("use_light_mode"))
+                            .checked(!follow_system && !is_dark_mode)
+                            .on_click(window.listener_for(&view, |this, _, window, cx| {
+                                this.switch_theme_mode(ThemeMode::Light, window, cx)
+                            })),
+                    )
+                    .item(
+                        PopupMenuItem::new(t!("use_dark_mode"))
+                            .checked(!follow_system && is_dark_mode)
+                            .on_click(window.listener_for(&view, |this, _, window, cx| {
+                                this.switch_theme_mode(ThemeMode::Dark, window, cx)
+                            })),
+                    )
+                    .separator()
+                    .label(t!("light_theme").to_string());
+
+                for theme_name in light_themes.clone() {
+                    let checked = theme_name == light_theme_name;
+                    menu = menu.item(
+                        PopupMenuItem::new(theme_name.clone())
+                            .checked(checked)
+                            .on_click(window.listener_for(&view, move |this, _, window, cx| {
+                                this.apply_theme(theme_name.clone(), window, cx)
+                            })),
+                    );
+                }
+
+                menu = menu.separator();
+                menu = menu.label(t!("dark_theme").to_string());
+
+                for theme_name in dark_themes.clone() {
+                    let checked = theme_name == dark_theme_name;
+                    menu = menu.item(
+                        PopupMenuItem::new(theme_name.clone())
+                            .checked(checked)
+                            .on_click(window.listener_for(&view, move |this, _, window, cx| {
+                                this.apply_theme(theme_name.clone(), window, cx)
+                            })),
+                    );
+                }
+
+                menu
+            })
+    }
+}

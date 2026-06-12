@@ -1,10 +1,19 @@
 use std::{
     collections::BTreeMap,
+    ffi::OsStr,
     time::{Duration, Instant},
 };
 
 use anyhow::{Result, anyhow};
 use sysinfo::{Disks, Networks, System};
+
+/// Known virtual/ram filesystems to exclude from disk monitoring.
+fn is_real_filesystem(fs: &OsStr) -> bool {
+    !matches!(
+        fs.to_str(),
+        Some("tmpfs" | "devtmpfs" | "ramfs" | "overlay" | "aufs")
+    )
+}
 
 #[derive(Debug, Clone, Default)]
 pub struct DiskSample {
@@ -22,6 +31,8 @@ pub struct SystemSnapshot {
     pub swap_detail: String,
     pub net_rx: String,
     pub net_tx: String,
+    pub net_rx_rate: u64,
+    pub net_tx_rate: u64,
     pub disks: Vec<DiskSample>,
 }
 
@@ -82,10 +93,10 @@ impl SystemSampler {
         self.last_tx_total = tx_total;
         self.last_instant = now;
 
-        let disks = self
+        let mut disks: Vec<DiskSample> = self
             .disks
             .iter()
-            .filter(|disk| disk.total_space() > 0)
+            .filter(|disk| disk.total_space() > 0 && is_real_filesystem(disk.file_system()))
             .take(4)
             .map(|disk| DiskSample {
                 mount: disk.mount_point().to_string_lossy().to_string(),
@@ -93,6 +104,15 @@ impl SystemSampler {
                 total_bytes: disk.total_space(),
             })
             .collect();
+        disks.sort_by(|a, b| {
+            if a.mount == "/" {
+                return std::cmp::Ordering::Less;
+            }
+            if b.mount == "/" {
+                return std::cmp::Ordering::Greater;
+            }
+            a.mount.cmp(&b.mount)
+        });
 
         SystemSnapshot {
             cpu_percent,
@@ -102,6 +122,8 @@ impl SystemSampler {
             swap_detail: format!("{}/{}", format_bytes(swap_used), format_bytes(swap_total)),
             net_rx: format!("{}/s", format_bytes(rx_rate)),
             net_tx: format!("{}/s", format_bytes(tx_rate)),
+            net_rx_rate: rx_rate,
+            net_tx_rate: tx_rate,
             disks,
         }
     }
@@ -176,6 +198,20 @@ pub fn remote_snapshot_from_kv(raw: &str) -> Result<SystemSnapshot> {
     let rx_rate = parse_u64(&kv, "NET_RX");
     let tx_rate = parse_u64(&kv, "NET_TX");
 
+    // Safety filter: exclude entries with zero/negligible total size
+    // (catches any virtual fs lines that slipped past the script filter)
+    disks.retain(|d| d.total_bytes >= 1024 * 1024);
+
+    disks.sort_by(|a, b| {
+        if a.mount == "/" {
+            return std::cmp::Ordering::Less;
+        }
+        if b.mount == "/" {
+            return std::cmp::Ordering::Greater;
+        }
+        a.mount.cmp(&b.mount)
+    });
+
     Ok(SystemSnapshot {
         cpu_percent: cpu_percent.clamp(0.0, 1.0),
         mem_percent: ratio(mem_used, mem_total),
@@ -184,6 +220,8 @@ pub fn remote_snapshot_from_kv(raw: &str) -> Result<SystemSnapshot> {
         swap_detail: format!("{}/{}", format_bytes(swap_used), format_bytes(swap_total)),
         net_rx: format!("{}/s", format_bytes(rx_rate)),
         net_tx: format!("{}/s", format_bytes(tx_rate)),
+        net_rx_rate: rx_rate,
+        net_tx_rate: tx_rate,
         disks,
     })
 }

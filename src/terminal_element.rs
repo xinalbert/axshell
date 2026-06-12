@@ -221,7 +221,7 @@ impl InputHandler for TerminalInputHandler {
     ) -> Option<Bounds<Pixels>> {
         self.view
             .read(cx)
-            .terminal_ime_bounds_for_range(range_utf16, self.element_bounds, self.cell_width, self.line_height)
+            .terminal_ime_bounds_for_range(range_utf16, self.element_bounds)
     }
 
     fn character_index_for_point(

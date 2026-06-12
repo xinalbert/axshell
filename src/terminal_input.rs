@@ -1,0 +1,347 @@
+use std::ops::Range;
+
+use alacritty_terminal::index::Side;
+use alacritty_terminal::selection::SelectionType;
+use gpui::{
+    ClipboardItem, Context, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent,
+    MouseUpEvent, Pixels, Point, ScrollDelta, ScrollWheelEvent, Window, px,
+};
+
+use crate::{
+    Ashell,
+    terminal::{BackendCommand, encode_key},
+    TerminalBacktabKey, TerminalTabKey,
+};
+
+impl Ashell {
+    pub(crate) fn on_terminal_key_down(
+        &mut self,
+        event: &KeyDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if event.keystroke.modifiers.secondary() && event.keystroke.key == "," {
+            self.show_settings_dialog(window, cx);
+            window.prevent_default();
+            cx.stop_propagation();
+            return;
+        }
+        if event.keystroke.modifiers.shift
+            && event.keystroke.modifiers.secondary()
+            && event.keystroke.key == "o"
+        {
+            self.show_selector_dialog(window, cx);
+            window.prevent_default();
+            cx.stop_propagation();
+            return;
+        }
+        if event.keystroke.modifiers.secondary() && event.keystroke.key.eq_ignore_ascii_case("c") {
+            if let Some(text) = self.active_terminal_selection_text() {
+                cx.write_to_clipboard(ClipboardItem::new_string(text));
+                window.prevent_default();
+                cx.stop_propagation();
+                return;
+            }
+        }
+        if event.keystroke.modifiers.secondary() && event.keystroke.key.eq_ignore_ascii_case("v") {
+            if let Some(clipboard) = cx.read_from_clipboard() {
+                if let Some(text) = clipboard.text() {
+                    self.paste_into_terminal(&text, window, cx);
+                    return;
+                }
+            }
+        }
+
+        if event.prefer_character_input {
+            if let Some(text) = event.keystroke.key_char.as_deref() {
+                if !text.is_empty()
+                    && !event.keystroke.modifiers.control
+                    && !event.keystroke.modifiers.function
+                    && !event.keystroke.modifiers.platform
+                {
+                    self.send_terminal_input(text.as_bytes().to_vec(), window, cx);
+                }
+            }
+            return;
+        }
+
+        let Some(active_id) = self.active_tab.clone() else {
+            return;
+        };
+        let Some(tab) = self.tabs.iter_mut().find(|t| t.id == active_id) else {
+            return;
+        };
+
+        if tab.render_snapshot().display_offset > 0 {
+            tab.scroll_to_bottom();
+        }
+        tab.clear_selection();
+
+        if let Some(bytes) = encode_key(&event.keystroke, tab.app_cursor_mode(), false) {
+            tab.backend.send(BackendCommand::Input(bytes));
+            window.prevent_default();
+            cx.stop_propagation();
+            cx.notify();
+        }
+    }
+
+    pub(crate) fn on_terminal_tab_action(
+        &mut self,
+        _: &TerminalTabKey,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.send_terminal_input(vec![b'\t'], window, cx);
+    }
+
+    pub(crate) fn on_terminal_backtab_action(
+        &mut self,
+        _: &TerminalBacktabKey,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.send_terminal_input(b"\x1b[Z".to_vec(), window, cx);
+    }
+
+    fn send_terminal_input(&mut self, bytes: Vec<u8>, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(active_id) = self.active_tab.clone() else {
+            return;
+        };
+        let Some(tab) = self.tabs.iter_mut().find(|t| t.id == active_id) else {
+            return;
+        };
+
+        if tab.render_snapshot().display_offset > 0 {
+            tab.scroll_to_bottom();
+        }
+
+        tab.clear_selection();
+        tab.backend.send(BackendCommand::Input(bytes));
+        window.prevent_default();
+        cx.stop_propagation();
+        cx.notify();
+    }
+
+    fn active_terminal_selection_text(&self) -> Option<String> {
+        let active_id = self.active_tab.as_ref()?;
+        self.tabs
+            .iter()
+            .find(|tab| &tab.id == active_id)
+            .and_then(|tab| tab.selection_text())
+    }
+
+    fn paste_into_terminal(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(active_id) = self.active_tab.clone() else {
+            return;
+        };
+        let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == active_id) else {
+            return;
+        };
+
+        if tab.render_snapshot().display_offset > 0 {
+            tab.scroll_to_bottom();
+        }
+        tab.clear_selection();
+        tab.paste_text(text);
+        window.prevent_default();
+        cx.stop_propagation();
+        cx.notify();
+    }
+
+    pub(crate) fn terminal_accepts_text_input(&self) -> bool {
+        self.active_tab.is_some()
+    }
+
+    pub(crate) fn terminal_marked_text_range(&self) -> Option<Range<usize>> {
+        self.terminal_marked_text
+            .as_ref()
+            .map(|text| 0..text.encode_utf16().count())
+    }
+
+    pub(crate) fn set_terminal_marked_text(
+        &mut self,
+        text: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.terminal_marked_text = if text.is_empty() { None } else { Some(text) };
+        window.invalidate_character_coordinates();
+        cx.notify();
+    }
+
+    pub(crate) fn clear_terminal_marked_text(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.terminal_marked_text.take().is_some() {
+            window.invalidate_character_coordinates();
+            cx.notify();
+        }
+    }
+
+    pub(crate) fn commit_terminal_ime_text(
+        &mut self,
+        text: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(active_id) = self.active_tab.clone() else {
+            return;
+        };
+        let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == active_id) else {
+            return;
+        };
+
+        if tab.render_snapshot().display_offset > 0 {
+            tab.scroll_to_bottom();
+        }
+        tab.clear_selection();
+        self.terminal_marked_text = None;
+        tab.backend
+            .send(BackendCommand::Input(text.as_bytes().to_vec()));
+        window.invalidate_character_coordinates();
+        cx.notify();
+    }
+
+    pub(crate) fn on_terminal_right_click(
+        &mut self,
+        _event: &MouseDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.config.right_click_copy_paste() {
+            return;
+        }
+
+        let mut handled = false;
+        if let Some(text) = self.active_terminal_selection_text() {
+            if !text.is_empty() {
+                cx.write_to_clipboard(gpui::ClipboardItem::new_string(text));
+
+                let active_id = self.active_tab.clone();
+                if let Some(active_id) = active_id {
+                    if let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == active_id) {
+                        tab.clear_selection();
+                    }
+                }
+                cx.notify();
+                handled = true;
+            }
+        }
+
+        if !handled {
+            if let Some(clipboard_item) = cx.read_from_clipboard() {
+                if let Some(text) = clipboard_item.text() {
+                    if !text.is_empty() {
+                        self.paste_into_terminal(&text, window, cx);
+                    }
+                }
+            }
+        }
+    }
+
+    pub(crate) fn begin_terminal_selection(&mut self, event: &MouseDownEvent, cx: &mut Context<Self>) {
+        let click_count = event.click_count.max(1);
+        let selection_type = match click_count {
+            1 => SelectionType::Simple,
+            2 => SelectionType::Semantic,
+            3 => SelectionType::Lines,
+            _ => SelectionType::Simple,
+        };
+        let Some((row, col, side)) = self.terminal_grid_point_and_side(event.position) else {
+            return;
+        };
+        let Some(active_id) = self.active_tab.clone() else {
+            return;
+        };
+        if let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == active_id) {
+            tab.begin_selection(row, col, side, selection_type);
+            self.terminal_selecting = true;
+            cx.notify();
+        }
+    }
+
+    pub(crate) fn on_terminal_mouse_move(
+        &mut self,
+        event: &MouseMoveEvent,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.terminal_selecting || event.pressed_button != Some(MouseButton::Left) {
+            return;
+        }
+        let Some((row, col, side)) = self.terminal_grid_point_and_side(event.position) else {
+            return;
+        };
+        let Some(active_id) = self.active_tab.clone() else {
+            return;
+        };
+        if let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == active_id) {
+            tab.update_selection(row, col, side);
+            cx.notify();
+        }
+    }
+
+    pub(crate) fn on_terminal_mouse_up(
+        &mut self,
+        _event: &MouseUpEvent,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.terminal_selecting = false;
+        cx.notify();
+    }
+
+    fn terminal_grid_point_and_side(
+        &self,
+        position: Point<Pixels>,
+    ) -> Option<(usize, usize, Side)> {
+        let bounds = self.terminal_bounds?;
+        if !bounds.contains(&position) {
+            return None;
+        }
+        let local_x = (position.x - bounds.origin.x).max(px(0.));
+        let local_y = (position.y - bounds.origin.y).max(px(0.));
+        let cell_width = px(self.terminal_cell_width());
+        let line_height = px(self.terminal_line_height());
+        let snapshot = self.active_snapshot()?;
+        let max_col = snapshot.cols.saturating_sub(1);
+        let max_row = snapshot.rows.saturating_sub(1);
+        let col = ((local_x / cell_width).floor() as usize).min(max_col);
+        let row = ((local_y / line_height).floor() as usize).min(max_row);
+        let cell_offset_x = px(local_x.as_f32() % cell_width.as_f32());
+        let side = if cell_offset_x >= (cell_width / 2.) {
+            Side::Right
+        } else {
+            Side::Left
+        };
+        Some((row, col, side))
+    }
+
+    pub(crate) fn on_terminal_scroll(
+        &mut self,
+        event: &ScrollWheelEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let delta_lines = match event.delta {
+            ScrollDelta::Lines(point) => point.y.round() as i32,
+            ScrollDelta::Pixels(point) => {
+                (point.y.as_f32() / self.terminal_line_height()).round() as i32
+            }
+        };
+        if delta_lines == 0 {
+            return;
+        }
+        let Some(active_id) = self.active_tab.clone() else {
+            return;
+        };
+        if let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == active_id) {
+            tab.scroll_history(delta_lines);
+            window.prevent_default();
+            cx.stop_propagation();
+            cx.notify();
+        }
+    }
+}

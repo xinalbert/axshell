@@ -1314,6 +1314,7 @@ async fn upload_paths_impl(
         }
     }
 
+
     // Create directories sequentially first
     for dir in dirs_to_create {
         create_remote_dir_all(sftp, &dir).await?;

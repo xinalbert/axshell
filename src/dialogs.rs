@@ -1,0 +1,1258 @@
+use gpui::{
+    Anchor, Context, Focusable as _, FontWeight, InteractiveElement as _,
+    MouseButton, ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _,
+    Window, div, prelude::FluentBuilder as _, px, rems,
+};
+use gpui_component::{
+    ActiveTheme as _, Disableable as _, IconName, Sizable as _, WindowExt as _,
+    button::{Button, ButtonVariants as _},
+    dialog::Dialog,
+    h_flex,
+    input::Input,
+    menu::{DropdownMenu as _, PopupMenuItem},
+    progress::Progress,
+    scroll::{Scrollbar, ScrollbarShow},
+    switch::Switch,
+    v_flex,
+};
+use rust_i18n::t;
+
+use crate::{
+    Ashell,
+    config::AuthMethod,
+    system::format_bytes,
+};
+
+impl Ashell {
+    pub(crate) fn show_ssh_dialog(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let view = cx.entity();
+        let session_name_input = self.session_name_input.clone();
+        let host_input = self.host_input.clone();
+        let focus_host_input = host_input.clone();
+        let port_input = self.port_input.clone();
+        let user_input = self.user_input.clone();
+        let password_input = self.password_input.clone();
+        let key_path_input = self.key_path_input.clone();
+        let key_inline_input = self.key_inline_input.clone();
+
+        window.open_dialog(cx, move |dialog: Dialog, _window, _cx| {
+            dialog
+                .title(t!("new_ssh_connection"))
+                .w(px(520.))
+                .overlay_closable(true)
+                .content({
+                    let view = view.clone();
+                    let session_name_input = session_name_input.clone();
+                    let host_input = host_input.clone();
+                    let port_input = port_input.clone();
+                    let user_input = user_input.clone();
+                    let password_input = password_input.clone();
+                    let key_path_input = key_path_input.clone();
+                    let key_inline_input = key_inline_input.clone();
+                    move |content, window, cx| {
+                        let is_password = view.read(cx).ssh_auth_method == AuthMethod::Password;
+                        let is_editing = view.read(cx).editing_session_id.is_some();
+                        content.child(
+                            v_flex()
+                                .gap_3()
+                                .child(Input::new(&session_name_input).tab_index(0))
+                                .child(Input::new(&host_input).tab_index(1))
+                                .child(
+                                    h_flex()
+                                        .gap_2()
+                                        .child(Input::new(&port_input).w(px(96.)).tab_index(2))
+                                        .child(Input::new(&user_input).flex_1().tab_index(3)),
+                                )
+                                .child(
+                                    h_flex()
+                                        .gap_2()
+                                        .child(
+                                            Button::new("ssh-auth-password")
+                                                .label(t!("password").to_string())
+                                                .when(is_password, |button| button.primary())
+                                                .on_click(window.listener_for(
+                                                    &view,
+                                                    |this, _, _, cx| {
+                                                        this.set_ssh_auth_method(
+                                                            AuthMethod::Password,
+                                                            cx,
+                                                        )
+                                                    },
+                                                )),
+                                        )
+                                        .child(
+                                            Button::new("ssh-auth-key")
+                                                .label(t!("key").to_string())
+                                                .when(!is_password, |button| button.primary())
+                                                .on_click(window.listener_for(
+                                                    &view,
+                                                    |this, _, _, cx| {
+                                                        this.set_ssh_auth_method(
+                                                            AuthMethod::Key,
+                                                            cx,
+                                                        )
+                                                    },
+                                                )),
+                                        ),
+                                )
+                                .when(is_password, |this| {
+                                    this.child(
+                                        Input::new(&password_input).mask_toggle().tab_index(4),
+                                    )
+                                })
+                                .when(!is_password, |this| {
+                                    this.child(Input::new(&key_path_input).tab_index(5)).child(
+                                        Input::new(&key_inline_input).h(px(128.)).tab_index(6),
+                                    )
+                                })
+                                .child(
+                                    h_flex()
+                                        .justify_end()
+                                        .gap_2()
+                                        .child(
+                                            Button::new("connect-ssh-cancel")
+                                                .label(t!("cancel").to_string())
+                                                .on_click(|_, window, cx| window.close_dialog(cx)),
+                                        )
+                                        .child(
+                                            Button::new("connect-ssh-confirm")
+                                                .primary()
+                                                .label(if is_editing {
+                                                    t!("save")
+                                                } else {
+                                                    t!("connect")
+                                                })
+                                                .on_click(window.listener_for(
+                                                    &view,
+                                                    |this, _, window, cx| {
+                                                        this.connect_ssh(window, cx)
+                                                    },
+                                                )),
+                                        ),
+                                ),
+                        )
+                    }
+                })
+        });
+        window.defer(cx, move |window, cx| {
+            window.focus(&focus_host_input.read(cx).focus_handle(cx), cx);
+        });
+    }
+    pub(crate) fn show_selector_dialog(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let view = cx.entity();
+        let selector_focus_handle = self.selector_focus_handle.clone();
+        let deferred_selector_focus_handle = selector_focus_handle.clone();
+        let sessions = self.config.sessions().to_vec();
+        let active_session_id = self.active_session_id().map(ToOwned::to_owned);
+        self.selector_selection = self.default_selector_index();
+        window.open_dialog(cx, move |dialog: Dialog, _window, _| {
+            dialog
+                .title(t!("open_session").to_string())
+                .w(px(520.))
+                .on_ok({
+                    let view = view.clone();
+                    move |_, window, cx| {
+                        view.update(cx, |this, cx| {
+                            this.activate_selector_selection(window, cx);
+                        });
+                        false
+                    }
+                })
+                .content({
+                    let view = view.clone();
+                    let sessions = sessions.clone();
+                    let _active_session_id = active_session_id.clone();
+                    let selector_focus_handle = selector_focus_handle.clone();
+                    move |content, window, _cx| {
+                        let selected_index = view.read(_cx).selector_selection;
+                        let scroll_handle = view.read(_cx).selector_scroll_handle.clone();
+                        content.child(
+                            v_flex()
+                                .track_focus(&selector_focus_handle)
+                                .on_key_down(window.listener_for(
+                                    &view,
+                                    |this, event, window, cx| {
+                                        this.on_selector_key_down(event, window, cx)
+                                    },
+                                ))
+                                .gap_2()
+                                .child(
+                                    div()
+                                        .w_full()
+                                        .p_2()
+                                        .rounded_md()
+                                        .border_1()
+                                        .border_color(if selected_index == 0 {
+                                            _cx.theme().primary
+                                        } else {
+                                            _cx.theme().border
+                                        })
+                                        .bg(if selected_index == 0 {
+                                            _cx.theme().tab_active
+                                        } else {
+                                            _cx.theme().muted
+                                        })
+                                        .cursor_pointer()
+                                        .hover(|this| this.bg(_cx.theme().secondary))
+                                        .on_mouse_down(
+                                            MouseButton::Left,
+                                            window.listener_for(&view, |this, _, window, cx| {
+                                                this.open_local(cx);
+                                                window.close_dialog(cx);
+                                            }),
+                                        )
+                                        .child(
+                                            v_flex()
+                                                .gap_1()
+                                                .child(
+                                                    div()
+                                                        .text_size(rems(1.0))
+                                                        .font_weight(FontWeight::SEMIBOLD)
+                                                        .child(t!("local_terminal")),
+                                                )
+                                                .child(
+                                                    div()
+                                                        .text_size(rems(0.917))
+                                                        .text_color(_cx.theme().muted_foreground)
+                                                        .child(t!("open_local_shell_tab")),
+                                                ),
+                                        ),
+                                )
+                                .child(
+                                    div()
+                                        .w_full()
+                                        .p_2()
+                                        .rounded_md()
+                                        .border_1()
+                                        .border_color(if selected_index == 1 {
+                                            _cx.theme().primary
+                                        } else {
+                                            _cx.theme().border
+                                        })
+                                        .bg(if selected_index == 1 {
+                                            _cx.theme().tab_active
+                                        } else {
+                                            _cx.theme().muted
+                                        })
+                                        .cursor_pointer()
+                                        .hover(|this| this.bg(_cx.theme().secondary))
+                                        .on_mouse_down(
+                                            MouseButton::Left,
+                                            window.listener_for(&view, |this, _, window, cx| {
+                                                window.close_dialog(cx);
+                                                this.open_new_ssh_dialog(window, cx);
+                                            }),
+                                        )
+                                        .child(
+                                            v_flex()
+                                                .gap_1()
+                                                .child(
+                                                    div()
+                                                        .text_size(rems(1.0))
+                                                        .font_weight(FontWeight::SEMIBOLD)
+                                                        .child(t!("new_ssh_connection")),
+                                                )
+                                                .child(
+                                                    div()
+                                                        .text_size(rems(0.917))
+                                                        .text_color(_cx.theme().muted_foreground)
+                                                        .child(t!("create_or_edit_ssh_session")),
+                                                ),
+                                        ),
+                                )
+                                .child(
+                                    div()
+                                        .relative()
+                                        .max_h(px(320.))
+                                        .size_full()
+                                        .child(
+                                            v_flex()
+                                                .size_full()
+                                                .id("selector-scroll-view")
+                                                .track_scroll(&scroll_handle)
+                                                .overflow_y_scroll()
+                                                .gap_2()
+                                                .children(
+                                                    sessions.clone().into_iter().enumerate().map(
+                                                        |(ix, session)| {
+                                                            let connect_id = session.id.clone();
+                                                            let is_selected =
+                                                                selected_index == ix + 2;
+                                                            let name = session.name.clone();
+                                                            let detail = format!(
+                                                                "{}@{}:{}",
+                                                                session.user,
+                                                                session.host,
+                                                                session.port
+                                                            );
+                                                            div()
+                                                    .id(("selector-open", ix))
+                                                    .w_full()
+                                                    .p_2()
+                                                    .rounded_md()
+                                                    .border_1()
+                                                    .border_color(if is_selected {
+                                                        _cx.theme().primary
+                                                    } else {
+                                                        _cx.theme().border
+                                                    })
+                                                    .bg(if is_selected {
+                                                        _cx.theme().tab_active
+                                                    } else {
+                                                        _cx.theme().muted
+                                                    })
+                                                    .cursor_pointer()
+                                                    .hover(|this| this.bg(_cx.theme().secondary))
+                                                    .on_mouse_down(
+                                                        MouseButton::Left,
+                                                        window.listener_for(
+                                                            &view,
+                                                            move |this, _, window, cx| {
+                                                                this.connect_saved_session(
+                                                                    connect_id.clone(),
+                                                                    cx,
+                                                                );
+                                                                window.close_dialog(cx);
+                                                            },
+                                                        ),
+                                                    )
+                                                    .child(
+                                                        v_flex()
+                                                            .gap_1()
+                                                            .child(
+                                                                div()
+                                                                    .text_size(rems(1.0))
+                                                                    .font_weight(
+                                                                        FontWeight::SEMIBOLD,
+                                                                    )
+                                                                    .child(name),
+                                                            )
+                                                            .child(
+                                                                div()
+                                                                    .text_size(rems(0.917))
+                                                                    .text_color(
+                                                                        _cx.theme()
+                                                                            .muted_foreground,
+                                                                    )
+                                                                    .child(detail),
+                                                            ),
+                                                    )
+                                                        },
+                                                    ),
+                                                ),
+                                        )
+                                        .child(
+                                            div()
+                                                .absolute()
+                                                .top_0()
+                                                .bottom_0()
+                                                .left_0()
+                                                .right_0()
+                                                .child(
+                                                gpui_component::scroll::Scrollbar::new(
+                                                    &scroll_handle,
+                                                )
+                                                .id("selector-scrollbar")
+                                                .axis(
+                                                    gpui_component::scroll::ScrollbarAxis::Vertical,
+                                                )
+                                                .scrollbar_show(
+                                                    gpui_component::scroll::ScrollbarShow::Always,
+                                                ),
+                                            ),
+                                        ),
+                                ),
+                        )
+                    }
+                })
+        });
+        window.defer(cx, move |window, cx| {
+            window.focus(&deferred_selector_focus_handle, cx);
+        });
+    }
+    pub(crate) fn show_transfers_dialog(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let view = cx.entity();
+        window.open_dialog(cx, move |dialog: Dialog, _window, _| {
+            dialog
+                .title(t!("transfers").to_string())
+                .w(px(600.))
+                .content({
+                    let view = view.clone();
+                    move |content, window, cx| {
+                        let mut transfers = view.read(cx).transfers.clone();
+                        transfers.sort_by_key(|t| match t.state {
+                            crate::terminal::TransferState::Running
+                            | crate::terminal::TransferState::Paused => 0,
+                            _ => 1,
+                        });
+
+                        if transfers.is_empty() {
+                            return content.child(
+                                div()
+                                    .p_4()
+                                    .text_center()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child(t!("no_transfers_yet").to_string()),
+                            );
+                        }
+
+                        let list = v_flex().gap_2().children(transfers.into_iter().map(|t| {
+                            let (icon, _color) = match t.info.kind {
+                                crate::terminal::TransferType::Upload => {
+                                    (IconName::ArrowUp, cx.theme().primary)
+                                }
+                                crate::terminal::TransferType::Download => {
+                                    (IconName::ArrowDown, cx.theme().success)
+                                }
+                            };
+
+                            let (status_text, actions) = match t.state {
+                                crate::terminal::TransferState::Running => {
+                                    let percent = t
+                                        .total
+                                        .map(|tot| {
+                                            (t.transferred as f64 / tot as f64 * 100.0)
+                                                .clamp(0.0, 100.0)
+                                        })
+                                        .unwrap_or(0.0);
+                                    let txt = if let Some(tot) = t.total {
+                                        format!(
+                                            "{:.1}% ({}/{})",
+                                            percent,
+                                            format_bytes(t.transferred),
+                                            format_bytes(tot)
+                                        )
+                                    } else {
+                                        format!("{}...", t!("downloading"))
+                                    };
+                                    let btn_pause = Button::new(SharedString::from(format!(
+                                        "pause-{}",
+                                        t.info.id
+                                    )))
+                                    .ghost()
+                                    .small()
+                                    .icon(IconName::Pause)
+                                    .on_click(window.listener_for(&view, {
+                                        let id = t.info.id.clone();
+                                        let tab_id = t.tab_id.clone();
+                                        move |this, _, _, _| {
+                                            if let Some(handle) = this.sftp_handles.get(&tab_id) {
+                                                handle.pause_transfer(id.clone());
+                                            }
+                                        }
+                                    }));
+                                    let btn_cancel = Button::new(SharedString::from(format!(
+                                        "cancel-{}",
+                                        t.info.id
+                                    )))
+                                    .ghost()
+                                    .small()
+                                    .icon(IconName::Close)
+                                    .on_click(window.listener_for(&view, {
+                                        let id = t.info.id.clone();
+                                        let tab_id = t.tab_id.clone();
+                                        move |this, _, _, _| {
+                                            if let Some(handle) = this.sftp_handles.get(&tab_id) {
+                                                handle.cancel_transfer(id.clone());
+                                            }
+                                        }
+                                    }));
+                                    (txt, h_flex().gap_1().child(btn_pause).child(btn_cancel))
+                                }
+                                crate::terminal::TransferState::Paused => {
+                                    let txt = t!("paused").to_string();
+                                    let btn_resume = Button::new(SharedString::from(format!(
+                                        "resume-{}",
+                                        t.info.id
+                                    )))
+                                    .ghost()
+                                    .small()
+                                    .icon(IconName::Play)
+                                    .on_click(window.listener_for(&view, {
+                                        let id = t.info.id.clone();
+                                        let tab_id = t.tab_id.clone();
+                                        move |this, _, _, _| {
+                                            if let Some(handle) = this.sftp_handles.get(&tab_id) {
+                                                handle.resume_transfer(id.clone());
+                                            }
+                                        }
+                                    }));
+                                    let btn_cancel = Button::new(SharedString::from(format!(
+                                        "cancel-{}",
+                                        t.info.id
+                                    )))
+                                    .ghost()
+                                    .small()
+                                    .icon(IconName::Close)
+                                    .on_click(window.listener_for(&view, {
+                                        let id = t.info.id.clone();
+                                        let tab_id = t.tab_id.clone();
+                                        move |this, _, _, _| {
+                                            if let Some(handle) = this.sftp_handles.get(&tab_id) {
+                                                handle.cancel_transfer(id.clone());
+                                            }
+                                        }
+                                    }));
+                                    (txt, h_flex().gap_1().child(btn_resume).child(btn_cancel))
+                                }
+                                crate::terminal::TransferState::Completed => {
+                                    let txt = t!("completed").to_string();
+                                    let mut actions = h_flex().gap_1();
+                                    if matches!(
+                                        t.info.kind,
+                                        crate::terminal::TransferType::Download
+                                    ) {
+                                        let btn_folder = Button::new(SharedString::from(format!(
+                                            "folder-{}",
+                                            t.info.id
+                                        )))
+                                        .ghost()
+                                        .small()
+                                        .icon(IconName::Folder)
+                                        .on_click({
+                                            let target = t.info.target.clone();
+                                            move |_, _, _| {
+                                                let _ = std::process::Command::new("open")
+                                                    .arg(&target)
+                                                    .spawn();
+                                            }
+                                        });
+                                        actions = actions.child(btn_folder);
+                                    }
+                                    (txt, actions)
+                                }
+                                crate::terminal::TransferState::Failed(ref err) => {
+                                    (format!("{}: {}", t!("failed"), err), h_flex().gap_1())
+                                }
+                                crate::terminal::TransferState::Cancelled => {
+                                    (t!("cancelled").to_string(), h_flex().gap_1())
+                                }
+                            };
+
+                            let percent = match t.state {
+                                crate::terminal::TransferState::Completed => 100.0,
+                                _ => t
+                                    .total
+                                    .map(|tot| t.transferred as f64 / tot as f64 * 100.0)
+                                    .unwrap_or(0.0),
+                            };
+
+                            v_flex()
+                                .gap_1()
+                                .p_2()
+                                .rounded_md()
+                                .border_1()
+                                .border_color(cx.theme().border)
+                                .bg(cx.theme().muted)
+                                .child(
+                                    h_flex()
+                                        .items_center()
+                                        .gap_2()
+                                        .child(
+                                            Button::new(SharedString::from(format!(
+                                                "icon-{}",
+                                                t.info.id
+                                            )))
+                                            .icon(icon)
+                                            .ghost()
+                                            .small()
+                                            .disabled(true),
+                                        )
+                                        .child(
+                                            v_flex()
+                                                .flex_1()
+                                                .min_w(px(0.))
+                                                .overflow_hidden()
+                                                .child(
+                                                    div()
+                                                        .text_size(px(12.))
+                                                        .font_weight(FontWeight::SEMIBOLD)
+                                                        .text_color(cx.theme().foreground)
+                                                        .overflow_hidden()
+                                                        .child(t.info.name.clone()),
+                                                )
+                                                .child(
+                                                    div()
+                                                        .text_size(px(10.))
+                                                        .text_color(cx.theme().muted_foreground)
+                                                        .overflow_hidden()
+                                                        .child(format!(
+                                                            "{}: {}",
+                                                            t!("session"),
+                                                            t.tab_title
+                                                        )),
+                                                ),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_size(px(11.))
+                                                .text_color(cx.theme().muted_foreground)
+                                                .child(status_text),
+                                        )
+                                        .child(actions),
+                                )
+                                .when(
+                                    matches!(
+                                        t.state,
+                                        crate::terminal::TransferState::Running
+                                            | crate::terminal::TransferState::Paused
+                                    ),
+                                    |this| {
+                                        this.child(
+                                            Progress::new(format!("progress-{}", t.info.id))
+                                                .with_size(px(4.))
+                                                .value(percent as f32)
+                                                .color(cx.theme().primary)
+                                                .w_full(),
+                                        )
+                                    },
+                                )
+                        }));
+
+                        let scroll_handle = window
+                            .use_keyed_state("transfers-scroll", cx, |_, _| {
+                                gpui::ScrollHandle::default()
+                            })
+                            .read(cx)
+                            .clone();
+
+                        content.child(
+                            div()
+                                .w_full()
+                                .relative()
+                                .child(
+                                    div()
+                                        .w_full()
+                                        .max_h(px(400.))
+                                        .flex_col()
+                                        .id("transfers-scroll-view")
+                                        .track_scroll(&scroll_handle)
+                                        .overflow_y_scroll()
+                                        .child(list),
+                                )
+                                .child(
+                                    div()
+                                        .absolute()
+                                        .top_0()
+                                        .right_0()
+                                        .bottom_0()
+                                        .w(px(16.))
+                                        .child(
+                                            Scrollbar::vertical(&scroll_handle)
+                                                .scrollbar_show(ScrollbarShow::Always),
+                                        ),
+                                ),
+                        )
+                    }
+                })
+        });
+    }
+    pub(crate) fn show_delete_confirm_dialog(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let view = cx.entity();
+        let selected_entries = self
+            .active_sftp()
+            .map(|s| s.selected_entries.clone())
+            .unwrap_or_default();
+        if selected_entries.is_empty() {
+            return;
+        }
+
+        let has_system_path = selected_entries.iter().any(|path| {
+            let p = path.as_str();
+            p.starts_with("/bin/")
+                || p == "/bin"
+                || p.starts_with("/etc/")
+                || p == "/etc"
+                || p.starts_with("/usr/")
+                || p == "/usr"
+                || p.starts_with("/var/")
+                || p == "/var"
+                || p.starts_with("/sys/")
+                || p == "/sys"
+                || p.starts_with("/dev/")
+                || p == "/dev"
+                || p.starts_with("/boot/")
+                || p == "/boot"
+                || p.starts_with("/lib/")
+                || p == "/lib"
+                || p.starts_with("/opt/")
+                || p == "/opt"
+                || p.starts_with("/run/")
+                || p == "/run"
+                || p.starts_with("/sbin/")
+                || p == "/sbin"
+        });
+
+        window.open_dialog(cx, move |dialog: Dialog, _window, _| {
+            dialog
+                .title(t!("confirm_delete").to_string())
+                .w(px(500.))
+                .keyboard(false)
+                .on_ok({
+                    let view = view.clone();
+                    let paths_to_delete: Vec<String> =
+                        selected_entries.clone().into_iter().collect();
+                    move |_, window, cx| {
+                        view.update(cx, |this, cx| {
+                            if let Some(id) = this.active_tab.clone() {
+                                if let Some(handle) = this.sftp_handles.get(&id) {
+                                    let _ = handle.commands.send(
+                                        crate::sftp::SftpCommand::DeletePaths(
+                                            paths_to_delete.clone(),
+                                        ),
+                                    );
+                                }
+                                if let Some(tab) = this.tabs.iter_mut().find(|t| t.id == id) {
+                                    if let Some(sftp) = tab.sftp.as_mut() {
+                                        sftp.selected_entries.clear();
+                                    }
+                                }
+                            }
+                            cx.notify();
+                        });
+                        window.close_dialog(cx);
+                        true
+                    }
+                })
+                .content({
+                    let view = view.clone();
+                    move |content, _window, cx| {
+                        let scroll_handle = view.read(cx).sftp_delete_scroll_handle.clone();
+                        let selected_paths: Vec<String> = view
+                            .read(cx)
+                            .active_sftp()
+                            .map(|s| s.selected_entries.clone().into_iter().collect())
+                            .unwrap_or_default();
+
+                        let warning_block = if has_system_path {
+                            Some(
+                                div()
+                                    .w_full()
+                                    .p_3()
+                                    .mb_3()
+                                    .rounded_md()
+                                    .bg(gpui::rgba(0xff00001a))
+                                    .border_1()
+                                    .border_color(gpui::rgba(0xff000080))
+                                    .child(
+                                        div()
+                                            .text_color(gpui::rgba(0xff0000ff))
+                                            .font_weight(FontWeight::BOLD)
+                                            .child(t!("system_path_warning").to_string()),
+                                    ),
+                            )
+                        } else {
+                            None
+                        };
+
+                        let paths_list = div()
+                            .relative()
+                            .max_h(px(200.))
+                            .w_full()
+                            .border_1()
+                            .border_color(cx.theme().border)
+                            .bg(cx.theme().background)
+                            .rounded_md()
+                            .child(
+                                v_flex()
+                                    .id("delete-scroll-view")
+                                    .size_full()
+                                    .track_scroll(&scroll_handle)
+                                    .overflow_y_scroll()
+                                    .p_2()
+                                    .gap_1()
+                                    .children(selected_paths.into_iter().map(|path| {
+                                        div()
+                                            .text_size(rems(0.917))
+                                            .text_color(cx.theme().muted_foreground)
+                                            .child(path)
+                                    })),
+                            )
+                            .child(
+                                div().absolute().top_0().bottom_0().right_0().child(
+                                    gpui_component::scroll::Scrollbar::vertical(&scroll_handle)
+                                        .scrollbar_show(
+                                            gpui_component::scroll::ScrollbarShow::Always,
+                                        ),
+                                ),
+                            );
+
+                        content.child(
+                            v_flex()
+                                .w_full()
+                                .gap_2()
+                                .children(warning_block)
+                                .child(
+                                    div().text_size(rems(1.0)).mb_2().child(
+                                        t!(
+                                            "confirm_delete_desc",
+                                            count = view
+                                                .read(cx)
+                                                .active_sftp()
+                                                .map(|s| s.selected_entries.len())
+                                                .unwrap_or(0)
+                                        )
+                                        .to_string(),
+                                    ),
+                                )
+                                .child(paths_list),
+                        )
+                    }
+                })
+                .footer({
+                    let view = view.clone();
+                    let paths_to_delete: Vec<String> =
+                        selected_entries.clone().into_iter().collect();
+                    h_flex()
+                        .w_full()
+                        .justify_end()
+                        .gap_2()
+                        .child(
+                            Button::new("cancel")
+                                .ghost()
+                                .label(t!("cancel").to_string())
+                                .on_click(move |_, window, cx| {
+                                    window.close_dialog(cx);
+                                }),
+                        )
+                        .child(
+                            Button::new("confirm")
+                                .danger()
+                                .label(t!("confirm").to_string())
+                                .on_click({
+                                    let view = view.clone();
+                                    move |_, window, cx| {
+                                        view.update(cx, |this, cx| {
+                                            if let Some(id) = this.active_tab.clone() {
+                                                if let Some(handle) = this.sftp_handles.get(&id) {
+                                                    let _ = handle.commands.send(
+                                                        crate::sftp::SftpCommand::DeletePaths(
+                                                            paths_to_delete.clone(),
+                                                        ),
+                                                    );
+                                                }
+                                                if let Some(tab) =
+                                                    this.tabs.iter_mut().find(|t| t.id == id)
+                                                {
+                                                    if let Some(sftp) = tab.sftp.as_mut() {
+                                                        sftp.selected_entries.clear();
+                                                    }
+                                                }
+                                            }
+                                            cx.notify();
+                                        });
+                                        window.close_dialog(cx);
+                                    }
+                                }),
+                        )
+                })
+        });
+    }
+    pub(crate) fn show_settings_dialog(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let view = cx.entity();
+        window.open_dialog(cx, move |dialog: Dialog, _window, _| {
+            dialog
+                .title(t!("settings").to_string())
+                .w(px(560.))
+                .content({
+                    let view = view.clone();
+                    move |content, window, cx| {
+                        content.child(
+                            v_flex()
+                                .gap_3()
+                                .child(
+                                    h_flex()
+                                        .items_center()
+                                        .gap_3()
+                                        .child(
+                                            div()
+                                                .w(px(240.))
+                                                .child(t!("ui_font_size").to_string()),
+                                        )
+                                        .child(
+                                            Button::new("ui-font-size-down")
+                                                .label("-")
+                                                .on_click(window.listener_for(
+                                                    &view,
+                                                    |this, _, _, cx| {
+                                                        this.change_ui_font_size(-1.0, cx)
+                                                    },
+                                                )),
+                                        )
+                                        .child(div().min_w(px(64.)).text_center().child(format!(
+                                            "{:.0}px",
+                                            view.read(cx).ui_font_size
+                                        )))
+                                        .child(
+                                            Button::new("ui-font-size-up")
+                                                .label("+")
+                                                .on_click(window.listener_for(
+                                                    &view,
+                                                    |this, _, _, cx| {
+                                                        this.change_ui_font_size(1.0, cx)
+                                                    },
+                                                )),
+                                        ),
+                                )
+                                .child(
+                                    h_flex()
+                                        .items_center()
+                                        .gap_3()
+                                        .child(
+                                            div()
+                                                .w(px(240.))
+                                                .child(t!("terminal_font_size").to_string()),
+                                        )
+                                        .child(
+                                            Button::new("font-size-down")
+                                                .label("-")
+                                                .on_click(window.listener_for(
+                                                    &view,
+                                                    |this, _, _, cx| {
+                                                        this.change_terminal_font_size(-1.0, cx)
+                                                    },
+                                                )),
+                                        )
+                                        .child(div().min_w(px(64.)).text_center().child(format!(
+                                            "{:.0}px",
+                                            view.read(cx).terminal_font_size
+                                        )))
+                                        .child(
+                                            Button::new("font-size-up")
+                                                .label("+")
+                                                .on_click(window.listener_for(
+                                                    &view,
+                                                    |this, _, _, cx| {
+                                                        this.change_terminal_font_size(1.0, cx)
+                                                    },
+                                                )),
+                                        ),
+                                )
+                                .child(
+                                    h_flex()
+                                        .items_center()
+                                        .gap_3()
+                                        .child(
+                                            div()
+                                                .w(px(240.))
+                                                .child(t!("ui_font_family").to_string()),
+                                        )
+                                        .child(
+                                            Button::new("ui-font-dropdown")
+                                                .small()
+                                                .icon(IconName::ChevronsUpDown)
+                                                .label({
+                                                    let current = view
+                                                        .read(cx)
+                                                        .ui_font_family
+                                                        .to_string();
+                                                    let names = cx.text_system().all_font_names();
+                                                    if current == *".SystemUIFont"
+                                                        || current.is_empty()
+                                                        || !names.contains(&current)
+                                                    {
+                                                        t!("system_default").to_string()
+                                                    } else if current == "Maple Mono NF CN" {
+                                                        format!("Maple Mono NF CN ({})", t!("software_builtin"))
+                                                    } else {
+                                                        current
+                                                    }
+                                                })
+                                                .dropdown_menu_with_anchor(
+                                                    Anchor::BottomRight,
+                                                    {
+                                                        let view = view.clone();
+                                                        move |mut menu, window, cx| {
+                                                            let current = view
+                                                                .read(cx)
+                                                                .ui_font_family
+                                                                .to_string();
+                                                            let mut names =
+                                                                cx.text_system().all_font_names();
+                                                            menu = menu.min_w(200.).max_h(
+                                                                px(320.),
+                                                            ).scrollable(true);
+                                                            // "System Default" entry
+                                                            menu = menu.item(
+                                                                PopupMenuItem::new(
+                                                                    t!(
+                                                                        "system_default"
+                                                                    )
+                                                                    .to_string(),
+                                                                )
+                                                                .checked(
+                                                                    current == *".SystemUIFont"
+                                                                        || current
+                                                                            .is_empty(),
+                                                                )
+                                                                .on_click(window
+                                                                    .listener_for(
+                                                                    &view,
+                                                                    move |this, _, window,
+                                                                     cx| {
+                                                                        this.change_ui_font_family(
+                                                                            ".SystemUIFont",
+                                                                            window,
+                                                                            cx,
+                                                                        );
+                                                                    },
+                                                                )),
+                                                            );
+
+                                                            let maple_font = "Maple Mono NF CN".to_string();
+                                                            if names.contains(&maple_font) {
+                                                                names.retain(|n| n != &maple_font);
+                                                                menu = menu.item(
+                                                                    PopupMenuItem::new(format!("{} ({})", maple_font, t!("software_builtin")))
+                                                                        .checked(current == maple_font)
+                                                                        .on_click(window.listener_for(&view, move |this, _, window, cx| {
+                                                                            this.change_ui_font_family("Maple Mono NF CN", window, cx);
+                                                                        }))
+                                                                ).separator();
+                                                            }
+
+                                                            for name in names {
+                                                                let checked =
+                                                                    name == current;
+                                                                menu = menu.item(
+                                                                    PopupMenuItem::new(
+                                                                        name.clone(),
+                                                                    )
+                                                                    .checked(checked)
+                                                                    .on_click(window
+                                                                        .listener_for(
+                                                                        &view,
+                                                                        move |this, _,
+                                                                         window, cx| {
+                                                                            this
+                                                                                .change_ui_font_family(
+                                                                                &name,
+                                                                                window,
+                                                                                cx,
+                                                                            );
+                                                                        },
+                                                                    )),
+                                                                );
+                                                            }
+                                                            menu
+                                                        }
+                                                    },
+                                                ),
+                                        ),
+                                )
+                                .child(
+                                    h_flex()
+                                        .items_center()
+                                        .gap_3()
+                                        .child(
+                                            div()
+                                                .w(px(240.))
+                                                .child(t!("terminal_font_family").to_string()),
+                                        )
+                                        .child(
+                                            Button::new("terminal-font-dropdown")
+                                                .small()
+                                                .icon(IconName::ChevronsUpDown)
+                                                .label({
+                                                    let current = view.read(cx).terminal_font_family.to_string();
+                                                    if current == "Maple Mono NF CN" {
+                                                        format!("Maple Mono NF CN ({})", t!("software_builtin"))
+                                                    } else {
+                                                        current
+                                                    }
+                                                })
+                                                .dropdown_menu_with_anchor(
+                                                    Anchor::BottomRight,
+                                                    {
+                                                        let view = view.clone();
+                                                        move |mut menu, window, cx| {
+                                                            let current = view
+                                                                .read(cx)
+                                                                .terminal_font_family
+                                                                .to_string();
+                                                            let mut names =
+                                                                cx.text_system().all_font_names();
+                                                            menu = menu.min_w(200.).max_h(
+                                                                px(320.),
+                                                            ).scrollable(true);
+
+                                                            let maple_font = "Maple Mono NF CN".to_string();
+                                                            if names.contains(&maple_font) {
+                                                                names.retain(|n| n != &maple_font);
+                                                                menu = menu.item(
+                                                                    PopupMenuItem::new(format!("{} ({})", maple_font, t!("software_builtin")))
+                                                                        .checked(current == maple_font)
+                                                                        .on_click(window.listener_for(&view, move |this, _, _window, cx| {
+                                                                            this.change_terminal_font_family("Maple Mono NF CN", cx);
+                                                                        }))
+                                                                ).separator();
+                                                            }
+
+                                                            for name in names {
+                                                                let checked =
+                                                                    name == current;
+                                                                menu = menu.item(
+                                                                    PopupMenuItem::new(
+                                                                        name.clone(),
+                                                                    )
+                                                                    .checked(checked)
+                                                                    .on_click(window
+                                                                        .listener_for(
+                                                                        &view,
+                                                                        move |this, _,
+                                                                         _window, cx| {
+                                                                            this
+                                                                                .change_terminal_font_family(
+                                                                                &name,
+                                                                                cx,
+                                                                            );
+                                                                        },
+                                                                    )),
+                                                                );
+                                                            }
+                                                            menu
+                                                        }
+                                                    },
+                                                ),
+                                        ),
+                                )
+                                .child(
+                                    v_flex()
+                                        .gap_1()
+                                        .child(
+                                            h_flex()
+                                                .items_center()
+                                                .gap_3()
+                                                .child(div().w(px(240.)).child(t!("right_click_copy_paste").to_string()))
+                                                .child(
+                                                    Switch::new("right-click-copy-paste")
+                                                        .checked(view.read(cx).config.right_click_copy_paste())
+                                                        .on_click(window.listener_for(
+                                                            &view,
+                                                            |this, checked, _, cx| {
+                                                                this.config.set_right_click_copy_paste(*checked);
+                                                                let _ = this.config.save();
+                                                                cx.notify();
+                                                            },
+                                                        )),
+                                                )
+                                        )
+                                        .child(
+                                            div()
+                                                .text_size(rems(0.85))
+                                                .text_color(cx.theme().muted_foreground)
+                                                .child(t!("copy_paste_hint", key = if cfg!(target_os = "macos") { "Command" } else { "Ctrl" }).to_string())
+                                        )
+                                )
+                                .child(
+                                    h_flex()
+                                        .items_center()
+                                        .gap_3()
+                                        .child(div().w(px(240.)).child(t!("language").to_string()))
+                                        .child(
+                                            Button::new("language-dropdown")
+                                                .small()
+                                                .icon(IconName::Globe)
+                                                .label({
+                                                    let current_locale =
+                                                        view.read(cx).config.locale().to_string();
+                                                    if current_locale == "en" {
+                                                        t!("english").to_string()
+                                                    } else if current_locale == "zh-CN" {
+                                                        t!("chinese").to_string()
+                                                    } else {
+                                                        t!("follow_system").to_string()
+                                                    }
+                                                })
+                                                .dropdown_menu_with_anchor(Anchor::BottomRight, {
+                                                    let view = view.clone();
+                                                    move |mut menu, window, cx| {
+                                                        let current_locale = view
+                                                            .read(cx)
+                                                            .config
+                                                            .locale()
+                                                            .to_string();
+                                                        menu = menu
+                                                            .min_w(160.)
+                                                            .item(
+                                                                PopupMenuItem::new(
+                                                                    t!("follow_system").to_string(),
+                                                                )
+                                                                .checked(current_locale == "system")
+                                                                .on_click(window.listener_for(
+                                                                    &view,
+                                                                    |this, _, window, cx| {
+                                                                        this.set_display_language(
+                                                                            "system", window, cx,
+                                                                        )
+                                                                    },
+                                                                )),
+                                                            )
+                                                            .separator()
+                                                            .item(
+                                                                PopupMenuItem::new(
+                                                                    t!("english").to_string(),
+                                                                )
+                                                                .checked(current_locale == "en")
+                                                                .on_click(window.listener_for(
+                                                                    &view,
+                                                                    |this, _, window, cx| {
+                                                                        this.set_display_language(
+                                                                            "en", window, cx,
+                                                                        )
+                                                                    },
+                                                                )),
+                                                            )
+                                                            .item(
+                                                                PopupMenuItem::new(
+                                                                    t!("chinese").to_string(),
+                                                                )
+                                                                .checked(current_locale == "zh-CN")
+                                                                .on_click(window.listener_for(
+                                                                    &view,
+                                                                    |this, _, window, cx| {
+                                                                        this.set_display_language(
+                                                                            "zh-CN", window, cx,
+                                                                        )
+                                                                    },
+                                                                )),
+                                                            );
+                                                        menu
+                                                    }
+                                                }),
+                                        ),
+                                )
+                                .child(
+                                    h_flex()
+                                        .items_center()
+                                        .gap_3()
+                                        .child(
+                                            div().w(px(240.)).child(t!("reset_layout").to_string()),
+                                        )
+                                        .child(
+                                            Button::new("reset-layout")
+                                                .label(t!("reset").to_string())
+                                                .on_click(window.listener_for(
+                                                    &view,
+                                                    |this, _, window, cx| {
+                                                        this.reset_layout(window, cx);
+                                                    },
+                                                )),
+                                        ),
+                                )
+                                .child(
+                                    div()
+                                        .text_size(rems(1.0))
+                                        .text_color(cx.theme().muted_foreground)
+                                        .child(t!("theme_management_hint")),
+                                ),
+                        )
+                    }
+                })
+        });
+    }
+}
