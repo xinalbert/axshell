@@ -128,6 +128,16 @@ pub enum TitleBarStyle {
     Integrated,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum CursorStyle {
+    #[default]
+    Default,
+    Blink,
+    Beam,
+    BeamBlink,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConfigFile {
     #[serde(default = "default_follow_system_theme")]
@@ -154,6 +164,8 @@ pub struct ConfigFile {
     pub terminal_font_family: String,
     #[serde(default)]
     pub title_bar_style: TitleBarStyle,
+    #[serde(default)]
+    pub cursor_style: CursorStyle,
     #[serde(default)]
     pub sessions: Vec<Session>,
     #[serde(default)]
@@ -249,6 +261,7 @@ impl Default for ConfigFile {
             ui_font_family: default_ui_font_family(),
             terminal_font_family: default_terminal_font_family(),
             title_bar_style: TitleBarStyle::default(),
+            cursor_style: CursorStyle::default(),
             sessions: Vec::new(),
             window_bounds: None,
             workspace_panels: None,
@@ -601,6 +614,14 @@ impl ConfigStore {
 
     pub fn set_title_bar_style(&mut self, style: TitleBarStyle) {
         self.cache.title_bar_style = style;
+    }
+
+    pub fn cursor_style(&self) -> CursorStyle {
+        self.cache.cursor_style
+    }
+
+    pub fn set_cursor_style(&mut self, style: CursorStyle) {
+        self.cache.cursor_style = style;
     }
 
     pub fn show_hidden_files(&self) -> bool {

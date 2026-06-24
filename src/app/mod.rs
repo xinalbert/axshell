@@ -275,6 +275,7 @@ pub(crate) struct Ashell {
     pub(crate) status: SharedString,
     pub(crate) config: ConfigStore,
     pub(crate) active_title_bar_style: crate::session::config::TitleBarStyle,
+    pub(crate) cursor_style: crate::session::config::CursorStyle,
     pub(crate) system_sampler: SystemSampler,
     pub(crate) recording_action: Option<String>,
     pub(crate) active_dialog: Option<DialogKind>,
@@ -545,6 +546,7 @@ impl Ashell {
             dark_theme_name,
             ui_font_size: config.ui_font_size(),
             terminal_font_size: config.terminal_font_size(),
+            cursor_style: config.cursor_style(),
             ui_font_family,
             terminal_font_family,
             tabs: Vec::new(),
@@ -699,6 +701,7 @@ impl Ashell {
     pub(crate) fn start_event_pump(&self, window: &mut Window, cx: &mut Context<Self>) {
         cx.spawn_in(window, async move |this, mut cx| {
             let mut idle_frames = 0u32;
+            let mut last_blink_time = std::time::Instant::now();
             loop {
                 cx.background_executor()
                     .timer(Duration::from_millis(16))
@@ -710,9 +713,19 @@ impl Ashell {
                         changed = this.drain_backend_events(window, cx);
                         system_sampled = this.sample_system_if_due();
                         this.sync_theme_if_due(cx);
-                        if changed || system_sampled {
+                        let is_blinking = matches!(
+                            this.cursor_style,
+                            crate::session::config::CursorStyle::Blink
+                                | crate::session::config::CursorStyle::BeamBlink
+                        );
+                        let now = std::time::Instant::now();
+                        let blink_due = is_blinking && now.duration_since(last_blink_time) >= std::time::Duration::from_millis(600);
+                        if changed || system_sampled || blink_due {
                             cx.notify();
                             idle_frames = 0;
+                            if blink_due {
+                                last_blink_time = now;
+                            }
                         } else {
                             idle_frames += 1;
                             if idle_frames >= 60 {

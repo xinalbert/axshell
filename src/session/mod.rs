@@ -297,6 +297,19 @@ impl Ashell {
         cx.notify();
     }
 
+    pub(crate) fn change_cursor_style(
+        &mut self,
+        style: crate::session::config::CursorStyle,
+        cx: &mut Context<Self>,
+    ) {
+        self.cursor_style = style;
+        self.config.set_cursor_style(style);
+        if let Err(err) = self.config.save() {
+            tracing::warn!("failed to save cursor style: {err:#}");
+        }
+        cx.notify();
+    }
+
     pub(crate) fn reset_layout(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         self.config.set_layout_state(None, None, None);
         let _ = self.config.save();

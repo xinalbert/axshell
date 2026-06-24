@@ -1521,6 +1521,58 @@ impl Ashell {
                                                         })
                                                     )
                                                 )
+                                                .item(
+                                                    SettingItem::new(
+                                                        t!("cursor_style").to_string(),
+                                                        SettingField::render({
+                                                            let view = view_clone_for_general.clone();
+                                                            move |_, _window, cx| {
+                                                                use crate::session::config::CursorStyle;
+                                                                let current = view.read(cx).cursor_style;
+                                                                Button::new("cursor-style-dropdown")
+                                                                    .small()
+                                                                    .icon(IconName::ChevronsUpDown)
+                                                                    .label(match current {
+                                                                        CursorStyle::Default => t!("cursor_style_default").to_string(),
+                                                                        CursorStyle::Blink => t!("cursor_style_blink").to_string(),
+                                                                        CursorStyle::Beam => t!("cursor_style_beam").to_string(),
+                                                                        CursorStyle::BeamBlink => t!("cursor_style_beam_blink").to_string(),
+                                                                    })
+                                                                    .dropdown_menu_with_anchor(Anchor::BottomRight, {
+                                                                        let view = view.clone();
+                                                                        move |mut menu, window, cx| {
+                                                                            use crate::session::config::CursorStyle;
+                                                                            let current = view.read(cx).cursor_style;
+                                                                            menu = menu.min_w(160.).max_h(px(320.)).scrollable(true);
+                                                                            for style in [
+                                                                                CursorStyle::Default,
+                                                                                CursorStyle::Blink,
+                                                                                CursorStyle::Beam,
+                                                                                CursorStyle::BeamBlink,
+                                                                            ] {
+                                                                                let checked = style == current;
+                                                                                let label = match style {
+                                                                                    CursorStyle::Default => t!("cursor_style_default").to_string(),
+                                                                                    CursorStyle::Blink => t!("cursor_style_blink").to_string(),
+                                                                                    CursorStyle::Beam => t!("cursor_style_beam").to_string(),
+                                                                                    CursorStyle::BeamBlink => t!("cursor_style_beam_blink").to_string(),
+                                                                                };
+                                                                                menu = menu.item(
+                                                                                    PopupMenuItem::new(label)
+                                                                                        .checked(checked)
+                                                                                        .on_click(window.listener_for(&view, move |this, _, _window, cx| {
+                                                                                            this.change_cursor_style(style, cx);
+                                                                                        }))
+                                                                                );
+                                                                            }
+                                                                            menu
+                                                                        }
+                                                                    })
+                                                                    .into_any_element()
+                                                            }
+                                                        })
+                                                    )
+                                                )
                                         )
                                         .group(
                                             SettingGroup::new()
