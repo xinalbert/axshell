@@ -2774,22 +2774,30 @@ impl Render for Ashell {
                 }
             }))
             .on_action(cx.listener(|this, _: &crate::Copy, window, cx| {
-                if let Some(text) = this.active_terminal_selection_text() {
-                    cx.write_to_clipboard(gpui::ClipboardItem::new_string(text));
-                    if let Some(active_id) = &this.active_tab {
-                        if let Some(tab) = this.tabs.iter_mut().find(|tab| &tab.id == active_id) {
-                            tab.clear_selection();
+                if window.focused(cx) == Some(this.focus_handle.clone()) {
+                    if let Some(text) = this.active_terminal_selection_text() {
+                        cx.write_to_clipboard(gpui::ClipboardItem::new_string(text));
+                        if let Some(active_id) = &this.active_tab {
+                            if let Some(tab) = this.tabs.iter_mut().find(|tab| &tab.id == active_id) {
+                                tab.clear_selection();
+                            }
                         }
+                        window.prevent_default();
+                        cx.stop_propagation();
                     }
-                    window.prevent_default();
-                    cx.stop_propagation();
+                } else {
+                    cx.propagate();
                 }
             }))
             .on_action(cx.listener(|this, _: &crate::Paste, window, cx| {
-                if let Some(clipboard) = cx.read_from_clipboard() {
-                    if let Some(text) = clipboard.text() {
-                        this.paste_into_terminal(&text, window, cx);
+                if window.focused(cx) == Some(this.focus_handle.clone()) {
+                    if let Some(clipboard) = cx.read_from_clipboard() {
+                        if let Some(text) = clipboard.text() {
+                            this.paste_into_terminal(&text, window, cx);
+                        }
                     }
+                } else {
+                    cx.propagate();
                 }
             }))
             .when(self.active_title_bar_style == crate::session::config::TitleBarStyle::Integrated, |this| {
