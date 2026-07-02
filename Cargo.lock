@@ -315,7 +315,7 @@ dependencies = [
 
 [[package]]
 name = "ashell"
-version = "0.4.8"
+version = "0.4.9"
 dependencies = [
  "alacritty_terminal",
  "anyhow",
