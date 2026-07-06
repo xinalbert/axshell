@@ -73,6 +73,44 @@ sudo xattr -cr /Applications/ashell.app
 cargo run --release
 ```
 
+## 开发期自动重载
+
+当前项目没有状态保留式 hot reload，但现在提供了开发期自动重编译并重启入口。
+
+```bash
+cargo dev-reload
+```
+
+默认监听这些路径：
+
+- `src`
+- `assets`
+- `locales`
+- `Cargo.toml`
+- `Cargo.lock`
+- `build.rs`
+- `.cargo`
+
+行为说明：
+
+- 文件变化后，会先停止正在运行的 `ashell`
+- 然后执行 `cargo build --bin ashell`
+- 构建成功后重新启动应用
+- 这属于 restart-based reload，不会保留应用运行时状态
+
+常用示例：
+
+```bash
+# 以 release 配置自动重载
+cargo dev-reload --release
+
+# 自定义 debounce 时间
+cargo dev-reload --debounce-ms 800
+
+# 把额外参数透传给 ashell
+cargo dev-reload -- --some-arg value
+```
+
 ## 打包 macOS 应用
 
 ```bash

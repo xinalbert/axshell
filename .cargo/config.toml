@@ -1,0 +1,2 @@
+[alias]
+dev-reload = "run --example dev_reload --"
