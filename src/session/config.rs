@@ -1,7 +1,8 @@
-use std::{fs, path::PathBuf};
+use std::{collections::BTreeMap, fs, path::PathBuf};
 
 use anyhow::{Context, Result};
 use directories::BaseDirs;
+use gpui_component::ThemeMode;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -141,6 +142,46 @@ pub enum CursorStyle {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CustomThemeModeConfig {
+    #[serde(default)]
+    pub base_theme_name: String,
+    #[serde(default)]
+    pub overrides: BTreeMap<String, String>,
+    #[serde(default = "default_custom_font_brightness")]
+    pub font_brightness: f32,
+}
+
+impl Default for CustomThemeModeConfig {
+    fn default() -> Self {
+        Self {
+            base_theme_name: String::new(),
+            overrides: BTreeMap::new(),
+            font_brightness: default_custom_font_brightness(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CustomThemeConfig {
+    #[serde(default = "default_custom_theme_name")]
+    pub theme_name: String,
+    #[serde(default)]
+    pub light: CustomThemeModeConfig,
+    #[serde(default)]
+    pub dark: CustomThemeModeConfig,
+}
+
+impl Default for CustomThemeConfig {
+    fn default() -> Self {
+        Self {
+            theme_name: default_custom_theme_name(),
+            light: CustomThemeModeConfig::default(),
+            dark: CustomThemeModeConfig::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConfigFile {
     #[serde(default = "default_follow_system_theme")]
     pub follow_system_theme: bool,
@@ -164,6 +205,8 @@ pub struct ConfigFile {
     pub custom_font_brightness: f32,
     #[serde(default = "default_custom_theme_name")]
     pub custom_theme_name: String,
+    #[serde(default)]
+    pub custom_theme: CustomThemeConfig,
     #[serde(default)]
     pub right_click_copy_paste: bool,
     #[serde(default)]
@@ -395,6 +438,7 @@ impl Default for ConfigFile {
             custom_background_color: String::new(),
             custom_font_brightness: default_custom_font_brightness(),
             custom_theme_name: default_custom_theme_name(),
+            custom_theme: CustomThemeConfig::default(),
             right_click_copy_paste: false,
             keyword_highlight: false,
             ui_font_family: default_ui_font_family(),
@@ -521,13 +565,17 @@ impl ConfigStore {
         }
     }
 
-    fn config_path() -> Result<PathBuf> {
+    fn config_root_dir() -> Result<PathBuf> {
         let dirs = BaseDirs::new().context("could not determine user home directory")?;
-        Ok(dirs
-            .home_dir()
-            .join(".config")
-            .join("ax_ashell")
-            .join("sessions.json"))
+        Ok(dirs.home_dir().join(".config").join("ax_ashell"))
+    }
+
+    pub fn theme_dir_path() -> Result<PathBuf> {
+        Ok(Self::config_root_dir()?.join("themes"))
+    }
+
+    fn config_path() -> Result<PathBuf> {
+        Ok(Self::config_root_dir()?.join("sessions.json"))
     }
 
     pub fn sessions(&self) -> &[Session] {
@@ -750,22 +798,6 @@ impl ConfigStore {
         self.cache.ui_font_size = ui_font_size.max(8.0);
     }
 
-    pub fn custom_primary_color(&self) -> &str {
-        self.cache.custom_primary_color.trim()
-    }
-
-    pub fn set_custom_primary_color(&mut self, color: &str) {
-        self.cache.custom_primary_color = color.trim().to_string();
-    }
-
-    pub fn custom_background_color(&self) -> &str {
-        self.cache.custom_background_color.trim()
-    }
-
-    pub fn set_custom_background_color(&mut self, color: &str) {
-        self.cache.custom_background_color = color.trim().to_string();
-    }
-
     pub fn custom_font_brightness(&self) -> f32 {
         let value = self.cache.custom_font_brightness;
         if value <= 0.0 {
@@ -773,10 +805,6 @@ impl ConfigStore {
         } else {
             value.clamp(0.6, 1.6)
         }
-    }
-
-    pub fn set_custom_font_brightness(&mut self, brightness: f32) {
-        self.cache.custom_font_brightness = brightness.clamp(0.6, 1.6);
     }
 
     pub fn custom_theme_name(&self) -> &str {
@@ -794,6 +822,154 @@ impl ConfigStore {
         } else {
             name.to_string()
         };
+    }
+
+    fn has_structured_custom_theme(&self) -> bool {
+        let draft = &self.cache.custom_theme;
+        draft.theme_name.trim() != default_custom_theme_name()
+            || !draft.light.base_theme_name.trim().is_empty()
+            || !draft.dark.base_theme_name.trim().is_empty()
+            || !draft.light.overrides.is_empty()
+            || !draft.dark.overrides.is_empty()
+            || (draft.light.font_brightness - default_custom_font_brightness()).abs() > f32::EPSILON
+            || (draft.dark.font_brightness - default_custom_font_brightness()).abs() > f32::EPSILON
+    }
+
+    fn effective_custom_theme(&self) -> CustomThemeConfig {
+        let mut draft = if self.has_structured_custom_theme() {
+            self.cache.custom_theme.clone()
+        } else {
+            CustomThemeConfig::default()
+        };
+
+        let legacy_has_values = !self.cache.custom_primary_color.trim().is_empty()
+            || !self.cache.custom_background_color.trim().is_empty()
+            || (self.cache.custom_font_brightness - default_custom_font_brightness()).abs()
+                > f32::EPSILON
+            || self.cache.custom_theme_name.trim() != default_custom_theme_name();
+
+        if !self.has_structured_custom_theme() && legacy_has_values {
+            draft.theme_name = if self.cache.custom_theme_name.trim().is_empty() {
+                default_custom_theme_name()
+            } else {
+                self.cache.custom_theme_name.trim().to_string()
+            };
+
+            for mode_cfg in [&mut draft.light, &mut draft.dark] {
+                if !self.cache.custom_primary_color.trim().is_empty() {
+                    mode_cfg.overrides.insert(
+                        "primary.background".to_string(),
+                        self.cache.custom_primary_color.trim().to_string(),
+                    );
+                }
+                if !self.cache.custom_background_color.trim().is_empty() {
+                    mode_cfg.overrides.insert(
+                        "background".to_string(),
+                        self.cache.custom_background_color.trim().to_string(),
+                    );
+                }
+                mode_cfg.font_brightness = self.custom_font_brightness();
+            }
+        }
+
+        if draft.theme_name.trim().is_empty() {
+            draft.theme_name = default_custom_theme_name();
+        }
+        if draft.light.font_brightness <= 0.0 {
+            draft.light.font_brightness = default_custom_font_brightness();
+        }
+        if draft.dark.font_brightness <= 0.0 {
+            draft.dark.font_brightness = default_custom_font_brightness();
+        }
+
+        draft
+    }
+
+    fn custom_theme_mode_ref(draft: &CustomThemeConfig, mode: ThemeMode) -> &CustomThemeModeConfig {
+        if mode.is_dark() {
+            &draft.dark
+        } else {
+            &draft.light
+        }
+    }
+
+    fn custom_theme_mode_mut(
+        draft: &mut CustomThemeConfig,
+        mode: ThemeMode,
+    ) -> &mut CustomThemeModeConfig {
+        if mode.is_dark() {
+            &mut draft.dark
+        } else {
+            &mut draft.light
+        }
+    }
+
+    pub fn custom_theme_draft(&self) -> CustomThemeConfig {
+        self.effective_custom_theme()
+    }
+
+    pub fn set_custom_theme_draft_name(&mut self, name: &str) {
+        let mut draft = self.effective_custom_theme();
+        let name = name.trim();
+        draft.theme_name = if name.is_empty() {
+            default_custom_theme_name()
+        } else {
+            name.to_string()
+        };
+        self.cache.custom_theme = draft;
+        self.set_custom_theme_name(name);
+    }
+
+    pub fn custom_theme_base_name(&self, mode: ThemeMode) -> String {
+        let draft = self.effective_custom_theme();
+        let mode_cfg = Self::custom_theme_mode_ref(&draft, mode);
+        mode_cfg.base_theme_name.trim().to_string()
+    }
+
+    pub fn set_custom_theme_base_name(&mut self, mode: ThemeMode, name: &str) {
+        let mut draft = self.effective_custom_theme();
+        Self::custom_theme_mode_mut(&mut draft, mode).base_theme_name = name.trim().to_string();
+        self.cache.custom_theme = draft;
+    }
+
+    pub fn set_custom_theme_override(&mut self, mode: ThemeMode, key: &str, value: &str) {
+        let mut draft = self.effective_custom_theme();
+        let overrides = &mut Self::custom_theme_mode_mut(&mut draft, mode).overrides;
+        let value = value.trim();
+        if value.is_empty() {
+            overrides.remove(key);
+        } else {
+            overrides.insert(key.to_string(), value.to_string());
+        }
+        self.cache.custom_theme = draft;
+    }
+
+    pub fn custom_theme_font_brightness_for_mode(&self, mode: ThemeMode) -> f32 {
+        let draft = self.effective_custom_theme();
+        let value = Self::custom_theme_mode_ref(&draft, mode).font_brightness;
+        if value <= 0.0 {
+            default_custom_font_brightness()
+        } else {
+            value.clamp(0.6, 1.6)
+        }
+    }
+
+    pub fn set_custom_theme_font_brightness_for_mode(&mut self, mode: ThemeMode, brightness: f32) {
+        let mut draft = self.effective_custom_theme();
+        Self::custom_theme_mode_mut(&mut draft, mode).font_brightness = brightness.clamp(0.6, 1.6);
+        self.cache.custom_theme = draft;
+    }
+
+    pub fn reset_custom_theme_draft(&mut self) {
+        self.cache.custom_theme = CustomThemeConfig::default();
+        self.cache.custom_primary_color.clear();
+        self.cache.custom_background_color.clear();
+        self.cache.custom_font_brightness = default_custom_font_brightness();
+        self.cache.custom_theme_name = default_custom_theme_name();
+    }
+
+    pub fn theme_dir(&self) -> Option<PathBuf> {
+        self.path.parent().map(|path| path.join("themes"))
     }
 
     pub fn ui_font_family(&self) -> &str {

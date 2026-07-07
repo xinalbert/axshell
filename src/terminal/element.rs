@@ -388,7 +388,7 @@ impl TerminalElement {
     ) {
         let view_read = self.view.read(cx);
         let hovered_url = view_read.hovered_url.clone();
-        let font_brightness = view_read.config.custom_font_brightness();
+        let font_brightness = view_read.active_custom_font_brightness(cx.theme().mode);
 
         let mut rects = Vec::new();
         let mut runs = Vec::new();

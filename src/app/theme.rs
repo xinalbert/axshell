@@ -1,8 +1,15 @@
-use anyhow::{Context as _, Result};
-use gpui::{App, Context, Hsla, SharedString, Window, px, rgb};
-use gpui_component::{ActiveTheme as _, Colorize, Theme, ThemeMode, ThemeRegistry};
+use anyhow::{Context as _, Result, anyhow};
+use gpui::{App, Context, Hsla, SharedString, Window, px};
+use gpui_component::{
+    ActiveTheme as _, Colorize, Theme, ThemeConfig, ThemeMode, ThemeRegistry, ThemeSet,
+    try_parse_color,
+};
+use serde_json::{Map as JsonMap, Value as JsonValue};
 
-use crate::AxAshell;
+use crate::{
+    AxAshell,
+    session::config::{ConfigStore, CustomThemeModeConfig},
+};
 
 pub(crate) const EMBEDDED_THEME_JSONS: &[&str] = &[
     include_str!("../../assets/themes/matrix.json"),
@@ -12,9 +19,383 @@ pub(crate) const EMBEDDED_THEME_JSONS: &[&str] = &[
     include_str!("../../assets/themes/phygerr.json"),
 ];
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::{
+    borrow::Cow,
+    fs,
+    path::{Path, PathBuf},
+    rc::Rc,
+    sync::atomic::{AtomicBool, Ordering},
+};
 
 pub(crate) static USING_SYSTEM_MAPLE: AtomicBool = AtomicBool::new(false);
+
+const CUSTOM_THEME_NAME_INPUT_KEY: &str = "custom_theme.theme_name";
+const CUSTOM_THEME_FILE_PREFIX: &str = "custom-";
+const CUSTOM_LIGHT_SUFFIX: &str = "[Custom Light]";
+const CUSTOM_DARK_SUFFIX: &str = "[Custom Dark]";
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum CustomThemeFieldDomain {
+    ThemeColor,
+    HighlightColor,
+    Brightness,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct CustomThemeFieldSpec {
+    pub key: &'static str,
+    pub label: &'static str,
+    pub placeholder: &'static str,
+    pub domain: CustomThemeFieldDomain,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct CustomThemeSectionSpec {
+    pub title: &'static str,
+    pub fields: &'static [CustomThemeFieldSpec],
+}
+
+pub(crate) const CUSTOM_THEME_CORE_FIELDS: &[CustomThemeFieldSpec] = &[
+    CustomThemeFieldSpec {
+        key: "background",
+        label: "Background",
+        placeholder: "#111827",
+        domain: CustomThemeFieldDomain::ThemeColor,
+    },
+    CustomThemeFieldSpec {
+        key: "foreground",
+        label: "Foreground",
+        placeholder: "#E5E7EB",
+        domain: CustomThemeFieldDomain::ThemeColor,
+    },
+    CustomThemeFieldSpec {
+        key: "border",
+        label: "Border",
+        placeholder: "#374151",
+        domain: CustomThemeFieldDomain::ThemeColor,
+    },
+    CustomThemeFieldSpec {
+        key: "primary.background",
+        label: "Primary Background",
+        placeholder: "#4F8CFF",
+        domain: CustomThemeFieldDomain::ThemeColor,
+    },
+    CustomThemeFieldSpec {
+        key: "primary.foreground",
+        label: "Primary Foreground",
+        placeholder: "#FFFFFF",
+        domain: CustomThemeFieldDomain::ThemeColor,
+    },
+    CustomThemeFieldSpec {
+        key: "secondary.background",
+        label: "Secondary Background",
+        placeholder: "#1F2937",
+        domain: CustomThemeFieldDomain::ThemeColor,
+    },
+    CustomThemeFieldSpec {
+        key: "secondary.foreground",
+        label: "Secondary Foreground",
+        placeholder: "#E5E7EB",
+        domain: CustomThemeFieldDomain::ThemeColor,
+    },
+    CustomThemeFieldSpec {
+        key: "accent.background",
+        label: "Accent Background",
+        placeholder: "#1D4ED8",
+        domain: CustomThemeFieldDomain::ThemeColor,
+    },
+    CustomThemeFieldSpec {
+        key: "accent.foreground",
+        label: "Accent Foreground",
+        placeholder: "#FFFFFF",
+        domain: CustomThemeFieldDomain::ThemeColor,
+    },
+    CustomThemeFieldSpec {
+        key: "selection.background",
+        label: "Selection Background",
+        placeholder: "#2563EB66",
+        domain: CustomThemeFieldDomain::ThemeColor,
+    },
+    CustomThemeFieldSpec {
+        key: "ring",
+        label: "Focus Ring",
+        placeholder: "#60A5FA",
+        domain: CustomThemeFieldDomain::ThemeColor,
+    },
+    CustomThemeFieldSpec {
+        key: "font_brightness",
+        label: "Font Brightness",
+        placeholder: "1.00",
+        domain: CustomThemeFieldDomain::Brightness,
+    },
+];
+
+pub(crate) const CUSTOM_THEME_SURFACE_FIELDS: &[CustomThemeFieldSpec] = &[
+    CustomThemeFieldSpec {
+        key: "popover.background",
+        label: "Popover Background",
+        placeholder: "#111827",
+        domain: CustomThemeFieldDomain::ThemeColor,
+    },
+    CustomThemeFieldSpec {
+        key: "popover.foreground",
+        label: "Popover Foreground",
+        placeholder: "#E5E7EB",
+        domain: CustomThemeFieldDomain::ThemeColor,
+    },
+    CustomThemeFieldSpec {
+        key: "sidebar.background",
+        label: "Sidebar Background",
+        placeholder: "#0F172A",
+        domain: CustomThemeFieldDomain::ThemeColor,
+    },
+    CustomThemeFieldSpec {
+        key: "sidebar.foreground",
+        label: "Sidebar Foreground",
+        placeholder: "#E5E7EB",
+        domain: CustomThemeFieldDomain::ThemeColor,
+    },
+    CustomThemeFieldSpec {
+        key: "sidebar.primary.background",
+        label: "Sidebar Primary Background",
+        placeholder: "#4F8CFF",
+        domain: CustomThemeFieldDomain::ThemeColor,
+    },
+    CustomThemeFieldSpec {
+        key: "sidebar.primary.foreground",
+        label: "Sidebar Primary Foreground",
+        placeholder: "#FFFFFF",
+        domain: CustomThemeFieldDomain::ThemeColor,
+    },
+    CustomThemeFieldSpec {
+        key: "tab.active.background",
+        label: "Active Tab Background",
+        placeholder: "#111827",
+        domain: CustomThemeFieldDomain::ThemeColor,
+    },
+    CustomThemeFieldSpec {
+        key: "tab.active.foreground",
+        label: "Active Tab Foreground",
+        placeholder: "#F9FAFB",
+        domain: CustomThemeFieldDomain::ThemeColor,
+    },
+    CustomThemeFieldSpec {
+        key: "tab.foreground",
+        label: "Tab Foreground",
+        placeholder: "#CBD5E1",
+        domain: CustomThemeFieldDomain::ThemeColor,
+    },
+    CustomThemeFieldSpec {
+        key: "table.head.background",
+        label: "Table Head Background",
+        placeholder: "#111827",
+        domain: CustomThemeFieldDomain::ThemeColor,
+    },
+    CustomThemeFieldSpec {
+        key: "table.head.foreground",
+        label: "Table Head Foreground",
+        placeholder: "#CBD5E1",
+        domain: CustomThemeFieldDomain::ThemeColor,
+    },
+];
+
+pub(crate) const CUSTOM_THEME_SEMANTIC_FIELDS: &[CustomThemeFieldSpec] = &[
+    CustomThemeFieldSpec {
+        key: "danger.background",
+        label: "Danger Background",
+        placeholder: "#EF4444",
+        domain: CustomThemeFieldDomain::ThemeColor,
+    },
+    CustomThemeFieldSpec {
+        key: "danger.foreground",
+        label: "Danger Foreground",
+        placeholder: "#FFFFFF",
+        domain: CustomThemeFieldDomain::ThemeColor,
+    },
+    CustomThemeFieldSpec {
+        key: "info.background",
+        label: "Info Background",
+        placeholder: "#06B6D4",
+        domain: CustomThemeFieldDomain::ThemeColor,
+    },
+    CustomThemeFieldSpec {
+        key: "success.background",
+        label: "Success Background",
+        placeholder: "#22C55E",
+        domain: CustomThemeFieldDomain::ThemeColor,
+    },
+    CustomThemeFieldSpec {
+        key: "warning.background",
+        label: "Warning Background",
+        placeholder: "#F59E0B",
+        domain: CustomThemeFieldDomain::ThemeColor,
+    },
+    CustomThemeFieldSpec {
+        key: "base.red",
+        label: "Base Red",
+        placeholder: "#EF4444",
+        domain: CustomThemeFieldDomain::ThemeColor,
+    },
+    CustomThemeFieldSpec {
+        key: "base.green",
+        label: "Base Green",
+        placeholder: "#22C55E",
+        domain: CustomThemeFieldDomain::ThemeColor,
+    },
+    CustomThemeFieldSpec {
+        key: "base.blue",
+        label: "Base Blue",
+        placeholder: "#3B82F6",
+        domain: CustomThemeFieldDomain::ThemeColor,
+    },
+    CustomThemeFieldSpec {
+        key: "base.yellow",
+        label: "Base Yellow",
+        placeholder: "#F59E0B",
+        domain: CustomThemeFieldDomain::ThemeColor,
+    },
+    CustomThemeFieldSpec {
+        key: "base.magenta",
+        label: "Base Magenta",
+        placeholder: "#A855F7",
+        domain: CustomThemeFieldDomain::ThemeColor,
+    },
+    CustomThemeFieldSpec {
+        key: "base.cyan",
+        label: "Base Cyan",
+        placeholder: "#06B6D4",
+        domain: CustomThemeFieldDomain::ThemeColor,
+    },
+];
+
+pub(crate) const CUSTOM_THEME_EDITOR_FIELDS: &[CustomThemeFieldSpec] = &[
+    CustomThemeFieldSpec {
+        key: "editor.background",
+        label: "Editor Background",
+        placeholder: "#111827",
+        domain: CustomThemeFieldDomain::HighlightColor,
+    },
+    CustomThemeFieldSpec {
+        key: "editor.foreground",
+        label: "Editor Foreground",
+        placeholder: "#E5E7EB",
+        domain: CustomThemeFieldDomain::HighlightColor,
+    },
+    CustomThemeFieldSpec {
+        key: "editor.active_line.background",
+        label: "Active Line Background",
+        placeholder: "#1F2937",
+        domain: CustomThemeFieldDomain::HighlightColor,
+    },
+    CustomThemeFieldSpec {
+        key: "editor.line_number",
+        label: "Line Number",
+        placeholder: "#64748B",
+        domain: CustomThemeFieldDomain::HighlightColor,
+    },
+    CustomThemeFieldSpec {
+        key: "editor.active_line_number",
+        label: "Active Line Number",
+        placeholder: "#F8FAFC",
+        domain: CustomThemeFieldDomain::HighlightColor,
+    },
+    CustomThemeFieldSpec {
+        key: "syntax.keyword.color",
+        label: "Syntax Keyword",
+        placeholder: "#F472B6",
+        domain: CustomThemeFieldDomain::HighlightColor,
+    },
+    CustomThemeFieldSpec {
+        key: "syntax.string.color",
+        label: "Syntax String",
+        placeholder: "#86EFAC",
+        domain: CustomThemeFieldDomain::HighlightColor,
+    },
+    CustomThemeFieldSpec {
+        key: "syntax.function.color",
+        label: "Syntax Function",
+        placeholder: "#60A5FA",
+        domain: CustomThemeFieldDomain::HighlightColor,
+    },
+    CustomThemeFieldSpec {
+        key: "syntax.type.color",
+        label: "Syntax Type",
+        placeholder: "#C084FC",
+        domain: CustomThemeFieldDomain::HighlightColor,
+    },
+    CustomThemeFieldSpec {
+        key: "syntax.comment.color",
+        label: "Syntax Comment",
+        placeholder: "#64748B",
+        domain: CustomThemeFieldDomain::HighlightColor,
+    },
+];
+
+pub(crate) const CUSTOM_THEME_SECTION_SPECS: &[CustomThemeSectionSpec] = &[
+    CustomThemeSectionSpec {
+        title: "Core",
+        fields: CUSTOM_THEME_CORE_FIELDS,
+    },
+    CustomThemeSectionSpec {
+        title: "Surfaces",
+        fields: CUSTOM_THEME_SURFACE_FIELDS,
+    },
+    CustomThemeSectionSpec {
+        title: "Semantic & Base Palette",
+        fields: CUSTOM_THEME_SEMANTIC_FIELDS,
+    },
+    CustomThemeSectionSpec {
+        title: "Editor & Syntax",
+        fields: CUSTOM_THEME_EDITOR_FIELDS,
+    },
+];
+
+const BRIGHTNESS_THEME_KEYS: &[&str] = &[
+    "foreground",
+    "primary.foreground",
+    "secondary.foreground",
+    "accent.foreground",
+    "popover.foreground",
+    "sidebar.foreground",
+    "sidebar.primary.foreground",
+    "tab.active.foreground",
+    "tab.foreground",
+    "table.head.foreground",
+    "danger.foreground",
+];
+
+const BRIGHTNESS_HIGHLIGHT_KEYS: &[&str] = &[
+    "editor.foreground",
+    "editor.line_number",
+    "editor.active_line_number",
+];
+
+const BRIGHTNESS_SYNTAX_KEYS: &[&str] = &["keyword", "string", "function", "type", "comment"];
+
+pub(crate) fn custom_theme_name_input_key() -> &'static str {
+    CUSTOM_THEME_NAME_INPUT_KEY
+}
+
+pub(crate) fn custom_theme_modes() -> [ThemeMode; 2] {
+    [ThemeMode::Light, ThemeMode::Dark]
+}
+
+pub(crate) fn custom_theme_input_key(mode: ThemeMode, key: &str) -> String {
+    format!(
+        "custom_theme.{}.{}",
+        if mode.is_dark() { "dark" } else { "light" },
+        key
+    )
+}
+
+pub(crate) fn custom_theme_registry_name(theme_name: &str, mode: ThemeMode) -> String {
+    let theme_name = normalized_custom_theme_name(theme_name);
+    if mode.is_dark() {
+        format!("{theme_name} {CUSTOM_DARK_SUFFIX}")
+    } else {
+        format!("{theme_name} {CUSTOM_LIGHT_SUFFIX}")
+    }
+}
 
 pub(crate) fn load_fonts(cx: &mut App) -> Result<()> {
     let has_system_maple = cx
@@ -24,12 +405,11 @@ pub(crate) fn load_fonts(cx: &mut App) -> Result<()> {
     if has_system_maple {
         USING_SYSTEM_MAPLE.store(true, Ordering::Relaxed);
     } else {
-        let regular = std::borrow::Cow::Borrowed(
+        let regular = Cow::Borrowed(
             include_bytes!("../../assets/fonts/MapleMono-NF-CN-Regular.ttf").as_slice(),
         );
-        let bold = std::borrow::Cow::Borrowed(
-            include_bytes!("../../assets/fonts/MapleMono-NF-CN-Bold.ttf").as_slice(),
-        );
+        let bold =
+            Cow::Borrowed(include_bytes!("../../assets/fonts/MapleMono-NF-CN-Bold.ttf").as_slice());
         cx.text_system()
             .add_fonts(vec![regular, bold])
             .context("load Maple Mono NF CN fonts")?;
@@ -47,28 +427,75 @@ pub(crate) fn load_embedded_themes(cx: &mut App) {
     }
 }
 
+pub(crate) fn load_user_themes(cx: &mut App) {
+    let Ok(themes_dir) = ConfigStore::theme_dir_path() else {
+        tracing::warn!("failed to resolve user theme dir");
+        return;
+    };
+
+    if let Err(err) = fs::create_dir_all(&themes_dir) {
+        tracing::warn!(
+            "failed to create user theme dir {}: {err:#}",
+            themes_dir.display()
+        );
+        return;
+    }
+
+    let registry = ThemeRegistry::global_mut(cx);
+    if let Ok(entries) = fs::read_dir(&themes_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|ext| ext.to_str()) != Some("json") {
+                continue;
+            }
+            match fs::read_to_string(&path) {
+                Ok(content) => {
+                    if let Err(err) = registry.load_themes_from_str(&content) {
+                        tracing::warn!("failed to load user theme {}: {err:#}", path.display());
+                    }
+                }
+                Err(err) => {
+                    tracing::warn!("failed to read user theme {}: {err:#}", path.display());
+                }
+            }
+        }
+    }
+
+    if let Err(err) = ThemeRegistry::watch_dir(themes_dir, cx, |_| {}) {
+        tracing::warn!("failed to watch user theme dir: {err:#}");
+    }
+}
+
 pub(crate) fn set_theme_font_names(theme: &mut Theme, ui_font_family: &str) {
     theme.font_family = ui_font_family.into();
     theme.mono_font_family = ui_font_family.into();
 }
 
-fn parse_hex_color(value: &str) -> Option<Hsla> {
-    let value = value.trim().trim_start_matches('#');
-    if value.len() != 6 {
-        return None;
+fn normalized_custom_theme_name(theme_name: &str) -> String {
+    let theme_name = theme_name.trim();
+    if theme_name.is_empty() {
+        "Custom Theme".to_string()
+    } else {
+        theme_name.to_string()
     }
-    u32::from_str_radix(value, 16)
-        .ok()
-        .map(|hex| Hsla::from(rgb(hex)))
 }
 
-fn contrast_text_for(background: Hsla) -> Hsla {
-    Hsla {
-        h: 0.0,
-        s: 0.0,
-        l: if background.l > 0.58 { 0.08 } else { 0.96 },
-        a: 1.0,
+fn custom_theme_file_path(theme_dir: &Path, theme_name: &str) -> PathBuf {
+    let mut slug = String::new();
+    for ch in normalized_custom_theme_name(theme_name).chars() {
+        if ch.is_ascii_alphanumeric() {
+            slug.push(ch.to_ascii_lowercase());
+        } else if !slug.ends_with('-') {
+            slug.push('-');
+        }
     }
+    let slug = slug.trim_matches('-');
+    let slug = if slug.is_empty() {
+        "custom-theme"
+    } else {
+        slug
+    };
+    theme_dir.join(format!("{CUSTOM_THEME_FILE_PREFIX}{slug}.json"))
 }
 
 fn adjust_text_brightness(color: Hsla, factor: f32) -> Hsla {
@@ -78,107 +505,281 @@ fn adjust_text_brightness(color: Hsla, factor: f32) -> Hsla {
     }
 }
 
-fn apply_custom_theme_overrides(theme: &mut Theme, config: &crate::session::config::ConfigStore) {
-    let is_dark = theme.mode.is_dark();
+fn custom_theme_field_specs() -> impl Iterator<Item = &'static CustomThemeFieldSpec> {
+    CUSTOM_THEME_SECTION_SPECS
+        .iter()
+        .flat_map(|section| section.fields.iter())
+}
 
-    if let Some(primary) = parse_hex_color(config.custom_primary_color()) {
-        let primary_foreground = contrast_text_for(primary);
-        theme.primary = primary;
-        theme.button_primary = primary;
-        theme.sidebar_primary = primary;
-        theme.primary_hover = primary.mix_oklab(theme.background, 0.18);
-        theme.primary_active = primary.mix_oklab(theme.background, 0.28);
-        theme.button_primary_hover = theme.primary_hover;
-        theme.button_primary_active = theme.primary_active;
-        theme.primary_foreground = primary_foreground;
-        theme.button_primary_foreground = primary_foreground;
-        theme.sidebar_primary_foreground = primary_foreground;
-        theme.link = primary;
-        theme.link_hover = theme.primary_hover;
-        theme.link_active = theme.primary_active;
-        theme.ring = primary;
-        theme.progress_bar = primary;
-        theme.selection = primary.alpha(if is_dark { 0.32 } else { 0.20 });
-    }
+fn find_custom_theme_field(key: &str) -> Option<&'static CustomThemeFieldSpec> {
+    custom_theme_field_specs().find(|field| field.key == key)
+}
 
-    if let Some(background) = parse_hex_color(config.custom_background_color()) {
-        let surface = background;
-        let raised = if is_dark {
-            surface.mix_oklab(theme.foreground, 0.08)
-        } else {
-            surface.mix_oklab(theme.foreground, 0.04)
-        };
-        let subtle = if is_dark {
-            surface.mix_oklab(theme.foreground, 0.14)
-        } else {
-            surface.mix_oklab(theme.foreground, 0.08)
-        };
-        let border = if is_dark {
-            surface.mix_oklab(theme.foreground, 0.20)
-        } else {
-            surface.mix_oklab(theme.foreground, 0.14)
-        };
+fn is_highlight_status_key(key: &str) -> bool {
+    matches!(key, "error" | "warning" | "info" | "success" | "hint")
+        || key.starts_with("error.")
+        || key.starts_with("warning.")
+        || key.starts_with("info.")
+        || key.starts_with("success.")
+        || key.starts_with("hint.")
+}
 
-        theme.background = surface;
-        theme.sidebar = surface;
-        theme.title_bar = surface;
-        theme.tab_bar = raised;
-        theme.tab_bar_segmented = raised;
-        theme.popover = raised;
-        theme.secondary = raised;
-        theme.secondary_hover = subtle;
-        theme.secondary_active = border;
-        theme.muted = raised;
-        theme.colors.list = surface;
-        theme.list_even = raised;
-        theme.list_head = raised;
-        theme.list_hover = subtle;
-        theme.table = surface;
-        theme.table_even = raised;
-        theme.table_head = raised;
-        theme.table_foot = raised;
-        theme.table_hover = subtle;
-        theme.tab = surface;
-        theme.tab_active = subtle;
-        theme.accordion = surface;
-        theme.accordion_hover = subtle;
-        theme.group_box = surface;
-        theme.sidebar_accent = subtle;
-        theme.scrollbar = raised.alpha(if is_dark { 0.65 } else { 0.45 });
-        theme.scrollbar_thumb = border.alpha(if is_dark { 0.85 } else { 0.60 });
-        theme.scrollbar_thumb_hover = border;
-        theme.border = border;
-        theme.input = border;
-        theme.sidebar_border = border;
-        theme.table_row_border = border;
-        theme.title_bar_border = border;
-        theme.window_border = border;
-    }
+fn adjust_color_value(value: &str, factor: f32) -> Option<String> {
+    let color = try_parse_color(value).ok()?;
+    Some(adjust_text_brightness(color, factor).to_hex())
+}
 
-    let brightness = config.custom_font_brightness();
-    if (brightness - 1.0).abs() > f32::EPSILON {
-        theme.foreground = adjust_text_brightness(theme.foreground, brightness);
-        theme.muted_foreground = adjust_text_brightness(theme.muted_foreground, brightness);
-        theme.secondary_foreground = adjust_text_brightness(theme.secondary_foreground, brightness);
-        theme.popover_foreground = adjust_text_brightness(theme.popover_foreground, brightness);
-        theme.tab_foreground = adjust_text_brightness(theme.tab_foreground, brightness);
-        theme.tab_active_foreground =
-            adjust_text_brightness(theme.tab_active_foreground, brightness);
-        theme.sidebar_foreground = adjust_text_brightness(theme.sidebar_foreground, brightness);
-        theme.table_head_foreground =
-            adjust_text_brightness(theme.table_head_foreground, brightness);
-        theme.table_foot_foreground =
-            adjust_text_brightness(theme.table_foot_foreground, brightness);
+fn adjust_json_string(object: &mut JsonMap<String, JsonValue>, key: &str, factor: f32) {
+    let Some(JsonValue::String(value)) = object.get_mut(key) else {
+        return;
+    };
+    if let Some(adjusted) = adjust_color_value(value, factor) {
+        *value = adjusted;
     }
 }
 
-impl AxAshell {
-    fn custom_theme_name(&self) -> SharedString {
-        self.config.custom_theme_name().into()
+fn adjust_syntax_color(object: &mut JsonMap<String, JsonValue>, token: &str, factor: f32) {
+    let Some(JsonValue::Object(syntax)) = object.get_mut("syntax") else {
+        return;
+    };
+    let Some(JsonValue::Object(style)) = syntax.get_mut(token) else {
+        return;
+    };
+    let Some(JsonValue::String(color)) = style.get_mut("color") else {
+        return;
+    };
+    if let Some(adjusted) = adjust_color_value(color, factor) {
+        *color = adjusted;
+    }
+}
+
+fn set_syntax_override(
+    highlight_object: &mut JsonMap<String, JsonValue>,
+    key: &str,
+    value: &str,
+) -> Result<()> {
+    let Some(rest) = key.strip_prefix("syntax.") else {
+        return Err(anyhow!("invalid syntax override key: {key}"));
+    };
+    let Some(token) = rest.strip_suffix(".color") else {
+        return Err(anyhow!("unsupported syntax override key: {key}"));
+    };
+
+    let syntax = highlight_object
+        .entry("syntax".to_string())
+        .or_insert_with(|| JsonValue::Object(JsonMap::new()));
+    let syntax = syntax
+        .as_object_mut()
+        .ok_or_else(|| anyhow!("syntax highlight section is not an object"))?;
+    let style = syntax
+        .entry(token.to_string())
+        .or_insert_with(|| JsonValue::Object(JsonMap::new()));
+    let style = style
+        .as_object_mut()
+        .ok_or_else(|| anyhow!("syntax style entry is not an object"))?;
+    style.insert("color".to_string(), JsonValue::String(value.to_string()));
+    Ok(())
+}
+
+fn apply_brightness(
+    colors: &mut JsonMap<String, JsonValue>,
+    highlight: &mut JsonMap<String, JsonValue>,
+    brightness: f32,
+) {
+    if (brightness - 1.0).abs() <= f32::EPSILON {
+        return;
     }
 
-    fn is_custom_theme_name(&self, name: &SharedString) -> bool {
-        name.as_ref() == self.config.custom_theme_name()
+    for key in BRIGHTNESS_THEME_KEYS {
+        adjust_json_string(colors, key, brightness);
+    }
+    for key in BRIGHTNESS_HIGHLIGHT_KEYS {
+        adjust_json_string(highlight, key, brightness);
+    }
+    for token in BRIGHTNESS_SYNTAX_KEYS {
+        adjust_syntax_color(highlight, token, brightness);
+    }
+}
+
+fn build_custom_theme_config(
+    base_theme: &ThemeConfig,
+    mode_config: &CustomThemeModeConfig,
+    generated_name: &str,
+    mode: ThemeMode,
+) -> Result<ThemeConfig> {
+    let mut value = serde_json::to_value(base_theme.clone()).context("serialize base theme")?;
+    let object = value
+        .as_object_mut()
+        .ok_or_else(|| anyhow!("serialized theme config is not an object"))?;
+
+    object.insert("is_default".to_string(), JsonValue::Bool(false));
+    object.insert(
+        "name".to_string(),
+        JsonValue::String(generated_name.to_string()),
+    );
+    object.insert(
+        "mode".to_string(),
+        JsonValue::String(if mode.is_dark() { "dark" } else { "light" }.to_string()),
+    );
+
+    let mut colors = match object.remove("colors") {
+        Some(JsonValue::Object(colors)) => colors,
+        Some(_) => return Err(anyhow!("theme colors is not an object")),
+        None => JsonMap::new(),
+    };
+    let mut highlight = match object.remove("highlight") {
+        Some(JsonValue::Object(highlight)) => highlight,
+        Some(_) => return Err(anyhow!("theme highlight is not an object")),
+        None => JsonMap::new(),
+    };
+
+    for (key, raw_value) in &mode_config.overrides {
+        let value = raw_value.trim();
+        if value.is_empty() {
+            continue;
+        }
+        match find_custom_theme_field(key).map(|field| field.domain) {
+            Some(CustomThemeFieldDomain::Brightness) => {}
+            Some(CustomThemeFieldDomain::ThemeColor) | None => {
+                colors.insert(key.clone(), JsonValue::String(value.to_string()));
+            }
+            Some(CustomThemeFieldDomain::HighlightColor) => {
+                if key.starts_with("syntax.") {
+                    set_syntax_override(&mut highlight, key, value)?;
+                } else if key.starts_with("editor.") || is_highlight_status_key(key) {
+                    highlight.insert(key.clone(), JsonValue::String(value.to_string()));
+                }
+            }
+        }
+    }
+
+    apply_brightness(&mut colors, &mut highlight, mode_config.font_brightness);
+
+    object.insert("colors".to_string(), JsonValue::Object(colors));
+    object.insert("highlight".to_string(), JsonValue::Object(highlight));
+
+    serde_json::from_value(value).context("deserialize generated custom theme")
+}
+
+fn resolve_base_theme(config: &ConfigStore, mode: ThemeMode, cx: &App) -> Rc<ThemeConfig> {
+    let base_name = config.custom_theme_base_name(mode);
+    if let Some(theme) = ThemeRegistry::global(cx)
+        .themes()
+        .get(&SharedString::from(base_name.clone()))
+        .filter(|theme| theme.mode == mode)
+    {
+        return theme.clone();
+    }
+
+    if mode.is_dark() {
+        ThemeRegistry::global(cx).default_dark_theme().clone()
+    } else {
+        ThemeRegistry::global(cx).default_light_theme().clone()
+    }
+}
+
+fn build_custom_theme_set(
+    config: &ConfigStore,
+    cx: &App,
+) -> Result<(ThemeSet, ThemeConfig, ThemeConfig)> {
+    let draft = config.custom_theme_draft();
+    let custom_name = normalized_custom_theme_name(&draft.theme_name);
+    let light_name = custom_theme_registry_name(&custom_name, ThemeMode::Light);
+    let dark_name = custom_theme_registry_name(&custom_name, ThemeMode::Dark);
+
+    let light = build_custom_theme_config(
+        &resolve_base_theme(config, ThemeMode::Light, cx),
+        &draft.light,
+        &light_name,
+        ThemeMode::Light,
+    )?;
+    let dark = build_custom_theme_config(
+        &resolve_base_theme(config, ThemeMode::Dark, cx),
+        &draft.dark,
+        &dark_name,
+        ThemeMode::Dark,
+    )?;
+
+    Ok((
+        ThemeSet {
+            name: custom_name.clone().into(),
+            author: Some("ax_ashell".into()),
+            url: None,
+            themes: vec![light.clone(), dark.clone()],
+        },
+        light,
+        dark,
+    ))
+}
+
+fn write_custom_theme_file(config: &ConfigStore, theme_set: &ThemeSet) -> Result<()> {
+    let theme_dir = config
+        .theme_dir()
+        .or_else(|| ConfigStore::theme_dir_path().ok())
+        .ok_or_else(|| anyhow!("could not resolve local theme dir"))?;
+    fs::create_dir_all(&theme_dir)
+        .with_context(|| format!("failed to create {}", theme_dir.display()))?;
+    let path = custom_theme_file_path(&theme_dir, theme_set.name.as_ref());
+    let content = serde_json::to_string_pretty(theme_set).context("serialize custom theme file")?;
+    fs::write(&path, content).with_context(|| format!("failed to write {}", path.display()))
+}
+
+impl AxAshell {
+    fn current_custom_theme_draft_name(&self) -> String {
+        self.config.custom_theme_draft().theme_name
+    }
+
+    fn current_custom_theme_registry_name(&self, mode: ThemeMode) -> SharedString {
+        custom_theme_registry_name(&self.current_custom_theme_draft_name(), mode).into()
+    }
+
+    fn is_current_custom_theme_name(&self, name: &SharedString, mode: ThemeMode) -> bool {
+        let generated = self.current_custom_theme_registry_name(mode);
+        name == &generated || name.as_ref() == self.config.custom_theme_name()
+    }
+
+    pub(crate) fn resolved_custom_theme_base_name(&self, mode: ThemeMode, cx: &App) -> String {
+        resolve_base_theme(&self.config, mode, cx).name.to_string()
+    }
+
+    pub(crate) fn active_custom_font_brightness(&self, mode: ThemeMode) -> f32 {
+        let current_name = if mode.is_dark() {
+            &self.dark_theme_name
+        } else {
+            &self.light_theme_name
+        };
+        if self.is_current_custom_theme_name(current_name, mode) {
+            self.config.custom_theme_font_brightness_for_mode(mode)
+        } else {
+            1.0
+        }
+    }
+
+    fn resolve_selected_theme(
+        &self,
+        name: &SharedString,
+        mode: ThemeMode,
+        cx: &App,
+    ) -> Rc<ThemeConfig> {
+        if self.is_current_custom_theme_name(name, mode) {
+            if let Ok((_, light, dark)) = build_custom_theme_set(&self.config, cx) {
+                return Rc::new(if mode.is_dark() { dark } else { light });
+            }
+        }
+
+        if let Some(theme) = ThemeRegistry::global(cx)
+            .themes()
+            .get(name)
+            .filter(|theme| theme.mode == mode)
+        {
+            return theme.clone();
+        }
+
+        if mode.is_dark() {
+            ThemeRegistry::global(cx).default_dark_theme().clone()
+        } else {
+            ThemeRegistry::global(cx).default_light_theme().clone()
+        }
     }
 
     pub(crate) fn switch_theme_mode(
@@ -219,22 +820,18 @@ impl AxAshell {
         cx.notify();
     }
 
-    pub(crate) fn apply_custom_theme(
+    pub(crate) fn set_custom_theme_base_preset(
         &mut self,
         mode: ThemeMode,
-        window: &mut Window,
+        name: &str,
         cx: &mut Context<Self>,
     ) {
-        let name = self.custom_theme_name();
-        if mode.is_dark() {
-            self.dark_theme_name = name.clone();
+        self.config.set_custom_theme_base_name(mode, name);
+        if let Err(err) = self.config.save() {
+            self.status = format!("failed to save custom theme base: {err:#}").into();
         } else {
-            self.light_theme_name = name.clone();
+            self.status = format!("custom {} base: {name}", mode.name()).into();
         }
-        self.apply_theme_preferences(window, cx);
-        self.status = format!("theme: {name}").into();
-        self.persist_theme_preferences();
-        window.refresh();
         cx.notify();
     }
 
@@ -281,18 +878,8 @@ impl AxAshell {
     }
 
     pub(crate) fn apply_theme_preferences(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let light_is_custom = self.is_custom_theme_name(&self.light_theme_name);
-        let dark_is_custom = self.is_custom_theme_name(&self.dark_theme_name);
-        let light_theme = ThemeRegistry::global(cx)
-            .themes()
-            .get(&self.light_theme_name)
-            .cloned()
-            .unwrap_or_else(|| ThemeRegistry::global(cx).default_light_theme().clone());
-        let dark_theme = ThemeRegistry::global(cx)
-            .themes()
-            .get(&self.dark_theme_name)
-            .cloned()
-            .unwrap_or_else(|| ThemeRegistry::global(cx).default_dark_theme().clone());
+        let light_theme = self.resolve_selected_theme(&self.light_theme_name, ThemeMode::Light, cx);
+        let dark_theme = self.resolve_selected_theme(&self.dark_theme_name, ThemeMode::Dark, cx);
         let theme = Theme::global_mut(cx);
         theme.light_theme = light_theme;
         theme.dark_theme = dark_theme;
@@ -304,114 +891,154 @@ impl AxAshell {
         } else {
             Theme::change(self.theme_mode, Some(window), cx);
         }
-
-        let active_custom_theme = if Theme::global(cx).mode.is_dark() {
-            dark_is_custom
-        } else {
-            light_is_custom
-        };
-        if active_custom_theme {
-            apply_custom_theme_overrides(Theme::global_mut(cx), &self.config);
-        }
     }
 
     pub(crate) fn save_custom_appearance(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let previous_draft = self.config.custom_theme_draft();
         let theme_name = self
-            .custom_theme_name_input
+            .custom_theme_inputs
+            .get(CUSTOM_THEME_NAME_INPUT_KEY)
+            .expect("custom theme name input missing")
             .read(cx)
             .value()
             .trim()
             .to_string();
-        let primary_color = self
-            .custom_primary_color_input
-            .read(cx)
-            .value()
-            .trim()
-            .to_string();
-        let background_color = self
-            .custom_background_color_input
-            .read(cx)
-            .value()
-            .trim()
-            .to_string();
-        let brightness_raw = self
-            .custom_font_brightness_input
-            .read(cx)
-            .value()
-            .trim()
-            .to_string();
+        self.config.set_custom_theme_draft_name(&theme_name);
 
-        if !primary_color.is_empty() && parse_hex_color(&primary_color).is_none() {
-            self.status = "invalid primary color, use #RRGGBB".into();
-            cx.notify();
-            return;
-        }
-        if !background_color.is_empty() && parse_hex_color(&background_color).is_none() {
-            self.status = "invalid background color, use #RRGGBB".into();
-            cx.notify();
-            return;
+        for mode in custom_theme_modes() {
+            for field in custom_theme_field_specs() {
+                let input_key = custom_theme_input_key(mode, field.key);
+                let value = self
+                    .custom_theme_inputs
+                    .get(&input_key)
+                    .expect("custom theme input missing")
+                    .read(cx)
+                    .value()
+                    .trim()
+                    .to_string();
+
+                match field.domain {
+                    CustomThemeFieldDomain::Brightness => {
+                        let brightness = match value.parse::<f32>() {
+                            Ok(value) if (0.6..=1.6).contains(&value) => value,
+                            _ => {
+                                self.status = format!(
+                                    "invalid {} value, use 0.60-1.60",
+                                    field.label.to_lowercase()
+                                )
+                                .into();
+                                cx.notify();
+                                return;
+                            }
+                        };
+                        self.config
+                            .set_custom_theme_font_brightness_for_mode(mode, brightness);
+                    }
+                    CustomThemeFieldDomain::ThemeColor | CustomThemeFieldDomain::HighlightColor => {
+                        if !value.is_empty() && try_parse_color(&value).is_err() {
+                            self.status = format!(
+                                "invalid color for {}: use hex like #RRGGBB or #RRGGBBAA",
+                                field.label
+                            )
+                            .into();
+                            cx.notify();
+                            return;
+                        }
+                        self.config
+                            .set_custom_theme_override(mode, field.key, &value);
+                    }
+                }
+            }
         }
 
-        let brightness = match brightness_raw.parse::<f32>() {
-            Ok(value) if (0.6..=1.6).contains(&value) => value,
-            _ => {
-                self.status = "invalid font brightness, use 0.60-1.60".into();
+        let (theme_set, _, _) = match build_custom_theme_set(&self.config, cx) {
+            Ok(themes) => themes,
+            Err(err) => {
+                self.status = format!("failed to build custom theme: {err:#}").into();
                 cx.notify();
                 return;
             }
         };
 
-        self.config.set_custom_theme_name(&theme_name);
-        self.config.set_custom_primary_color(&primary_color);
-        self.config.set_custom_background_color(&background_color);
-        self.config.set_custom_font_brightness(brightness);
-
-        let custom_theme_name = self.custom_theme_name();
-        if Theme::global(cx).mode.is_dark() {
-            self.dark_theme_name = custom_theme_name;
-        } else {
-            self.light_theme_name = custom_theme_name;
-        }
-        self.persist_theme_preferences();
-        if let Err(err) = self.config.save() {
-            self.status = format!("failed to save custom appearance: {err:#}").into();
+        if let Err(err) = write_custom_theme_file(&self.config, &theme_set) {
+            self.status = format!("failed to save custom theme file: {err:#}").into();
             cx.notify();
             return;
         }
 
+        match serde_json::to_string_pretty(&theme_set) {
+            Ok(theme_json) => {
+                if let Err(err) = ThemeRegistry::global_mut(cx).load_themes_from_str(&theme_json) {
+                    tracing::warn!("failed to seed custom theme into registry: {err:#}");
+                }
+            }
+            Err(err) => {
+                tracing::warn!("failed to serialize custom theme for registry seed: {err:#}");
+            }
+        }
+
+        let previous_light =
+            custom_theme_registry_name(&previous_draft.theme_name, ThemeMode::Light);
+        let previous_dark = custom_theme_registry_name(&previous_draft.theme_name, ThemeMode::Dark);
+        let current_light =
+            custom_theme_registry_name(&self.current_custom_theme_draft_name(), ThemeMode::Light);
+        let current_dark =
+            custom_theme_registry_name(&self.current_custom_theme_draft_name(), ThemeMode::Dark);
+
+        if self.light_theme_name.as_ref() == previous_draft.theme_name
+            || self.light_theme_name.as_ref() == previous_light
+        {
+            self.light_theme_name = current_light.clone().into();
+        }
+        if self.dark_theme_name.as_ref() == previous_draft.theme_name
+            || self.dark_theme_name.as_ref() == previous_dark
+        {
+            self.dark_theme_name = current_dark.clone().into();
+        }
+
+        if Theme::global(cx).mode.is_dark() {
+            self.dark_theme_name = current_dark.into();
+        } else {
+            self.light_theme_name = current_light.into();
+        }
+
         self.apply_theme_preferences(window, cx);
-        self.status = "custom appearance saved".into();
+        self.persist_theme_preferences();
+        self.status = "custom theme saved to theme list".into();
         window.refresh();
         cx.notify();
     }
 
     pub(crate) fn reset_custom_appearance(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.config.set_custom_theme_name("Custom Theme");
-        self.config.set_custom_primary_color("");
-        self.config.set_custom_background_color("");
-        self.config.set_custom_font_brightness(1.0);
+        self.config.reset_custom_theme_draft();
         if let Err(err) = self.config.save() {
-            self.status = format!("failed to reset custom appearance: {err:#}").into();
+            self.status = format!("failed to reset custom theme draft: {err:#}").into();
             cx.notify();
             return;
         }
 
-        self.custom_theme_name_input.update(cx, |input, cx| {
-            input.set_value("Custom Theme", window, cx);
-        });
-        self.custom_primary_color_input.update(cx, |input, cx| {
-            input.set_value("", window, cx);
-        });
-        self.custom_background_color_input.update(cx, |input, cx| {
-            input.set_value("", window, cx);
-        });
-        self.custom_font_brightness_input.update(cx, |input, cx| {
-            input.set_value("1.00", window, cx);
-        });
+        if let Some(input) = self.custom_theme_inputs.get(CUSTOM_THEME_NAME_INPUT_KEY) {
+            input.update(cx, |input, cx| {
+                input.set_value("Custom Theme", window, cx);
+            });
+        }
+        for mode in custom_theme_modes() {
+            for field in custom_theme_field_specs() {
+                let input_key = custom_theme_input_key(mode, field.key);
+                if let Some(input) = self.custom_theme_inputs.get(&input_key) {
+                    let reset_value = if field.domain == CustomThemeFieldDomain::Brightness {
+                        "1.00"
+                    } else {
+                        ""
+                    };
+                    input.update(cx, |input, cx| {
+                        input.set_value(reset_value, window, cx);
+                    });
+                }
+            }
+        }
 
-        self.apply_theme_preferences(window, cx);
-        self.status = "custom appearance reset".into();
-        window.refresh();
+        self.status = "custom theme editor reset".into();
         cx.notify();
     }
 

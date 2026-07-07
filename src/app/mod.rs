@@ -240,10 +240,7 @@ pub(crate) struct AxAshell {
     pub(crate) sync_s3_secret_key_input: Entity<InputState>,
     pub(crate) sync_s3_session_token_input: Entity<InputState>,
     pub(crate) sync_encryption_password_input: Entity<InputState>,
-    pub(crate) custom_theme_name_input: Entity<InputState>,
-    pub(crate) custom_primary_color_input: Entity<InputState>,
-    pub(crate) custom_background_color_input: Entity<InputState>,
-    pub(crate) custom_font_brightness_input: Entity<InputState>,
+    pub(crate) custom_theme_inputs: HashMap<String, Entity<InputState>>,
     pub(crate) sync_in_progress: bool,
     pub(crate) sync_status: SharedString,
     pub(crate) sftp_path_input: Entity<InputState>,
@@ -521,30 +518,52 @@ impl AxAshell {
                 .placeholder(t!("sync_encryption_password").to_string())
                 .masked(true)
         });
-        let custom_primary_color_input = cx.new(|cx| {
-            InputState::new(window, cx)
-                .placeholder("#4f8cff")
-                .default_value(config.custom_primary_color())
-        });
-        let custom_theme_name_input = cx.new(|cx| {
-            InputState::new(window, cx)
-                .placeholder("Custom Theme")
-                .default_value(config.custom_theme_name())
-        });
-        let custom_background_color_input = cx.new(|cx| {
-            InputState::new(window, cx)
-                .placeholder("#111827")
-                .default_value(config.custom_background_color())
-        });
-        let custom_font_brightness_input = cx.new(|cx| {
-            InputState::new(window, cx)
-                .placeholder("1.0")
-                .default_value(format!("{:.2}", config.custom_font_brightness()))
-        });
+        let custom_theme_draft = config.custom_theme_draft();
+        let custom_theme_draft_name = custom_theme_draft.theme_name.clone();
+        let mut custom_theme_inputs = HashMap::new();
+        custom_theme_inputs.insert(
+            crate::app::theme::custom_theme_name_input_key().to_string(),
+            cx.new(|cx| {
+                InputState::new(window, cx)
+                    .placeholder("Custom Theme")
+                    .default_value(custom_theme_draft_name.clone())
+            }),
+        );
+        for mode in crate::app::theme::custom_theme_modes() {
+            let mode_config = if mode.is_dark() {
+                &custom_theme_draft.dark
+            } else {
+                &custom_theme_draft.light
+            };
+            for section in crate::app::theme::CUSTOM_THEME_SECTION_SPECS {
+                for field in section.fields {
+                    let default_value =
+                        if field.domain == crate::app::theme::CustomThemeFieldDomain::Brightness {
+                            format!("{:.2}", mode_config.font_brightness)
+                        } else {
+                            mode_config
+                                .overrides
+                                .get(field.key)
+                                .cloned()
+                                .unwrap_or_default()
+                        };
+                    let input_key = crate::app::theme::custom_theme_input_key(mode, field.key);
+                    let placeholder = field.placeholder.to_string();
+                    custom_theme_inputs.insert(
+                        input_key,
+                        cx.new(|cx| {
+                            InputState::new(window, cx)
+                                .placeholder(placeholder.clone())
+                                .default_value(default_value.clone())
+                        }),
+                    );
+                }
+            }
+        }
         let saved_group_name_input =
             cx.new(|cx| InputState::new(window, cx).placeholder(t!("group_name")));
 
-        let _subscriptions = vec![
+        let mut _subscriptions = vec![
             cx.subscribe_in(&host_input, window, Self::on_input_event),
             cx.subscribe_in(&session_name_input, window, Self::on_input_event),
             cx.subscribe_in(&session_group_input, window, Self::on_input_event),
@@ -577,12 +596,13 @@ impl AxAshell {
                 window,
                 Self::on_input_event,
             ),
-            cx.subscribe_in(&custom_theme_name_input, window, Self::on_input_event),
-            cx.subscribe_in(&custom_primary_color_input, window, Self::on_input_event),
-            cx.subscribe_in(&custom_background_color_input, window, Self::on_input_event),
-            cx.subscribe_in(&custom_font_brightness_input, window, Self::on_input_event),
             cx.subscribe_in(&saved_group_name_input, window, Self::on_input_event),
         ];
+        _subscriptions.extend(
+            custom_theme_inputs
+                .values()
+                .map(|input| cx.subscribe_in(input, window, Self::on_input_event)),
+        );
 
         let (events_tx, events_rx) = mpsc::channel();
         let workspace_panels = cx.new(|_| ResizableState::default());
@@ -598,13 +618,29 @@ impl AxAshell {
             "dark" => ThemeMode::Dark,
             _ => ThemeMode::Light,
         };
+        let migrated_light_custom_name = crate::app::theme::custom_theme_registry_name(
+            &custom_theme_draft.theme_name,
+            ThemeMode::Light,
+        );
+        let migrated_dark_custom_name = crate::app::theme::custom_theme_registry_name(
+            &custom_theme_draft.theme_name,
+            ThemeMode::Dark,
+        );
         let light_theme_name = if config.light_theme_name().is_empty() {
             default_light_theme_name
+        } else if config.light_theme_name() == custom_theme_draft.theme_name
+            || config.light_theme_name() == config.custom_theme_name()
+        {
+            migrated_light_custom_name.into()
         } else {
             config.light_theme_name().into()
         };
         let dark_theme_name = if config.dark_theme_name().is_empty() {
             default_dark_theme_name
+        } else if config.dark_theme_name() == custom_theme_draft.theme_name
+            || config.dark_theme_name() == config.custom_theme_name()
+        {
+            migrated_dark_custom_name.into()
         } else {
             config.dark_theme_name().into()
         };
@@ -661,10 +697,7 @@ impl AxAshell {
             sync_s3_secret_key_input,
             sync_s3_session_token_input,
             sync_encryption_password_input,
-            custom_theme_name_input,
-            custom_primary_color_input,
-            custom_background_color_input,
-            custom_font_brightness_input,
+            custom_theme_inputs,
             sync_in_progress: false,
             sync_status: t!("sync_not_run").into(),
             sftp_path_input,
@@ -923,10 +956,10 @@ impl AxAshell {
                 }
                 _ => {}
             }
-        } else if input == &self.custom_theme_name_input
-            || input == &self.custom_primary_color_input
-            || input == &self.custom_background_color_input
-            || input == &self.custom_font_brightness_input
+        } else if self
+            .custom_theme_inputs
+            .values()
+            .any(|custom_input| input == custom_input)
         {
             if let InputEvent::PressEnter { .. } = event {
                 self.save_custom_appearance(window, cx);
