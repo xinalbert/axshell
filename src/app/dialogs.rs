@@ -1305,13 +1305,18 @@ impl AxAshell {
             .flex_col()
             .size_full()
             .track_focus(&self.focus_handle)
-            .on_mouse_down(MouseButton::Left, cx.listener(|this, _, window, cx| {
-                this.focus_handle.focus(window, cx);
-            }))
             .on_key_down({
                 let view = view.clone();
                 move |ev: &gpui::KeyDownEvent, window, cx| {
                     view.update(cx, |this, cx| {
+                        if window.focused(cx) != Some(this.focus_handle.clone()) {
+                            if this.recording_action.is_some() {
+                                this.recording_action = None;
+                                cx.notify();
+                            }
+                            return;
+                        }
+
                         if this.recording_action.is_none() {
                             if crate::app::keybinding_recorder::event_matches_action(
                                 &this.config,
