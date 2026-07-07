@@ -1,83 +1,51 @@
-[中文](README.md) | [English](README.en.md)
+[中文](README.md)
 
-# ax_ashell
+# AxAshell
 
 ![Preview](preview.png)
 
-`ax_ashell` is a Rust and GPUI Component based desktop terminal workspace for local shells, SSH sessions, and built-in SFTP file management.
+AxAshell is a desktop terminal workspace built with Rust, GPUI, and `alacritty_terminal`, focused on local shells, SSH sessions, and built-in SFTP file management.
 
-Forked from https://github.com/rust-kotlin/ashell.git
+Forked from <https://github.com/rust-kotlin/ashell.git>
 
 Repository: <https://github.com/xinalbert/ax_ashell>
 
-## Overview
+## Core Features
 
-- Local terminal tabs and SSH remote sessions
-- Built-in SFTP browsing, upload, download, and transfer history
-- Multi-tab, multi-pane workspace
-- Sidebar telemetry, theme switching, and bundled fonts
-- Desktop settings, keybinding management, and config sync
+- Local terminal tabs and SSH session management with password and private key authentication
+- Built-in SFTP panel for browsing, upload, download, delete, transfer control, and remote file editing
+- Multi-tab, multi-pane workspace with search, pane split, focus switching, and pane close actions
+- In-app settings for themes, fonts, keybindings, monitoring panels, and title bar style
+- Session configuration sync over WebDAV or S3 with end-to-end encrypted uploads
+- Global proxy and SSH X11 forwarding settings for remote operations and GUI forwarding workflows
 
 ## Quick Start
 
-Run the app locally:
+Run the desktop app:
 
 ```bash
 cargo run --release
 ```
 
-Use the restart-based development reloader:
+Use restart-based live development:
 
 ```bash
 cargo dev-reload
 ```
 
-By default it watches `src`, `assets`, `locales`, `Cargo.toml`, `Cargo.lock`, `build.rs`, and `.cargo`.
+See [Development and Packaging](docs/development.en.md) for the full run and packaging workflow.
 
-In debug mode, `cargo dev-reload` writes dev-reload events, `cargo build` output, and the launched app's `stdout/stderr` to `target/debug/dev-reload-logs/session-<timestamp>/`; `cargo dev-reload --release` does not create these log files.
+## Documentation
 
-If a later file change causes the rebuild to fail, `cargo dev-reload` keeps the currently running old process alive and continues watching instead of exiting immediately; only an initial startup build failure ends the command with an error.
+- [User Guide](docs/user-guide.en.md): UI layout, SSH / SFTP workflows, sync, proxy, and X11 usage
+- [Development and Packaging](docs/development.en.md): development commands, `cargo dev-reload`, macOS `.app`, and Debian `.deb` packaging
 
-## Packaging
+## Project Status
 
-macOS `.app`:
-
-```bash
-./scripts/package-macos-app.sh
-open target/release/ax_ashell.app
-```
-
-Debian / Ubuntu `.deb`:
-
-```bash
-sudo apt install pkg-config libfontconfig1-dev
-cargo install cargo-deb
-cargo build --release
-cargo deb
-```
-
-Install example:
-
-```bash
-sudo dpkg -i target/debian/ax_ashell_<version>-1_amd64.deb
-```
-
-## Versioning
-
-- Public release labels use dates: `YYYY.MM.DD`
-- Multiple releases on the same day append a sequence: `YYYY.MM.DD.1`, `YYYY.MM.DD.2`
-- Cargo and package metadata still need semver-compatible values; the current internal build version starts at `2026.7.6`
-
-## Release Status
-
-- GitHub Actions currently keeps build and artifact upload steps enabled
-- Token-backed publishing paths such as GitHub Release automation and Homebrew cask updates are disabled for now
-- The README no longer documents Homebrew cask installation as an active distribution path
-
-## Assets
-
-- Runtime and packaging icons are sourced from `assets/icons/terminal_icon_all_formats`
+- Runtime and packaging icons come from `assets/icons/terminal_icon_all_formats`
+- GitHub Actions still builds the app and uploads artifacts
+- Token-backed publishing paths such as GitHub Releases and Homebrew cask updates are currently disabled
 
 ## License
 
-This project is licensed under [GPL-3.0-or-later](LICENSE).
+Licensed under [GPL-3.0-or-later](LICENSE).
