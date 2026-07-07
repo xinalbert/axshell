@@ -259,6 +259,7 @@ pub(crate) struct AxShell {
     pub(crate) sync_in_progress: bool,
     pub(crate) sync_status: SharedString,
     pub(crate) sftp_path_input: Entity<InputState>,
+    pub(crate) local_sftp_path_input: Entity<InputState>,
     pub(crate) ssh_auth_method: AuthMethod,
     pub(crate) editing_session_id: Option<String>,
     pub(crate) follow_system_theme: bool,
@@ -281,6 +282,7 @@ pub(crate) struct AxShell {
     pub(crate) is_layout_reset: bool,
     pub(crate) terminal_scrollbars: HashMap<String, TerminalScrollbarHandle>,
     pub(crate) remote_files_scroll_handle: UniformListScrollHandle,
+    pub(crate) local_files_scroll_handle: UniformListScrollHandle,
     pub(crate) disk_scroll_handle: gpui::ScrollHandle,
     pub(crate) tabs_scroll_handle: gpui::ScrollHandle,
     pub(crate) selector_scroll_handle: gpui::ScrollHandle,
@@ -289,6 +291,8 @@ pub(crate) struct AxShell {
     pub(crate) connection_scroll_handle: gpui::ScrollHandle,
     pub(crate) connection_progress: Option<ConnectionProgress>,
     pub(crate) pending_sftp_path_sync: Option<String>,
+    pub(crate) pending_local_sftp_path_sync: Option<String>,
+    pub(crate) local_file_browser: LocalFileBrowserState,
     pub(crate) sftp_context_menu: Option<SftpContextMenuState>,
     pub(crate) sftp_creating_folder: bool,
     pub(crate) sftp_new_folder_input: Entity<InputState>,
@@ -359,6 +363,24 @@ pub(crate) struct HoveredUrl {
     pub(crate) url: String,
     pub(crate) tab_id: String,
     pub(crate) cells: Vec<(usize, usize)>,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct LocalFileEntry {
+    pub(crate) name: String,
+    pub(crate) full_path: String,
+    pub(crate) is_dir: bool,
+    pub(crate) size: u64,
+    pub(crate) modified: u32,
+}
+
+#[derive(Clone, Default)]
+pub(crate) struct LocalFileBrowserState {
+    pub(crate) current_path: String,
+    pub(crate) status: String,
+    pub(crate) entries: Vec<LocalFileEntry>,
+    pub(crate) selected_path: Option<String>,
+    pub(crate) selected_entries: HashSet<String>,
 }
 
 #[derive(Clone)]
@@ -442,6 +464,9 @@ impl AxShell {
                 .masked(true)
         });
         let sftp_path_input = cx.new(|cx| InputState::new(window, cx).default_value("/"));
+        let default_local_dir = Self::default_local_browser_dir();
+        let local_sftp_path_input =
+            cx.new(|cx| InputState::new(window, cx).default_value(default_local_dir.clone()));
         let sftp_new_folder_input =
             cx.new(|cx| InputState::new(window, cx).placeholder(t!("new_folder").to_string()));
         let search_input =
@@ -578,6 +603,11 @@ impl AxShell {
         }
         let saved_group_name_input =
             cx.new(|cx| InputState::new(window, cx).placeholder(t!("group_name")));
+        let (local_entries, local_status) =
+            match Self::read_local_browser_entries(&default_local_dir) {
+                Ok(entries) => (entries, default_local_dir.clone()),
+                Err(err) => (Vec::new(), err),
+            };
 
         let mut _subscriptions = vec![
             cx.subscribe_in(&host_input, window, Self::on_input_event),
@@ -595,6 +625,7 @@ impl AxShell {
             cx.subscribe_in(&proxy_password_input, window, Self::on_input_event),
             cx.subscribe_in(&xquartz_app_path_input, window, Self::on_input_event),
             cx.subscribe_in(&sftp_path_input, window, Self::on_input_event),
+            cx.subscribe_in(&local_sftp_path_input, window, Self::on_input_event),
             cx.subscribe_in(&sftp_new_folder_input, window, Self::on_input_event),
             cx.subscribe_in(&search_input, window, Self::on_input_event),
             cx.subscribe_in(&sync_endpoint_input, window, Self::on_input_event),
@@ -717,6 +748,7 @@ impl AxShell {
             sync_in_progress: false,
             sync_status: t!("sync_not_run").into(),
             sftp_path_input,
+            local_sftp_path_input,
             ssh_auth_method: AuthMethod::Password,
             editing_session_id: None,
             follow_system_theme,
@@ -743,6 +775,7 @@ impl AxShell {
             is_layout_reset: false,
             terminal_scrollbars: HashMap::new(),
             remote_files_scroll_handle: UniformListScrollHandle::new(),
+            local_files_scroll_handle: UniformListScrollHandle::new(),
             disk_scroll_handle: gpui::ScrollHandle::new(),
             tabs_scroll_handle: gpui::ScrollHandle::new(),
             selector_scroll_handle: gpui::ScrollHandle::new(),
@@ -751,6 +784,14 @@ impl AxShell {
             connection_scroll_handle: gpui::ScrollHandle::new(),
             connection_progress: None,
             pending_sftp_path_sync: Some("/".into()),
+            pending_local_sftp_path_sync: Some(default_local_dir.clone()),
+            local_file_browser: LocalFileBrowserState {
+                current_path: default_local_dir.clone(),
+                status: local_status,
+                entries: local_entries,
+                selected_path: None,
+                selected_entries: HashSet::new(),
+            },
             sftp_context_menu: None,
             sftp_creating_folder: false,
             sftp_new_folder_input,
@@ -924,6 +965,19 @@ impl AxShell {
                     .trim()
                     .to_string();
                 self.navigate_sftp(if path.is_empty() { "/".into() } else { path }, cx);
+                window.prevent_default();
+                cx.stop_propagation();
+            }
+        } else if input == &self.local_sftp_path_input {
+            if let InputEvent::PressEnter { .. } = event {
+                let path = self
+                    .local_sftp_path_input
+                    .read(cx)
+                    .text()
+                    .to_string()
+                    .trim()
+                    .to_string();
+                self.navigate_local_file_browser(path, cx);
                 window.prevent_default();
                 cx.stop_propagation();
             }

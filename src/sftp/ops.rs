@@ -1,7 +1,15 @@
+use std::{
+    fs,
+    path::{Component, Path, PathBuf},
+    time::UNIX_EPOCH,
+};
+
+use directories::BaseDirs;
 use gpui::{Context, PathPromptOptions, Pixels, Point, Window};
 
 use crate::{
     AxShell, SftpContextMenuState,
+    app::LocalFileEntry,
     sftp::{RemoteEntry, SftpHandle},
     terminal,
 };
@@ -27,6 +35,123 @@ pub(crate) fn is_editable_text_file(filename: &str) -> bool {
 }
 
 impl AxShell {
+    pub(crate) fn default_local_browser_dir() -> String {
+        BaseDirs::new()
+            .map(|dirs| dirs.home_dir().to_string_lossy().to_string())
+            .or_else(|| {
+                std::env::current_dir()
+                    .ok()
+                    .map(|path| path.to_string_lossy().to_string())
+            })
+            .unwrap_or_else(|| ".".to_string())
+    }
+
+    fn expand_local_browser_path(value: &str) -> PathBuf {
+        if value == "~" {
+            return BaseDirs::new()
+                .map(|dirs| dirs.home_dir().to_path_buf())
+                .unwrap_or_else(|| PathBuf::from(value));
+        }
+        if let Some(rest) = value
+            .strip_prefix("~/")
+            .or_else(|| value.strip_prefix("~\\"))
+        {
+            return BaseDirs::new()
+                .map(|dirs| dirs.home_dir().join(rest))
+                .unwrap_or_else(|| PathBuf::from(value));
+        }
+        PathBuf::from(value)
+    }
+
+    fn normalize_local_browser_path(path: PathBuf) -> PathBuf {
+        let anchored = path.is_absolute();
+        let mut normalized = PathBuf::new();
+        for component in path.components() {
+            match component {
+                Component::CurDir => {}
+                Component::ParentDir => {
+                    if !normalized.pop() && !anchored {
+                        normalized.push(component.as_os_str());
+                    }
+                }
+                _ => normalized.push(component.as_os_str()),
+            }
+        }
+        if normalized.as_os_str().is_empty() {
+            PathBuf::from(Path::new(std::path::MAIN_SEPARATOR_STR))
+        } else {
+            normalized
+        }
+    }
+
+    fn resolve_local_browser_path(current_path: &str, value: &str) -> PathBuf {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            return PathBuf::from(current_path);
+        }
+        let candidate = Self::expand_local_browser_path(trimmed);
+        if candidate.is_absolute() {
+            return Self::normalize_local_browser_path(candidate);
+        }
+        Self::normalize_local_browser_path(PathBuf::from(current_path).join(candidate))
+    }
+
+    pub(crate) fn local_browser_parent_path(path: &str) -> String {
+        Path::new(path)
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+            .map(|parent| parent.to_string_lossy().to_string())
+            .unwrap_or_else(|| path.to_string())
+    }
+
+    pub(crate) fn read_local_browser_entries(path: &str) -> Result<Vec<LocalFileEntry>, String> {
+        let read_dir = fs::read_dir(path).map_err(|err| format!("local read_dir failed: {err}"))?;
+        let mut entries = Vec::new();
+        for entry in read_dir {
+            let entry = match entry {
+                Ok(entry) => entry,
+                Err(err) => {
+                    tracing::warn!("[local-browser] skipped unreadable entry in '{path}': {err}");
+                    continue;
+                }
+            };
+            let metadata = match entry.metadata() {
+                Ok(metadata) => metadata,
+                Err(err) => {
+                    tracing::warn!(
+                        "[local-browser] skipped entry with unreadable metadata in '{path}': {err}"
+                    );
+                    continue;
+                }
+            };
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name == "." || name == ".." {
+                continue;
+            }
+            let modified = metadata
+                .modified()
+                .ok()
+                .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+                .map(|duration| duration.as_secs().min(u32::MAX as u64) as u32)
+                .unwrap_or(0);
+            let is_dir = metadata.is_dir();
+            entries.push(LocalFileEntry {
+                name,
+                full_path: entry.path().to_string_lossy().to_string(),
+                is_dir,
+                size: if is_dir { 0 } else { metadata.len() },
+                modified,
+            });
+        }
+        entries.sort_by(|left, right| {
+            right
+                .is_dir
+                .cmp(&left.is_dir)
+                .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
+        });
+        Ok(entries)
+    }
+
     pub(crate) fn active_sftp(&self) -> Option<&terminal::SftpUiState> {
         self.active_group
             .as_ref()
@@ -109,6 +234,130 @@ impl AxShell {
         self.sftp_path_input.update(cx, |state, cx| {
             state.set_value(path, window, cx);
         });
+    }
+
+    pub(crate) fn navigate_local_file_browser(&mut self, path: String, cx: &mut Context<Self>) {
+        let current_path = self.local_file_browser.current_path.clone();
+        let resolved = Self::resolve_local_browser_path(&current_path, &path);
+        let resolved_str = resolved.to_string_lossy().to_string();
+        match Self::read_local_browser_entries(&resolved_str) {
+            Ok(entries) => {
+                self.local_file_browser.current_path = resolved_str.clone();
+                self.local_file_browser.status = resolved_str.clone();
+                self.local_file_browser.entries = entries;
+                self.local_file_browser.selected_path = None;
+                self.local_file_browser.selected_entries.clear();
+                self.pending_local_sftp_path_sync = Some(resolved_str);
+            }
+            Err(err) => {
+                self.local_file_browser.status = err;
+            }
+        }
+        cx.notify();
+    }
+
+    pub(crate) fn refresh_local_file_browser(&mut self, cx: &mut Context<Self>) {
+        let current_path = self.local_file_browser.current_path.clone();
+        self.navigate_local_file_browser(current_path, cx);
+    }
+
+    pub(crate) fn sync_local_sftp_path_input(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(path) = self.pending_local_sftp_path_sync.take() else {
+            return;
+        };
+        self.local_sftp_path_input.update(cx, |state, cx| {
+            state.set_value(path, window, cx);
+        });
+    }
+
+    pub(crate) fn select_local_file_entry(
+        &mut self,
+        entry: LocalFileEntry,
+        cx: &mut Context<Self>,
+    ) {
+        if entry.is_dir {
+            self.navigate_local_file_browser(entry.full_path, cx);
+            return;
+        }
+        self.mark_local_file_entry_selected(&entry.full_path, cx);
+        if !self
+            .local_file_browser
+            .selected_entries
+            .remove(&entry.full_path)
+        {
+            self.local_file_browser
+                .selected_entries
+                .insert(entry.full_path);
+        }
+        cx.notify();
+    }
+
+    pub(crate) fn mark_local_file_entry_selected(&mut self, path: &str, cx: &mut Context<Self>) {
+        self.local_file_browser.selected_path = Some(path.to_string());
+        cx.notify();
+    }
+
+    pub(crate) fn toggle_local_file_entry(
+        &mut self,
+        path: String,
+        checked: bool,
+        cx: &mut Context<Self>,
+    ) {
+        if checked {
+            self.local_file_browser.selected_entries.insert(path);
+        } else {
+            self.local_file_browser.selected_entries.remove(&path);
+        }
+        cx.notify();
+    }
+
+    pub(crate) fn toggle_all_local_file_entries(&mut self, checked: bool, cx: &mut Context<Self>) {
+        if checked {
+            let paths: Vec<String> = self
+                .local_file_browser
+                .entries
+                .iter()
+                .filter(|entry| self.show_hidden_files || !entry.name.starts_with('.'))
+                .map(|entry| entry.full_path.clone())
+                .collect();
+            self.local_file_browser.selected_entries.extend(paths);
+        } else {
+            self.local_file_browser.selected_entries.clear();
+        }
+        cx.notify();
+    }
+
+    pub(crate) fn upload_selected_local_entries_to_sftp(&mut self, cx: &mut Context<Self>) {
+        let selected: Vec<String> = self
+            .local_file_browser
+            .selected_entries
+            .iter()
+            .cloned()
+            .collect();
+        if selected.is_empty() {
+            return;
+        }
+        let Some(remote_dir) = self.active_sftp().map(|sftp| sftp.current_path.clone()) else {
+            return;
+        };
+        let Some(handle) = self.active_sftp_handle() else {
+            return;
+        };
+        tracing::info!(
+            "[sftp] initiating upload of {} local browser entries to '{}'",
+            selected.len(),
+            remote_dir
+        );
+        let _ = handle.commands.send(crate::sftp::SftpCommand::UploadPaths {
+            locals: selected,
+            remote_dir,
+        });
+        self.show_transfers_dialog = true;
+        cx.notify();
     }
 
     pub(crate) fn open_sftp_context_menu(
