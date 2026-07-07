@@ -19,6 +19,20 @@ use rust_i18n::t;
 
 use crate::{AxShell, session::config::AuthMethod, system::format_bytes};
 
+fn terminal_font_names(window: &mut Window, cx: &mut gpui::App, font_size: f32) -> Vec<String> {
+    let mut names = cx.text_system().all_font_names();
+    names.retain(|name| {
+        crate::terminal::element::terminal_font_is_monospace(
+            window,
+            name.clone().into(),
+            px(font_size),
+        )
+    });
+    names.sort_unstable();
+    names.dedup();
+    names
+}
+
 impl AxShell {
     pub(crate) fn show_ssh_dialog(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.active_dialog.is_some() {
@@ -1867,13 +1881,16 @@ impl AxShell {
                                                         SettingField::render({
                                                             let view = view_clone_for_general.clone();
                                                             let current = terminal_font_family.clone();
-                                                            move |_, _window, _cx| {
+                                                            let current_terminal_font_size = terminal_font_size;
+                                                            move |_, window, _cx| {
                                                                 Button::new("terminal-font-dropdown")
                                                                     .small()
                                                                     .icon(IconName::ChevronsUpDown)
                                                                     .label({
                                                                         let using_system_maple = crate::app::theme::USING_SYSTEM_MAPLE.load(std::sync::atomic::Ordering::Relaxed);
                                                                         if !using_system_maple && current == "Maple Mono NF CN" {
+                                                                            format!("Maple Mono NF CN ({})", t!("software_builtin"))
+                                                                        } else if !crate::terminal::element::terminal_font_is_monospace(window, current.clone().into(), px(current_terminal_font_size)) {
                                                                             format!("Maple Mono NF CN ({})", t!("software_builtin"))
                                                                         } else {
                                                                             current.clone()
@@ -1883,7 +1900,7 @@ impl AxShell {
                                                                         let view = view.clone();
                                                                         let current = current.clone();
                                                                         move |mut menu, window, cx| {
-                                                                            let mut names = cx.text_system().all_font_names();
+                                                                            let mut names = terminal_font_names(window, cx, current_terminal_font_size);
                                                                             menu = menu.min_w(200.).max_h(px(320.)).scrollable(true);
                                                                             let maple_font = "Maple Mono NF CN".to_string();
                                                                             let using_system_maple = crate::app::theme::USING_SYSTEM_MAPLE.load(std::sync::atomic::Ordering::Relaxed);
@@ -2538,13 +2555,16 @@ impl AxShell {
                                                         SettingField::render({
                                                             let view = view_clone_for_general.clone();
                                                             let current = terminal_font_family.clone();
-                                                            move |_, _window, _cx| {
+                                                            let current_terminal_font_size = terminal_font_size;
+                                                            move |_, window, _cx| {
                                                                 Button::new("custom-terminal-font-dropdown")
                                                                     .small()
                                                                     .icon(IconName::ChevronsUpDown)
                                                                     .label({
                                                                         let using_system_maple = crate::app::theme::USING_SYSTEM_MAPLE.load(std::sync::atomic::Ordering::Relaxed);
                                                                         if !using_system_maple && current == "Maple Mono NF CN" {
+                                                                            format!("Maple Mono NF CN ({})", t!("software_builtin"))
+                                                                        } else if !crate::terminal::element::terminal_font_is_monospace(window, current.clone().into(), px(current_terminal_font_size)) {
                                                                             format!("Maple Mono NF CN ({})", t!("software_builtin"))
                                                                         } else {
                                                                             current.clone()
@@ -2554,7 +2574,7 @@ impl AxShell {
                                                                         let view = view.clone();
                                                                         let current = current.clone();
                                                                         move |mut menu, window, cx| {
-                                                                            let mut names = cx.text_system().all_font_names();
+                                                                            let mut names = terminal_font_names(window, cx, current_terminal_font_size);
                                                                             menu = menu.min_w(200.).max_h(px(320.)).scrollable(true);
                                                                             let maple_font = "Maple Mono NF CN".to_string();
                                                                             let using_system_maple = crate::app::theme::USING_SYSTEM_MAPLE.load(std::sync::atomic::Ordering::Relaxed);
