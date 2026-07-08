@@ -230,36 +230,58 @@ impl AxShell {
         }
     }
 
-    pub(crate) fn activate_group(
+    pub(crate) fn activate_group_page(
         &mut self,
         group_id: String,
+        page: WorkspacePage,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         if let Some(current_group_id) = self.active_group.clone() {
-            if let Some(group) = self
-                .tab_groups
-                .iter_mut()
-                .find(|g| g.id == current_group_id)
-            {
-                group.pane_root = self.pane_root.clone();
+            if current_group_id != group_id {
+                if let Some(group) = self
+                    .tab_groups
+                    .iter_mut()
+                    .find(|g| g.id == current_group_id)
+                {
+                    group.pane_root = self.pane_root.clone();
+                }
             }
         }
-        if let Some(group) = self.tab_groups.iter().find(|g| g.id == group_id) {
-            self.pane_root = group.pane_root.clone();
-            self.active_group = Some(group_id);
-            let ids = group.pane_root.tab_ids();
-            if let Some(&first_id) = ids.first() {
-                self.active_tab = Some(first_id.to_string());
-                self.focus_pane_with_id(first_id.to_string());
-            }
-            self.focus_handle.focus(window, cx);
-        }
-        self.set_workspace_page(WorkspacePage::Terminal, cx);
-        self.sync_system_tab_to_active_group();
-        cx.notify();
-    }
 
+        let switching_group = self.active_group.as_deref() != Some(group_id.as_str());
+
+        if let Some((pane_root, has_sftp)) = self
+            .tab_groups
+            .iter()
+            .find(|g| g.id == group_id)
+            .map(|group| (group.pane_root.clone(), group.sftp.is_some()))
+        {
+            if switching_group {
+                self.pane_root = pane_root.clone();
+                self.active_group = Some(group_id.clone());
+                let ids = pane_root.tab_ids();
+                if let Some(&first_id) = ids.first() {
+                    self.active_tab = Some(first_id.to_string());
+                    self.focus_pane_with_id(first_id.to_string());
+                }
+            }
+
+            let target_page = if page == WorkspacePage::Sftp && !has_sftp {
+                WorkspacePage::Terminal
+            } else {
+                page
+            };
+
+            if target_page == WorkspacePage::Terminal {
+                self.focus_handle.focus(window, cx);
+            }
+
+            self.set_workspace_page(target_page, cx);
+            self.sync_system_tab_to_active_group();
+            cx.notify();
+        }
+    }
     pub(crate) fn sync_pane_root_to_group(&mut self) {
         if let Some(group_id) = self.active_group.clone() {
             if let Some(group) = self.tab_groups.iter_mut().find(|g| g.id == group_id) {

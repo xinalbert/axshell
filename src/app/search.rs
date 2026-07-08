@@ -16,6 +16,9 @@ use crate::AxShell;
 
 impl AxShell {
     pub(crate) fn toggle_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.workspace_page != crate::app::WorkspacePage::Terminal {
+            return;
+        }
         if self.search_active {
             self.close_search(window, cx);
         } else {
@@ -24,6 +27,9 @@ impl AxShell {
     }
 
     pub(crate) fn open_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.workspace_page != crate::app::WorkspacePage::Terminal {
+            return;
+        }
         self.search_active = true;
         // Focus the search input on the next frame so it happens after the
         // current render cycle completes, avoiding focus being stolen back

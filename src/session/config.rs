@@ -1229,14 +1229,6 @@ impl ConfigStore {
         self.cache.sidebar_collapsed = val;
     }
 
-    pub fn sftp_panel_minimized(&self) -> bool {
-        self.cache.sftp_panel_minimized
-    }
-
-    pub fn set_sftp_panel_minimized(&mut self, val: bool) {
-        self.cache.sftp_panel_minimized = val;
-    }
-
     pub fn get(&self, id: &str) -> Option<&Session> {
         self.cache.sessions.iter().find(|s| s.id == id)
     }

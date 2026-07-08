@@ -191,7 +191,15 @@ pub(crate) enum DialogKind {
 pub(crate) enum WorkspacePage {
     #[default]
     Terminal,
+    Sftp,
     Settings,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct WorkspaceTabDescriptor {
+    pub(crate) group_id: Option<String>,
+    pub(crate) group_index: Option<usize>,
+    pub(crate) page: WorkspacePage,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

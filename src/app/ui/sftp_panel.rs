@@ -1,54 +1,6 @@
 use super::*;
 
 impl AxShell {
-    pub(crate) fn toggle_sftp_minimized(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let state = self.body_panels.clone();
-        let minimized = self.sftp_panel_minimized;
-        let default_restore_size = if self.config.show_monitoring_dashboard()
-            && self.config.monitoring_position() == "Bottom"
-        {
-            px(328.)
-        } else {
-            px(248.)
-        };
-
-        if !minimized {
-            let sizes = state.read(cx).sizes();
-            if sizes.len() > 1 {
-                self.prev_monitoring_size = Some(sizes[1]);
-            }
-            self.sftp_panel_minimized = true;
-        } else {
-            self.sftp_panel_minimized = false;
-            let target_size = self.prev_monitoring_size.unwrap_or(default_restore_size);
-
-            cx.on_next_frame(
-                window,
-                move |_this: &mut crate::app::AxShell,
-                      window: &mut gpui::Window,
-                      cx: &mut gpui::Context<crate::app::AxShell>| {
-                    cx.on_next_frame(
-                        window,
-                        move |this: &mut crate::app::AxShell,
-                              window: &mut gpui::Window,
-                              cx: &mut gpui::Context<crate::app::AxShell>| {
-                            this.body_panels.update(cx, |state, cx| {
-                                if state.sizes().len() > 1 {
-                                    state.resize_panel(1, target_size, window, cx);
-                                }
-                            });
-                            cx.notify();
-                        },
-                    );
-                },
-            );
-        }
-        self.config
-            .set_sftp_panel_minimized(self.sftp_panel_minimized);
-        let _ = self.config.save();
-        cx.notify();
-    }
-
     pub(super) fn render_sftp_panel(
         &mut self,
         _window: &mut Window,
@@ -572,7 +524,7 @@ impl AxShell {
                             .text_size(rems(0.833))
                             .text_color(cx.theme().primary)
                             .italic()
-                            .child(remote_status),
+                            .child(remote_status.clone()),
                     ),
             );
 
@@ -881,7 +833,7 @@ impl AxShell {
             .gap_0()
             .border_color(cx.theme().border)
             .bg(cx.theme().background)
-            .flex_1()
+            .size_full()
             .on_drop(
                 cx.listener(|this, paths: &gpui::ExternalPaths, _window, cx| {
                     let paths_to_upload: Vec<String> = paths
@@ -900,7 +852,6 @@ impl AxShell {
                 .w_full()
                 .h_full()
                 .min_h(px(0.))
-                .when(self.sftp_panel_minimized, |this| this.hidden())
                 .child(remote_pane)
                 .child(div().w(px(1.)).h_full().bg(cx.theme().border))
                 .child(local_pane),
@@ -914,6 +865,12 @@ impl AxShell {
                 .border_t_1()
                 .border_color(cx.theme().border)
                 .bg(cx.theme().tab_bar)
+                .child(
+                    div()
+                        .text_size(rems(0.833))
+                        .text_color(cx.theme().muted_foreground)
+                        .child(remote_status),
+                )
                 .child(div().flex_1())
                 .child(
                     Button::new("open-transfers")
@@ -998,24 +955,6 @@ impl AxShell {
                         })
                         .on_click(cx.listener(|this, _, window, cx| {
                             this.show_transfers_dialog(window, cx);
-                        })),
-                )
-                .child(
-                    Button::new("sftp-minimize-toggle")
-                        .ghost()
-                        .small()
-                        .icon(if self.sftp_panel_minimized {
-                            IconName::ChevronUp
-                        } else {
-                            IconName::ChevronDown
-                        })
-                        .label(if self.sftp_panel_minimized {
-                            t!("panel_expand").to_string()
-                        } else {
-                            t!("panel_minimize").to_string()
-                        })
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            this.toggle_sftp_minimized(window, cx);
                         })),
                 ),
         );

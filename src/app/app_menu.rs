@@ -44,7 +44,7 @@ fn app_menus() -> [Menu; 6] {
         ]),
         Menu::new("View").items([
             MenuItem::action("Toggle Sidebar", ToggleSidebar),
-            MenuItem::action("Toggle SFTP Panel", ToggleSftpZoom),
+            MenuItem::action("Open SFTP Page", ToggleSftpZoom),
             MenuItem::separator(),
             MenuItem::action("Transfers", OpenTransfers),
         ]),

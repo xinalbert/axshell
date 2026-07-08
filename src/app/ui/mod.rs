@@ -1,4 +1,4 @@
-use crate::app::resizable::{h_resizable, resizable_panel, v_resizable};
+use crate::app::resizable::{h_resizable, resizable_panel};
 use gpui::{
     Context, ElementId, Focusable as _, FontWeight, Hsla, InteractiveElement as _, IntoElement,
     MouseButton, MouseDownEvent, ParentElement as _, PathBuilder, Pixels, Render,

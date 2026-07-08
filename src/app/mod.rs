@@ -33,7 +33,7 @@ use crate::{
 pub(crate) use types::{
     ConnectionProgress, DialogKind, HoveredUrl, LocalFileBrowserState, LocalFileEntry, PaneLayout,
     SelectorEntry, SftpContextMenuState, TabGroup, TerminalFontMetrics, TerminalScrollbarHandle,
-    WorkspacePage,
+    WorkspacePage, WorkspaceTabDescriptor,
 };
 
 pub(crate) struct AxShell {
@@ -124,10 +124,8 @@ pub(crate) struct AxShell {
     pub(crate) dragging_splitter: Option<(Vec<usize>, usize)>, // (parent_path, child_index)
     pub(crate) drag_split_origin: Option<gpui::Point<Pixels>>,
     pub(crate) terminal_marked_text: Option<String>,
-    pub(crate) sftp_panel_minimized: bool,
     pub(crate) sidebar_collapsed: bool,
     pub(crate) collapsed_saved_scroll_handle: gpui::ScrollHandle,
-    pub(crate) prev_monitoring_size: Option<Pixels>,
     pub(crate) status: SharedString,
     pub(crate) config: ConfigStore,
     pub(crate) active_title_bar_style: crate::session::config::TitleBarStyle,

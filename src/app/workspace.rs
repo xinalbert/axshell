@@ -5,11 +5,75 @@ use rust_i18n::t;
 
 use crate::{
     AxShell,
-    app::{ConnectionProgress, WorkspacePage},
+    app::{ConnectionProgress, WorkspacePage, WorkspaceTabDescriptor},
     session::config::ConfigStore,
 };
 
 impl AxShell {
+    pub(crate) fn workspace_tabs(&self) -> Vec<WorkspaceTabDescriptor> {
+        let mut tabs = Vec::new();
+
+        for (group_index, group) in self.tab_groups.iter().enumerate() {
+            tabs.push(WorkspaceTabDescriptor {
+                group_id: Some(group.id.clone()),
+                group_index: Some(group_index),
+                page: WorkspacePage::Terminal,
+            });
+
+            if group.sftp.is_some() {
+                tabs.push(WorkspaceTabDescriptor {
+                    group_id: Some(group.id.clone()),
+                    group_index: Some(group_index),
+                    page: WorkspacePage::Sftp,
+                });
+            }
+        }
+
+        if self.settings_page_open {
+            tabs.push(WorkspaceTabDescriptor {
+                group_id: None,
+                group_index: None,
+                page: WorkspacePage::Settings,
+            });
+        }
+
+        tabs
+    }
+
+    pub(crate) fn workspace_tab_selected(&self, entry: &WorkspaceTabDescriptor) -> bool {
+        match entry.page {
+            WorkspacePage::Settings => {
+                self.settings_page_open && self.workspace_page == WorkspacePage::Settings
+            }
+            page => {
+                self.workspace_page == page
+                    && entry.group_id.as_deref() == self.active_group.as_deref()
+            }
+        }
+    }
+
+    pub(crate) fn active_workspace_tab_index(&self, tabs: &[WorkspaceTabDescriptor]) -> usize {
+        tabs.iter()
+            .position(|entry| self.workspace_tab_selected(entry))
+            .or_else(|| {
+                self.active_group.as_ref().and_then(|group_id| {
+                    tabs.iter().position(|entry| {
+                        entry.page == WorkspacePage::Terminal
+                            && entry.group_id.as_deref() == Some(group_id.as_str())
+                    })
+                })
+            })
+            .unwrap_or(0)
+    }
+
+    pub(crate) fn active_group_has_sftp(&self) -> bool {
+        self.active_group
+            .as_ref()
+            .and_then(|group_id| self.tab_groups.iter().find(|group| &group.id == group_id))
+            .and_then(|group| group.sftp.as_ref())
+            .is_some()
+    }
+
     pub(crate) fn transfer_source_title(&self, tab_id: &str) -> String {
         self.tabs
             .iter()
@@ -31,6 +95,12 @@ impl AxShell {
     }
 
     pub(crate) fn set_workspace_page(&mut self, page: WorkspacePage, cx: &mut Context<Self>) {
+        let page = if page == WorkspacePage::Sftp && !self.active_group_has_sftp() {
+            WorkspacePage::Terminal
+        } else {
+            page
+        };
+
         if self.workspace_page == page {
             return;
         }
@@ -43,14 +113,18 @@ impl AxShell {
             crate::app::app_menu::refresh(cx);
         }
 
-        if page == WorkspacePage::Settings {
-            crate::app::keybinding_recorder::unbind_all_workspace_keys(cx, &self.config);
-            self.keybinds_suspended = true;
+        if self.workspace_page == WorkspacePage::Terminal && page != WorkspacePage::Terminal {
             self.search_active = false;
             self.search_query.clear();
             self.search_matches.clear();
             self.search_current = 0;
             self.search_target_tab = None;
+            self.search_bar_bounds = None;
+        }
+
+        if page == WorkspacePage::Settings {
+            crate::app::keybinding_recorder::unbind_all_workspace_keys(cx, &self.config);
+            self.keybinds_suspended = true;
         }
 
         self.workspace_page = page;
@@ -77,36 +151,36 @@ impl AxShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let settings_index = self.tab_groups.len();
-        let total_tabs = settings_index + usize::from(self.settings_page_open);
-        if total_tabs <= 1 {
+        let workspace_tabs = self.workspace_tabs();
+        if workspace_tabs.len() <= 1 {
             return;
         }
 
-        let current_index =
-            if self.workspace_page == WorkspacePage::Settings && self.settings_page_open {
-                settings_index
-            } else {
-                self.active_group
-                    .as_ref()
-                    .and_then(|gid| self.tab_groups.iter().position(|group| group.id == *gid))
-                    .unwrap_or(0)
-            };
-
-        let next_index = (current_index as isize + step).rem_euclid(total_tabs as isize) as usize;
-        if self.settings_page_open && next_index == settings_index {
-            self.open_settings_page(cx);
-            return;
-        }
-
-        let Some(group_id) = self
-            .tab_groups
-            .get(next_index)
-            .map(|group| group.id.clone())
-        else {
+        let current_index = self.active_workspace_tab_index(&workspace_tabs);
+        let next_index =
+            (current_index as isize + step).rem_euclid(workspace_tabs.len() as isize) as usize;
+        let Some(target) = workspace_tabs.get(next_index).cloned() else {
             return;
         };
-        self.activate_group(group_id, window, cx);
+
+        match target.page {
+            WorkspacePage::Settings => self.open_settings_page(cx),
+            page => {
+                let Some(group_id) = target.group_id else {
+                    return;
+                };
+                self.activate_group_page(group_id, page, window, cx);
+            }
+        }
+    }
+
+    pub(crate) fn open_active_sftp_page(&mut self, cx: &mut Context<Self>) {
+        if self.active_group_has_sftp() {
+            self.set_workspace_page(WorkspacePage::Sftp, cx);
+        } else {
+            self.status = t!("open_ssh_tab_sftp").into();
+            cx.notify();
+        }
     }
 
     pub(crate) fn request_active_system_snapshot(&mut self) {
@@ -332,7 +406,7 @@ impl AxShell {
                 .iter()
                 .map(|s| s.into())
                 .collect();
-            let mut body_sizes: Vec<f32> = self
+            let body_sizes: Vec<f32> = self
                 .body_panels
                 .read(cx)
                 .sizes()
@@ -340,17 +414,8 @@ impl AxShell {
                 .map(|s| s.into())
                 .collect();
 
-            if self.sftp_panel_minimized {
-                if let Some(prev) = self.prev_monitoring_size {
-                    if body_sizes.len() > 1 {
-                        body_sizes[1] = prev.into();
-                    }
-                }
-            }
-
             config.set_layout_state(Some(saved_bounds), Some(workspace_sizes), Some(body_sizes));
             config.set_sidebar_collapsed(self.sidebar_collapsed);
-            config.set_sftp_panel_minimized(self.sftp_panel_minimized);
             let _ = config.save();
         } else {
             tracing::warn!(

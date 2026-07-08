@@ -43,41 +43,20 @@ impl Render for AxShell {
         let show_bottom_monitoring = self.config.show_monitoring_dashboard()
             && self.config.monitoring_position() == "Bottom";
 
-        let monitoring_contents = v_flex()
+        let body_panel = v_flex()
             .size_full()
             .when(show_bottom_monitoring, |this| {
-                this.child(self.render_monitoring_panel(window.viewport_size().width, cx))
+                this.child(
+                    div()
+                        .flex_none()
+                        .child(self.render_monitoring_panel(window.viewport_size().width, cx)),
+                )
             })
-            .child(self.render_sftp_panel(window, cx));
-
-        let is_monitor_bottom = show_bottom_monitoring;
-        let minimized_height = if is_monitor_bottom { 104. } else { 24. };
-        let min_panel_height = if is_monitor_bottom { 260. } else { 180. };
-        let default_panel_height = if is_monitor_bottom { 328. } else { 248. };
-
-        let sftp_size = if self.sftp_panel_minimized {
-            px(minimized_height)
-        } else {
-            px(self
-                .config
-                .body_panels()
-                .and_then(|s| s.get(1).copied())
-                .unwrap_or(default_panel_height))
-        };
-
-        let body_panel = v_resizable("ax_shell-body")
-            .lock(self.config.lock_layout())
-            .with_state(&self.body_panels)
-            .child(resizable_panel().child(self.render_terminal_panel(window, cx)))
             .child(
-                resizable_panel()
-                    .size(sftp_size)
-                    .size_range(if self.sftp_panel_minimized {
-                        px(minimized_height)..px(minimized_height)
-                    } else {
-                        px(min_panel_height)..px(1200.)
-                    })
-                    .child(monitoring_contents),
+                div()
+                    .flex_1()
+                    .min_h_0()
+                    .child(self.render_terminal_panel(window, cx)),
             )
             .into_any_element();
 
@@ -187,17 +166,49 @@ impl Render for AxShell {
                 let _ = this.config.save();
                 cx.notify();
             }))
-            .on_action(cx.listener(|this, _: &crate::ToggleSftpZoom, window, cx| {
-                this.toggle_sftp_minimized(window, cx);
+            .on_action(cx.listener(|this, _: &crate::ToggleSftpZoom, _, cx| {
+                this.open_active_sftp_page(cx);
             }))
-            .on_action(cx.listener(|this, _: &crate::FocusPaneLeft, _, _| this.focus_adjacent_pane("left")))
-            .on_action(cx.listener(|this, _: &crate::FocusPaneRight, _, _| this.focus_adjacent_pane("right")))
-            .on_action(cx.listener(|this, _: &crate::FocusPaneUp, _, _| this.focus_adjacent_pane("up")))
-            .on_action(cx.listener(|this, _: &crate::FocusPaneDown, _, _| this.focus_adjacent_pane("down")))
-            .on_action(cx.listener(|this, _: &crate::SplitPaneLeft, _, cx| this.split_current_pane("left", cx)))
-            .on_action(cx.listener(|this, _: &crate::SplitPaneRight, _, cx| this.split_current_pane("right", cx)))
-            .on_action(cx.listener(|this, _: &crate::SplitPaneUp, _, cx| this.split_current_pane("up", cx)))
-            .on_action(cx.listener(|this, _: &crate::SplitPaneDown, _, cx| this.split_current_pane("down", cx)))
+            .on_action(cx.listener(|this, _: &crate::FocusPaneLeft, _, _| {
+                if this.workspace_page == WorkspacePage::Terminal {
+                    this.focus_adjacent_pane("left");
+                }
+            }))
+            .on_action(cx.listener(|this, _: &crate::FocusPaneRight, _, _| {
+                if this.workspace_page == WorkspacePage::Terminal {
+                    this.focus_adjacent_pane("right");
+                }
+            }))
+            .on_action(cx.listener(|this, _: &crate::FocusPaneUp, _, _| {
+                if this.workspace_page == WorkspacePage::Terminal {
+                    this.focus_adjacent_pane("up");
+                }
+            }))
+            .on_action(cx.listener(|this, _: &crate::FocusPaneDown, _, _| {
+                if this.workspace_page == WorkspacePage::Terminal {
+                    this.focus_adjacent_pane("down");
+                }
+            }))
+            .on_action(cx.listener(|this, _: &crate::SplitPaneLeft, _, cx| {
+                if this.workspace_page == WorkspacePage::Terminal {
+                    this.split_current_pane("left", cx);
+                }
+            }))
+            .on_action(cx.listener(|this, _: &crate::SplitPaneRight, _, cx| {
+                if this.workspace_page == WorkspacePage::Terminal {
+                    this.split_current_pane("right", cx);
+                }
+            }))
+            .on_action(cx.listener(|this, _: &crate::SplitPaneUp, _, cx| {
+                if this.workspace_page == WorkspacePage::Terminal {
+                    this.split_current_pane("up", cx);
+                }
+            }))
+            .on_action(cx.listener(|this, _: &crate::SplitPaneDown, _, cx| {
+                if this.workspace_page == WorkspacePage::Terminal {
+                    this.split_current_pane("down", cx);
+                }
+            }))
             .on_action(cx.listener(|this, _: &crate::ClosePane, _, cx| {
                 if let Some(active_id) = this.active_tab.clone() {
                     this.close_tab(active_id, cx);

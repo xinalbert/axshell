@@ -10,6 +10,7 @@ impl AxShell {
         let pane_tree = self.pane_root.clone();
         let view = cx.entity();
         let is_settings_page = self.workspace_page == WorkspacePage::Settings;
+        let is_sftp_page = self.workspace_page == WorkspacePage::Sftp;
 
         div()
             .size_full()
@@ -19,14 +20,14 @@ impl AxShell {
                     .size_full()
                     .on_prepaint(move |bounds, _window, cx| {
                         let _ = view.update(cx, |this, cx| {
-                            if this.terminal_panel_bounds != Some(bounds) {
+                            if !is_sftp_page && this.terminal_panel_bounds != Some(bounds) {
                                 this.terminal_panel_bounds = Some(bounds);
                                 cx.notify();
                             }
                         });
                     })
                     .overflow_hidden()
-                    .when(!is_settings_page, |this| {
+                    .when(!is_settings_page && !is_sftp_page, |this| {
                         this.track_focus(&self.focus_handle)
                             .key_context(TERMINAL_KEY_CONTEXT)
                             .on_mouse_down(MouseButton::Left, cx.listener(Self::focus_terminal))
@@ -43,6 +44,8 @@ impl AxShell {
                     })
                     .child(if is_settings_page {
                         self.render_settings_page(window, cx).into_any_element()
+                    } else if is_sftp_page {
+                        self.render_sftp_panel(window, cx).into_any_element()
                     } else if has_active {
                         Self::render_pane_tree(self, &pane_tree, &[], cx).into_any_element()
                     } else {
@@ -50,7 +53,7 @@ impl AxShell {
                     }),
             )
             // Search bar overlay — only when search is active.
-            .when(self.search_active, |el| {
+            .when(self.search_active && !is_sftp_page, |el| {
                 el.child(self.render_search_bar(window, cx))
             })
     }

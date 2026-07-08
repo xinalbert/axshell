@@ -920,6 +920,7 @@ impl AxShell {
             self.focused_pane_path = vec![];
             self.active_tab = None;
             self.active_group = None;
+            self.workspace_page = WorkspacePage::Terminal;
             self.tab_groups.clear();
             self.tabs.clear();
             self.system_tab_id = None;
@@ -965,6 +966,9 @@ impl AxShell {
             if let Some(active_id) = self.active_tab.clone() {
                 self.focus_pane_with_id(active_id);
             }
+        }
+        if self.workspace_page == WorkspacePage::Sftp && !self.active_group_has_sftp() {
+            self.workspace_page = WorkspacePage::Terminal;
         }
         self.sync_system_tab_to_active_group();
     }

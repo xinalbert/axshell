@@ -7,6 +7,15 @@
 - 验证结果：确认项目为 Rust 桌面应用；`rustc --version` 与 `cargo --version` 可执行；当前 CI 仅构建未跑测试
 - 对 plan 的更新：允许进入 `docs/project-implementation-tracker/` 规划阶段
 
+## 2026-07-08 刷新环境记录到 SFTP 独立页面任务
+
+- 触发原因：用户要求把 SFTP 改成独立页面，并补充编号标签页和快捷键对已打开 SFTP 的聚焦行为
+- 执行内容：复查 `Cargo.toml`、`src/app/types.rs`、`src/app/workspace.rs`、`src/session/pane.rs`、`src/app/ui/layout.rs`、`src/app/ui/tab_bar.rs`、`src/app/ui/terminal_panel.rs` 和 `src/app/ui/sftp_panel.rs`；确认主技术栈和依赖版本未变，只刷新当前任务的页面模型、标签模型和验证重点
+- 影响文件：`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`
+- 计划状态变更：无
+- 验证结果：确认本轮不需要联网和外部服务；实施验证命令收敛为 `rustfmt`、`cargo check`、`cargo test` 和 tracking docs 校验；GUI 手工验证仍需要覆盖编号标签与 SFTP 页面切换
+- 对 plan 的更新：允许继续实施 `WorkspacePage::Sftp`、编号 terminal/SFTP 标签和快捷键聚焦逻辑
+
 ## 2026-07-06 刷新当前环境记录到标签栏修复任务
 
 - 触发原因：本轮进入新的真实修复任务，原 `current.md` 停留在上一轮语境
@@ -676,3 +685,13 @@
 - 计划状态变更：无
 - 验证结果：格式化通过；`cargo check` 通过；`cargo test` 通过，18 个测试全部通过；tracking docs 校验待执行；GUI 终端选区保持仍需手工确认
 - 对 plan 的更新：优先先看“松开鼠标后选区是否保持”；若仍存在最后一行命中偏差，再继续修正 terminal grid bounds 记录
+
+## 2026-07-08 完成 SFTP 独立页面任务的本机验证
+
+- 时间：2026-07-08 18:08 +0800
+- 触发原因：SFTP 独立页面、编号标签页和快捷键聚焦逻辑已实现，需要把本轮最终验证结果回写到环境记忆
+- 执行内容：执行 `rustfmt --edition 2024 --config skip_children=true src/app/types.rs src/app/mod.rs src/app/init.rs src/app/workspace.rs src/session/pane.rs src/session/mod.rs src/session/config.rs src/app/ui/mod.rs src/app/ui/layout.rs src/app/ui/tab_bar.rs src/app/ui/terminal_panel.rs src/app/ui/sftp_panel.rs src/app/app_menu.rs src/app/search.rs`、`cargo check`、`cargo test` 与 `python3 /Users/albertxin/.codex/skills/project-implementation-tracker/scripts/validate_tracking_docs.py .`，并同步刷新当前环境记录
+- 影响文件：`src/app/types.rs`，`src/app/mod.rs`，`src/app/init.rs`，`src/app/workspace.rs`，`src/session/pane.rs`，`src/session/mod.rs`，`src/session/config.rs`，`src/app/ui/mod.rs`，`src/app/ui/layout.rs`，`src/app/ui/tab_bar.rs`，`src/app/ui/terminal_panel.rs`，`src/app/ui/sftp_panel.rs`，`src/app/app_menu.rs`，`src/app/search.rs`，`locales/en.yml`，`locales/zh-CN.yml`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/project-map.md`，`docs/project-implementation-tracker/changes/2026/07.md`
+- 计划状态变更：无
+- 验证结果：格式化通过；`cargo check` 通过；`cargo test` 通过，18 个测试全部通过；tracking docs 校验通过；仍保留既有 `block v0.1.6` future-incompat warning；GUI 手工验证未执行
+- 对 plan 的更新：本轮环境验证已完成；后续只需在 GUI 中补看编号标签、SFTP 页面切换和快捷键聚焦体验
