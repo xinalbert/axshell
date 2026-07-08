@@ -251,11 +251,16 @@ impl AxShell {
 
         let switching_group = self.active_group.as_deref() != Some(group_id.as_str());
 
-        if let Some((pane_root, has_sftp)) = self
+        if let Some((pane_root, sftp_page_open)) = self
             .tab_groups
             .iter()
             .find(|g| g.id == group_id)
-            .map(|group| (group.pane_root.clone(), group.sftp.is_some()))
+            .map(|group| {
+                (
+                    group.pane_root.clone(),
+                    group.sftp.is_some() && group.sftp_page_open,
+                )
+            })
         {
             if switching_group {
                 self.pane_root = pane_root.clone();
@@ -267,7 +272,7 @@ impl AxShell {
                 }
             }
 
-            let target_page = if page == WorkspacePage::Sftp && !has_sftp {
+            let target_page = if page == WorkspacePage::Sftp && !sftp_page_open {
                 WorkspacePage::Terminal
             } else {
                 page

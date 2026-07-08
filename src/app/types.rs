@@ -22,6 +22,54 @@ pub(crate) struct TabGroup {
     pub(crate) title: String,
     pub(crate) pane_root: PaneLayout,
     pub(crate) sftp: Option<crate::terminal::SftpUiState>,
+    pub(crate) sftp_page_open: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SftpSortColumn {
+    Name,
+    Size,
+    Modified,
+}
+
+impl Default for SftpSortColumn {
+    fn default() -> Self {
+        Self::Name
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SortDirection {
+    Asc,
+    Desc,
+}
+
+impl Default for SortDirection {
+    fn default() -> Self {
+        Self::Asc
+    }
+}
+
+impl SortDirection {
+    pub(crate) fn toggled(self) -> Self {
+        match self {
+            Self::Asc => Self::Desc,
+            Self::Desc => Self::Asc,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SftpTransferTab {
+    Active,
+    Failed,
+    Completed,
+}
+
+impl Default for SftpTransferTab {
+    fn default() -> Self {
+        Self::Active
+    }
 }
 
 impl PaneLayout {

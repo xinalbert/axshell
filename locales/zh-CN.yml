@@ -121,6 +121,7 @@ reset_layout: "恢复默认布局"
 reset_layout_hint: "重置面板布局占比，窗口大小将在下次启动时生效"
 
 transfers: "传输记录"
+sftp_transfer_active: "正在传输"
 no_transfers_yet: "暂无传输记录"
 downloading: "正在下载"
 paused: "已暂停"

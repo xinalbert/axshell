@@ -89,6 +89,7 @@ impl AxShell {
                     title: "Local".to_string(),
                     pane_root: PaneLayout::Single(id),
                     sftp: None,
+                    sftp_page_open: false,
                 });
                 self.active_group = Some(group_id);
                 self.tabs_scroll_handle.scroll_to_item(self.tabs.len() - 1);
@@ -608,6 +609,7 @@ impl AxShell {
                 selected_entries: std::collections::HashSet::new(),
                 home_dir: "/".into(),
             }),
+            sftp_page_open: false,
         });
         self.active_group = Some(group_id.clone());
         self.tabs_scroll_handle.scroll_to_item(self.tabs.len() - 1);
@@ -967,7 +969,7 @@ impl AxShell {
                 self.focus_pane_with_id(active_id);
             }
         }
-        if self.workspace_page == WorkspacePage::Sftp && !self.active_group_has_sftp() {
+        if self.workspace_page == WorkspacePage::Sftp && !self.active_group_sftp_page_open() {
             self.workspace_page = WorkspacePage::Terminal;
         }
         self.sync_system_tab_to_active_group();

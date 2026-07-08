@@ -30,6 +30,10 @@ impl AxShell {
                                         .prefix(div().w(px(5.)).h(px(32.)).bg(cx.theme().primary))
                                         .child(
                                             div()
+                                                .min_w(px(0.))
+                                                .overflow_hidden()
+                                                .text_ellipsis()
+                                                .whitespace_nowrap()
                                                 .when(self.workspace_tab_selected(tab), |this| {
                                                     this.font_weight(FontWeight::BOLD)
                                                         .text_color(cx.theme().primary)
@@ -125,14 +129,20 @@ impl AxShell {
                                         let selected = self.workspace_tab_selected(tab);
                                         let target_page = page;
                                         let target_group_id = group_id.clone();
+                                        let close_sftp_group_id = group_id.clone();
                                         let is_terminal_tab =
                                             target_page == WorkspacePage::Terminal;
+                                        let is_sftp_tab = target_page == WorkspacePage::Sftp;
 
                                         Tab::new()
                                             .min_w(px(if is_terminal_tab { 96. } else { 88. }))
                                             .prefix(div().w(px(5.)).h(px(32.)).bg(dot_color))
                                             .child(
                                                 div()
+                                                    .min_w(px(0.))
+                                                    .overflow_hidden()
+                                                    .text_ellipsis()
+                                                    .whitespace_nowrap()
                                                     .when(selected, |this| {
                                                         this.font_weight(FontWeight::BOLD)
                                                             .text_color(cx.theme().primary)
@@ -177,6 +187,33 @@ impl AxShell {
                                                                         cx,
                                                                     );
                                                                 }
+                                                            },
+                                                        )),
+                                                )
+                                            })
+                                            .when(is_sftp_tab, |this| {
+                                                this.suffix(
+                                                    Button::new(("sftp-tab-close", ix))
+                                                        .ghost()
+                                                        .xsmall()
+                                                        .icon(IconName::Close)
+                                                        .mr(px(5.))
+                                                        .on_mouse_down(
+                                                            MouseButton::Left,
+                                                            |_, window, cx| {
+                                                                window.prevent_default();
+                                                                cx.stop_propagation();
+                                                            },
+                                                        )
+                                                        .on_click(cx.listener(
+                                                            move |this, _, window, cx| {
+                                                                window.prevent_default();
+                                                                cx.stop_propagation();
+                                                                this.close_sftp_page(
+                                                                    close_sftp_group_id.clone(),
+                                                                    window,
+                                                                    cx,
+                                                                );
                                                             },
                                                         )),
                                                 )

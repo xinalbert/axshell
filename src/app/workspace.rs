@@ -20,7 +20,7 @@ impl AxShell {
                 page: WorkspacePage::Terminal,
             });
 
-            if group.sftp.is_some() {
+            if group.sftp.is_some() && group.sftp_page_open {
                 tabs.push(WorkspaceTabDescriptor {
                     group_id: Some(group.id.clone()),
                     group_index: Some(group_index),
@@ -66,12 +66,11 @@ impl AxShell {
             .unwrap_or(0)
     }
 
-    pub(crate) fn active_group_has_sftp(&self) -> bool {
+    pub(crate) fn active_group_sftp_page_open(&self) -> bool {
         self.active_group
             .as_ref()
             .and_then(|group_id| self.tab_groups.iter().find(|group| &group.id == group_id))
-            .and_then(|group| group.sftp.as_ref())
-            .is_some()
+            .is_some_and(|group| group.sftp.is_some() && group.sftp_page_open)
     }
 
     pub(crate) fn transfer_source_title(&self, tab_id: &str) -> String {
@@ -95,7 +94,7 @@ impl AxShell {
     }
 
     pub(crate) fn set_workspace_page(&mut self, page: WorkspacePage, cx: &mut Context<Self>) {
-        let page = if page == WorkspacePage::Sftp && !self.active_group_has_sftp() {
+        let page = if page == WorkspacePage::Sftp && !self.active_group_sftp_page_open() {
             WorkspacePage::Terminal
         } else {
             page
@@ -174,11 +173,55 @@ impl AxShell {
         }
     }
 
-    pub(crate) fn open_active_sftp_page(&mut self, cx: &mut Context<Self>) {
-        if self.active_group_has_sftp() {
+    pub(crate) fn toggle_active_sftp_page(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.workspace_page == WorkspacePage::Sftp {
+            self.set_workspace_page(WorkspacePage::Terminal, cx);
+            self.focus_handle.focus(window, cx);
+            return;
+        }
+
+        let Some(active_group_id) = self.active_group.clone() else {
+            self.status = t!("open_ssh_tab_sftp").into();
+            cx.notify();
+            return;
+        };
+
+        if let Some(group) = self
+            .tab_groups
+            .iter_mut()
+            .find(|group| group.id == active_group_id)
+            && group.sftp.is_some()
+        {
+            group.sftp_page_open = true;
             self.set_workspace_page(WorkspacePage::Sftp, cx);
+            self.focus_handle.focus(window, cx);
         } else {
             self.status = t!("open_ssh_tab_sftp").into();
+            cx.notify();
+        }
+    }
+
+    pub(crate) fn close_sftp_page(
+        &mut self,
+        group_id: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let was_active_sftp_page = self.workspace_page == WorkspacePage::Sftp
+            && self.active_group.as_deref() == Some(group_id.as_str());
+
+        if let Some(group) = self
+            .tab_groups
+            .iter_mut()
+            .find(|group| group.id == group_id)
+        {
+            group.sftp_page_open = false;
+        }
+
+        if was_active_sftp_page {
+            self.set_workspace_page(WorkspacePage::Terminal, cx);
+            self.focus_handle.focus(window, cx);
+        } else {
             cx.notify();
         }
     }

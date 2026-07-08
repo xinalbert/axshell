@@ -166,8 +166,8 @@ impl Render for AxShell {
                 let _ = this.config.save();
                 cx.notify();
             }))
-            .on_action(cx.listener(|this, _: &crate::ToggleSftpZoom, _, cx| {
-                this.open_active_sftp_page(cx);
+            .on_action(cx.listener(|this, _: &crate::ToggleSftpZoom, window, cx| {
+                this.toggle_active_sftp_page(window, cx);
             }))
             .on_action(cx.listener(|this, _: &crate::FocusPaneLeft, _, _| {
                 if this.workspace_page == WorkspacePage::Terminal {
@@ -209,8 +209,12 @@ impl Render for AxShell {
                     this.split_current_pane("down", cx);
                 }
             }))
-            .on_action(cx.listener(|this, _: &crate::ClosePane, _, cx| {
-                if let Some(active_id) = this.active_tab.clone() {
+            .on_action(cx.listener(|this, _: &crate::ClosePane, window, cx| {
+                if this.workspace_page == WorkspacePage::Sftp {
+                    if let Some(group_id) = this.active_group.clone() {
+                        this.close_sftp_page(group_id, window, cx);
+                    }
+                } else if let Some(active_id) = this.active_tab.clone() {
                     this.close_tab(active_id, cx);
                 }
             }))

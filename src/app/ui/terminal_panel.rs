@@ -42,6 +42,10 @@ impl AxShell {
                             .on_action(cx.listener(Self::on_terminal_backtab_action))
                             .on_scroll_wheel(cx.listener(Self::on_terminal_scroll))
                     })
+                    .when(is_sftp_page, |this| {
+                        this.track_focus(&self.focus_handle)
+                            .key_context(TERMINAL_KEY_CONTEXT)
+                    })
                     .child(if is_settings_page {
                         self.render_settings_page(window, cx).into_any_element()
                     } else if is_sftp_page {

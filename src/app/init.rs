@@ -241,6 +241,7 @@ impl AxShell {
         let (events_tx, events_rx) = std::sync::mpsc::channel();
         let workspace_panels = cx.new(|_| crate::app::resizable::ResizableState::default());
         let body_panels = cx.new(|_| crate::app::resizable::ResizableState::default());
+        let sftp_transfer_panels = cx.new(|_| crate::app::resizable::ResizableState::default());
         let mut system_sampler = SystemSampler::new();
         let system = system_sampler.sample();
         let default_light_theme_name = ThemeRegistry::global(cx).default_light_theme().name.clone();
@@ -361,6 +362,7 @@ impl AxShell {
             selector_selection: 0,
             workspace_panels,
             body_panels,
+            sftp_transfer_panels,
             is_layout_reset: false,
             terminal_scrollbars: std::collections::HashMap::new(),
             remote_files_scroll_handle: gpui::UniformListScrollHandle::new(),
@@ -386,6 +388,12 @@ impl AxShell {
             sftp_new_folder_input,
             sftp_delete_scroll_handle: gpui::ScrollHandle::new(),
             show_hidden_files: config.show_hidden_files(),
+            remote_sftp_sort_column: crate::app::SftpSortColumn::Name,
+            remote_sftp_sort_direction: crate::app::SortDirection::Asc,
+            local_sftp_sort_column: crate::app::SftpSortColumn::Name,
+            local_sftp_sort_direction: crate::app::SortDirection::Asc,
+            sftp_transfer_tab: crate::app::SftpTransferTab::Active,
+            sftp_transfer_scroll_handle: gpui::ScrollHandle::new(),
             transfers: {
                 let mut transfers = config.transfers();
                 for t in &mut transfers {

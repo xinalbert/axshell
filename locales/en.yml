@@ -120,6 +120,7 @@ reset_layout: "Reset Default Layout"
 reset_layout_hint: "Reset panel layout proportion. Window size will take effect on next startup."
 
 transfers: "Transfers"
+sftp_transfer_active: "Active"
 no_transfers_yet: "No transfers yet"
 downloading: "Downloading"
 paused: "Paused"

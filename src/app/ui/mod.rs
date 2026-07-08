@@ -1,13 +1,13 @@
-use crate::app::resizable::{h_resizable, resizable_panel};
+use crate::app::resizable::{h_resizable, resizable_panel, v_resizable};
 use gpui::{
-    Context, ElementId, Focusable as _, FontWeight, Hsla, InteractiveElement as _, IntoElement,
-    MouseButton, MouseDownEvent, ParentElement as _, PathBuilder, Pixels, Render,
+    AnyElement, Context, ElementId, Focusable as _, FontWeight, Hsla, InteractiveElement as _,
+    IntoElement, MouseButton, MouseDownEvent, ParentElement as _, PathBuilder, Pixels, Render,
     StatefulInteractiveElement as _, Styled as _, Window, canvas, div, point,
     prelude::FluentBuilder as _, px, rems, uniform_list,
 };
 use gpui_component::{
     ActiveTheme, Disableable as _, ElementExt, Icon, IconName, InteractiveElementExt as _, Root,
-    Sizable as _, Size,
+    Selectable as _, Sizable as _, Size,
     button::{Button, ButtonVariants as _},
     checkbox::Checkbox,
     h_flex,
@@ -22,8 +22,8 @@ use rust_i18n::t;
 
 use crate::{
     AxShell, PaneLayout,
-    app::WorkspacePage,
     app::constants::{COLLAPSED_SIDEBAR_WIDTH, SIDEBAR_WIDTH, TERMINAL_KEY_CONTEXT},
+    app::{LocalFileEntry, SftpSortColumn, SftpTransferTab, SortDirection, WorkspacePage},
     sftp::format_mtime,
     sftp::ops::is_editable_text_file,
     system::format_bytes,

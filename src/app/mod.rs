@@ -32,8 +32,8 @@ use crate::{
 
 pub(crate) use types::{
     ConnectionProgress, DialogKind, HoveredUrl, LocalFileBrowserState, LocalFileEntry, PaneLayout,
-    SelectorEntry, SftpContextMenuState, TabGroup, TerminalFontMetrics, TerminalScrollbarHandle,
-    WorkspacePage, WorkspaceTabDescriptor,
+    SelectorEntry, SftpContextMenuState, SftpSortColumn, SftpTransferTab, SortDirection, TabGroup,
+    TerminalFontMetrics, TerminalScrollbarHandle, WorkspacePage, WorkspaceTabDescriptor,
 };
 
 pub(crate) struct AxShell {
@@ -94,6 +94,7 @@ pub(crate) struct AxShell {
     pub(crate) selector_selection: usize,
     pub(crate) workspace_panels: Entity<ResizableState>,
     pub(crate) body_panels: Entity<ResizableState>,
+    pub(crate) sftp_transfer_panels: Entity<ResizableState>,
     pub(crate) is_layout_reset: bool,
     pub(crate) terminal_scrollbars: HashMap<String, TerminalScrollbarHandle>,
     pub(crate) remote_files_scroll_handle: UniformListScrollHandle,
@@ -113,6 +114,12 @@ pub(crate) struct AxShell {
     pub(crate) sftp_new_folder_input: Entity<InputState>,
     pub(crate) sftp_delete_scroll_handle: gpui::ScrollHandle,
     pub(crate) show_hidden_files: bool,
+    pub(crate) remote_sftp_sort_column: SftpSortColumn,
+    pub(crate) remote_sftp_sort_direction: SortDirection,
+    pub(crate) local_sftp_sort_column: SftpSortColumn,
+    pub(crate) local_sftp_sort_direction: SortDirection,
+    pub(crate) sftp_transfer_tab: SftpTransferTab,
+    pub(crate) sftp_transfer_scroll_handle: gpui::ScrollHandle,
     pub(crate) transfers: Vec<crate::terminal::Transfer>,
     pub(crate) show_transfers_dialog: bool,
     pub(crate) system_status: Option<SharedString>,

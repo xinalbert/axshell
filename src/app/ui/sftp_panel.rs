@@ -1,6 +1,33 @@
+use std::cmp::Ordering;
+
 use super::*;
 
 impl AxShell {
+    fn set_remote_sftp_sort(&mut self, column: SftpSortColumn, cx: &mut Context<Self>) {
+        if self.remote_sftp_sort_column == column {
+            self.remote_sftp_sort_direction = self.remote_sftp_sort_direction.toggled();
+        } else {
+            self.remote_sftp_sort_column = column;
+            self.remote_sftp_sort_direction = SortDirection::Asc;
+        }
+        cx.notify();
+    }
+
+    fn set_local_sftp_sort(&mut self, column: SftpSortColumn, cx: &mut Context<Self>) {
+        if self.local_sftp_sort_column == column {
+            self.local_sftp_sort_direction = self.local_sftp_sort_direction.toggled();
+        } else {
+            self.local_sftp_sort_column = column;
+            self.local_sftp_sort_direction = SortDirection::Asc;
+        }
+        cx.notify();
+    }
+
+    fn set_sftp_transfer_tab(&mut self, tab: SftpTransferTab, cx: &mut Context<Self>) {
+        self.sftp_transfer_tab = tab;
+        cx.notify();
+    }
+
     pub(super) fn render_sftp_panel(
         &mut self,
         _window: &mut Window,
@@ -8,61 +35,7 @@ impl AxShell {
     ) -> impl IntoElement {
         let active_sftp = self.active_sftp().cloned();
 
-        let build_summary = |kind: crate::terminal::TransferType| -> Option<(String, String, f32)> {
-            let active: Vec<&crate::terminal::Transfer> = self
-                .transfers
-                .iter()
-                .filter(|t| {
-                    matches!(
-                        t.state,
-                        crate::terminal::TransferState::Running
-                            | crate::terminal::TransferState::Paused
-                    ) && t.info.kind == kind
-                })
-                .collect();
-            if active.is_empty() {
-                return None;
-            }
-            Some(if active.len() == 1 {
-                let transfer = &active[0];
-                let pct = transfer.total.and_then(|total| {
-                    if total > 0 {
-                        Some((transfer.transferred as f64 / total as f64 * 100.0) as f32)
-                    } else {
-                        None
-                    }
-                });
-                match pct {
-                    Some(pct) => (transfer.info.name.clone(), format!("{pct:.0}%"), pct),
-                    None => (transfer.info.name.clone(), "-".to_string(), 0.0),
-                }
-            } else {
-                let total_transferred: u64 = active.iter().map(|t| t.transferred).sum();
-                let total_total: u64 = active.iter().filter_map(|t| t.total).sum();
-                let pct = if total_total > 0 {
-                    Some((total_transferred as f64 / total_total as f64 * 100.0) as f32)
-                } else {
-                    None
-                };
-                let label = match kind {
-                    crate::terminal::TransferType::Download => {
-                        t!("files_downloading", count = active.len()).to_string()
-                    }
-                    crate::terminal::TransferType::Upload => {
-                        t!("files_uploading", count = active.len()).to_string()
-                    }
-                };
-                match pct {
-                    Some(pct) => (label, format!("{pct:.0}%"), pct),
-                    None => (label, "-".to_string(), 0.0),
-                }
-            })
-        };
-        let dl_summary = build_summary(crate::terminal::TransferType::Download);
-        let ul_summary = build_summary(crate::terminal::TransferType::Upload);
-        let has_transfers = dl_summary.is_some() || ul_summary.is_some();
-
-        let remote_entries = active_sftp
+        let mut remote_entries = active_sftp
             .as_ref()
             .map(|sftp| {
                 sftp.entries
@@ -72,6 +45,11 @@ impl AxShell {
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default();
+        sort_sftp_entries(
+            &mut remote_entries,
+            self.remote_sftp_sort_column,
+            self.remote_sftp_sort_direction,
+        );
         let remote_selected_entries = active_sftp
             .as_ref()
             .map(|sftp| sftp.selected_entries.clone())
@@ -93,13 +71,18 @@ impl AxShell {
                 .iter()
                 .all(|entry| remote_selected_entries.contains(&entry.full_path));
 
-        let local_entries = self
+        let mut local_entries = self
             .local_file_browser
             .entries
             .clone()
             .into_iter()
             .filter(|entry| self.show_hidden_files || !entry.name.starts_with('.'))
             .collect::<Vec<_>>();
+        sort_sftp_entries(
+            &mut local_entries,
+            self.local_sftp_sort_column,
+            self.local_sftp_sort_direction,
+        );
         let local_selected_entries = self.local_file_browser.selected_entries.clone();
         let local_selected_path = self.local_file_browser.selected_path.clone();
         let local_status = self.local_file_browser.status.clone();
@@ -116,8 +99,12 @@ impl AxShell {
         let can_upload_local_selection = remote_ready && local_selected_count > 0;
         let view = cx.entity();
         let icon_col_width = px(14.);
-        let size_col_width = px(96.);
-        let modified_col_width = px(152.);
+        let size_col_width = px(92.);
+        let modified_col_width = px(148.);
+        let remote_sort_column = self.remote_sftp_sort_column;
+        let remote_sort_direction = self.remote_sftp_sort_direction;
+        let local_sort_column = self.local_sftp_sort_column;
+        let local_sort_direction = self.local_sftp_sort_direction;
 
         let remote_pane = v_flex()
             .flex_1()
@@ -286,33 +273,123 @@ impl AxShell {
                     .child(
                         h_flex()
                             .flex_1()
-                            .min_w(px(0.))
+                            .min_w(px(96.))
                             .items_center()
                             .gap_2()
                             .child(div().w(icon_col_width).flex_none())
                             .child(
-                                div()
+                                h_flex()
                                     .flex_1()
-                                    .text_size(rems(0.917))
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child(t!("name")),
+                                    .min_w(px(0.))
+                                    .items_center()
+                                    .gap_1()
+                                    .overflow_hidden()
+                                    .cursor_pointer()
+                                    .hover(|style| style.bg(cx.theme().muted))
+                                    .on_mouse_down(
+                                        MouseButton::Left,
+                                        cx.listener(|this, _, _, cx| {
+                                            this.set_remote_sftp_sort(SftpSortColumn::Name, cx);
+                                        }),
+                                    )
+                                    .child(
+                                        div()
+                                            .flex_1()
+                                            .min_w(px(0.))
+                                            .overflow_hidden()
+                                            .text_ellipsis()
+                                            .whitespace_nowrap()
+                                            .text_size(rems(0.917))
+                                            .text_color(cx.theme().muted_foreground)
+                                            .child(t!("name")),
+                                    )
+                                    .when(remote_sort_column == SftpSortColumn::Name, |this| {
+                                        this.child(
+                                            Icon::new(match remote_sort_direction {
+                                                SortDirection::Asc => IconName::ChevronUp,
+                                                SortDirection::Desc => IconName::ChevronDown,
+                                            })
+                                            .with_size(Size::XSmall)
+                                            .text_color(cx.theme().primary),
+                                        )
+                                    }),
                             ),
                     )
                     .child(
-                        div()
+                        h_flex()
                             .w(size_col_width)
-                            .flex_none()
-                            .text_size(rems(0.917))
-                            .text_color(cx.theme().muted_foreground)
-                            .child(t!("size")),
+                            .min_w(px(0.))
+                            .flex_shrink_1()
+                            .items_center()
+                            .gap_1()
+                            .overflow_hidden()
+                            .cursor_pointer()
+                            .hover(|style| style.bg(cx.theme().muted))
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                cx.listener(|this, _, _, cx| {
+                                    this.set_remote_sftp_sort(SftpSortColumn::Size, cx);
+                                }),
+                            )
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w(px(0.))
+                                    .overflow_hidden()
+                                    .text_ellipsis()
+                                    .whitespace_nowrap()
+                                    .text_size(rems(0.917))
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child(t!("size")),
+                            )
+                            .when(remote_sort_column == SftpSortColumn::Size, |this| {
+                                this.child(
+                                    Icon::new(match remote_sort_direction {
+                                        SortDirection::Asc => IconName::ChevronUp,
+                                        SortDirection::Desc => IconName::ChevronDown,
+                                    })
+                                    .with_size(Size::XSmall)
+                                    .text_color(cx.theme().primary),
+                                )
+                            }),
                     )
                     .child(
-                        div()
+                        h_flex()
                             .w(modified_col_width)
-                            .flex_none()
-                            .text_size(rems(0.917))
-                            .text_color(cx.theme().muted_foreground)
-                            .child(t!("modified")),
+                            .min_w(px(0.))
+                            .flex_shrink_1()
+                            .items_center()
+                            .gap_1()
+                            .overflow_hidden()
+                            .cursor_pointer()
+                            .hover(|style| style.bg(cx.theme().muted))
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                cx.listener(|this, _, _, cx| {
+                                    this.set_remote_sftp_sort(SftpSortColumn::Modified, cx);
+                                }),
+                            )
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w(px(0.))
+                                    .overflow_hidden()
+                                    .text_ellipsis()
+                                    .whitespace_nowrap()
+                                    .text_size(rems(0.917))
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child(t!("modified")),
+                            )
+                            .when(remote_sort_column == SftpSortColumn::Modified, |this| {
+                                this.child(
+                                    Icon::new(match remote_sort_direction {
+                                        SortDirection::Asc => IconName::ChevronUp,
+                                        SortDirection::Desc => IconName::ChevronDown,
+                                    })
+                                    .with_size(Size::XSmall)
+                                    .text_color(cx.theme().primary),
+                                )
+                            }),
                     ),
             )
             .child(
@@ -427,7 +504,7 @@ impl AxShell {
                                                     .child(
                                                         h_flex()
                                                             .flex_1()
-                                                            .min_w(px(0.))
+                                                            .min_w(px(96.))
                                                             .items_center()
                                                             .gap_2()
                                                             .child(
@@ -443,6 +520,8 @@ impl AxShell {
                                                                     .flex_1()
                                                                     .min_w(px(0.))
                                                                     .overflow_hidden()
+                                                                    .text_ellipsis()
+                                                                    .whitespace_nowrap()
                                                                     .text_size(rems(1.0))
                                                                     .text_color(name_color)
                                                                     .child(entry.name),
@@ -451,7 +530,11 @@ impl AxShell {
                                                     .child(
                                                         div()
                                                             .w(size_col_width)
-                                                            .flex_none()
+                                                            .min_w(px(0.))
+                                                            .flex_shrink_1()
+                                                            .overflow_hidden()
+                                                            .text_ellipsis()
+                                                            .whitespace_nowrap()
                                                             .text_size(rems(0.917))
                                                             .text_color(theme.muted_foreground)
                                                             .child(if entry.is_dir {
@@ -463,7 +546,11 @@ impl AxShell {
                                                     .child(
                                                         div()
                                                             .w(modified_col_width)
-                                                            .flex_none()
+                                                            .min_w(px(0.))
+                                                            .flex_shrink_1()
+                                                            .overflow_hidden()
+                                                            .text_ellipsis()
+                                                            .whitespace_nowrap()
                                                             .text_size(rems(0.917))
                                                             .text_color(theme.muted_foreground)
                                                             .child(format_mtime(entry.modified)),
@@ -521,6 +608,8 @@ impl AxShell {
                             .flex_1()
                             .min_w(px(0.))
                             .overflow_hidden()
+                            .text_ellipsis()
+                            .whitespace_nowrap()
                             .text_size(rems(0.833))
                             .text_color(cx.theme().primary)
                             .italic()
@@ -628,33 +717,123 @@ impl AxShell {
                     .child(
                         h_flex()
                             .flex_1()
-                            .min_w(px(0.))
+                            .min_w(px(96.))
                             .items_center()
                             .gap_2()
                             .child(div().w(icon_col_width).flex_none())
                             .child(
-                                div()
+                                h_flex()
                                     .flex_1()
-                                    .text_size(rems(0.917))
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child(t!("name")),
+                                    .min_w(px(0.))
+                                    .items_center()
+                                    .gap_1()
+                                    .overflow_hidden()
+                                    .cursor_pointer()
+                                    .hover(|style| style.bg(cx.theme().muted))
+                                    .on_mouse_down(
+                                        MouseButton::Left,
+                                        cx.listener(|this, _, _, cx| {
+                                            this.set_local_sftp_sort(SftpSortColumn::Name, cx);
+                                        }),
+                                    )
+                                    .child(
+                                        div()
+                                            .flex_1()
+                                            .min_w(px(0.))
+                                            .overflow_hidden()
+                                            .text_ellipsis()
+                                            .whitespace_nowrap()
+                                            .text_size(rems(0.917))
+                                            .text_color(cx.theme().muted_foreground)
+                                            .child(t!("name")),
+                                    )
+                                    .when(local_sort_column == SftpSortColumn::Name, |this| {
+                                        this.child(
+                                            Icon::new(match local_sort_direction {
+                                                SortDirection::Asc => IconName::ChevronUp,
+                                                SortDirection::Desc => IconName::ChevronDown,
+                                            })
+                                            .with_size(Size::XSmall)
+                                            .text_color(cx.theme().primary),
+                                        )
+                                    }),
                             ),
                     )
                     .child(
-                        div()
+                        h_flex()
                             .w(size_col_width)
-                            .flex_none()
-                            .text_size(rems(0.917))
-                            .text_color(cx.theme().muted_foreground)
-                            .child(t!("size")),
+                            .min_w(px(0.))
+                            .flex_shrink_1()
+                            .items_center()
+                            .gap_1()
+                            .overflow_hidden()
+                            .cursor_pointer()
+                            .hover(|style| style.bg(cx.theme().muted))
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                cx.listener(|this, _, _, cx| {
+                                    this.set_local_sftp_sort(SftpSortColumn::Size, cx);
+                                }),
+                            )
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w(px(0.))
+                                    .overflow_hidden()
+                                    .text_ellipsis()
+                                    .whitespace_nowrap()
+                                    .text_size(rems(0.917))
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child(t!("size")),
+                            )
+                            .when(local_sort_column == SftpSortColumn::Size, |this| {
+                                this.child(
+                                    Icon::new(match local_sort_direction {
+                                        SortDirection::Asc => IconName::ChevronUp,
+                                        SortDirection::Desc => IconName::ChevronDown,
+                                    })
+                                    .with_size(Size::XSmall)
+                                    .text_color(cx.theme().primary),
+                                )
+                            }),
                     )
                     .child(
-                        div()
+                        h_flex()
                             .w(modified_col_width)
-                            .flex_none()
-                            .text_size(rems(0.917))
-                            .text_color(cx.theme().muted_foreground)
-                            .child(t!("modified")),
+                            .min_w(px(0.))
+                            .flex_shrink_1()
+                            .items_center()
+                            .gap_1()
+                            .overflow_hidden()
+                            .cursor_pointer()
+                            .hover(|style| style.bg(cx.theme().muted))
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                cx.listener(|this, _, _, cx| {
+                                    this.set_local_sftp_sort(SftpSortColumn::Modified, cx);
+                                }),
+                            )
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w(px(0.))
+                                    .overflow_hidden()
+                                    .text_ellipsis()
+                                    .whitespace_nowrap()
+                                    .text_size(rems(0.917))
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child(t!("modified")),
+                            )
+                            .when(local_sort_column == SftpSortColumn::Modified, |this| {
+                                this.child(
+                                    Icon::new(match local_sort_direction {
+                                        SortDirection::Asc => IconName::ChevronUp,
+                                        SortDirection::Desc => IconName::ChevronDown,
+                                    })
+                                    .with_size(Size::XSmall)
+                                    .text_color(cx.theme().primary),
+                                )
+                            }),
                     ),
             )
             .child(
@@ -744,7 +923,7 @@ impl AxShell {
                                                 .child(
                                                     h_flex()
                                                         .flex_1()
-                                                        .min_w(px(0.))
+                                                        .min_w(px(96.))
                                                         .items_center()
                                                         .gap_2()
                                                         .child(
@@ -760,6 +939,8 @@ impl AxShell {
                                                                 .flex_1()
                                                                 .min_w(px(0.))
                                                                 .overflow_hidden()
+                                                                .text_ellipsis()
+                                                                .whitespace_nowrap()
                                                                 .text_size(rems(1.0))
                                                                 .text_color(name_color)
                                                                 .child(entry.name),
@@ -768,7 +949,11 @@ impl AxShell {
                                                 .child(
                                                     div()
                                                         .w(size_col_width)
-                                                        .flex_none()
+                                                        .min_w(px(0.))
+                                                        .flex_shrink_1()
+                                                        .overflow_hidden()
+                                                        .text_ellipsis()
+                                                        .whitespace_nowrap()
                                                         .text_size(rems(0.917))
                                                         .text_color(theme.muted_foreground)
                                                         .child(if entry.is_dir {
@@ -780,7 +965,11 @@ impl AxShell {
                                                 .child(
                                                     div()
                                                         .w(modified_col_width)
-                                                        .flex_none()
+                                                        .min_w(px(0.))
+                                                        .flex_shrink_1()
+                                                        .overflow_hidden()
+                                                        .text_ellipsis()
+                                                        .whitespace_nowrap()
                                                         .text_size(rems(0.917))
                                                         .text_color(theme.muted_foreground)
                                                         .child(format_mtime(entry.modified)),
@@ -822,6 +1011,8 @@ impl AxShell {
                             .flex_1()
                             .min_w(px(0.))
                             .overflow_hidden()
+                            .text_ellipsis()
+                            .whitespace_nowrap()
                             .text_size(rems(0.833))
                             .text_color(cx.theme().primary)
                             .italic()
@@ -845,120 +1036,474 @@ impl AxShell {
                 }),
             );
 
+        let file_panes = h_flex()
+            .items_stretch()
+            .flex_1()
+            .w_full()
+            .h_full()
+            .min_h(px(0.))
+            .child(remote_pane)
+            .child(div().w(px(1.)).h_full().bg(cx.theme().border))
+            .child(local_pane);
+
         outer = outer.child(
-            h_flex()
-                .items_stretch()
-                .flex_1()
-                .w_full()
-                .h_full()
-                .min_h(px(0.))
-                .child(remote_pane)
-                .child(div().w(px(1.)).h_full().bg(cx.theme().border))
-                .child(local_pane),
-        );
-        outer = outer.child(
-            h_flex()
-                .flex_none()
-                .h(px(24.))
-                .px_3()
-                .items_center()
-                .border_t_1()
-                .border_color(cx.theme().border)
-                .bg(cx.theme().tab_bar)
+            v_resizable("sftp-transfer-panels")
+                .with_state(&self.sftp_transfer_panels)
                 .child(
-                    div()
-                        .text_size(rems(0.833))
-                        .text_color(cx.theme().muted_foreground)
-                        .child(remote_status),
+                    resizable_panel()
+                        .size(px(360.))
+                        .size_range(px(180.)..Pixels::MAX)
+                        .child(file_panes),
                 )
-                .child(div().flex_1())
                 .child(
-                    Button::new("open-transfers")
-                        .ghost()
-                        .small()
-                        .when(has_transfers, |this| {
-                            let mut content = h_flex().items_center().gap_2();
-                            if let Some((ref label, ref pct_display, pct)) = dl_summary {
-                                content = content.child(
-                                    h_flex()
-                                        .items_center()
-                                        .gap_1()
-                                        .child(
-                                            Icon::new(IconName::ArrowDown)
-                                                .with_size(Size::Small)
-                                                .text_color(cx.theme().primary),
-                                        )
-                                        .child(
-                                            div()
-                                                .text_size(rems(0.833))
-                                                .text_color(cx.theme().primary)
-                                                .italic()
-                                                .child(label.clone()),
-                                        )
-                                        .child(
-                                            Progress::new("sftp-status-dl")
-                                                .with_size(px(4.))
-                                                .value(pct)
-                                                .color(cx.theme().primary)
-                                                .w(px(50.0)),
-                                        )
-                                        .child(
-                                            div()
-                                                .text_size(rems(0.833))
-                                                .text_color(cx.theme().primary)
-                                                .italic()
-                                                .child(pct_display.clone()),
-                                        ),
-                                );
-                            }
-                            if let Some((ref label, ref pct_display, pct)) = ul_summary {
-                                if dl_summary.is_some() {
-                                    content = content.child(div().w(px(6.)));
-                                }
-                                content = content.child(
-                                    h_flex()
-                                        .items_center()
-                                        .gap_1()
-                                        .child(
-                                            Icon::new(IconName::ArrowUp)
-                                                .with_size(Size::Small)
-                                                .text_color(cx.theme().primary),
-                                        )
-                                        .child(
-                                            div()
-                                                .text_size(rems(0.833))
-                                                .text_color(cx.theme().primary)
-                                                .italic()
-                                                .child(label.clone()),
-                                        )
-                                        .child(
-                                            Progress::new("sftp-status-ul")
-                                                .with_size(px(4.))
-                                                .value(pct)
-                                                .color(cx.theme().primary)
-                                                .w(px(50.0)),
-                                        )
-                                        .child(
-                                            div()
-                                                .text_size(rems(0.833))
-                                                .text_color(cx.theme().primary)
-                                                .italic()
-                                                .child(pct_display.clone()),
-                                        ),
-                                );
-                            }
-                            this.child(content)
-                        })
-                        .when(!has_transfers, |this| {
-                            this.icon(IconName::ArrowDown)
-                                .label(t!("transfers").to_string())
-                        })
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            this.show_transfers_dialog(window, cx);
-                        })),
+                    resizable_panel()
+                        .size(px(240.))
+                        .size_range(px(120.)..Pixels::MAX)
+                        .child(self.render_sftp_transfer_panel(cx)),
                 ),
         );
 
         outer.into_any_element()
+    }
+
+    fn render_sftp_transfer_panel(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let selected_tab = self.sftp_transfer_tab;
+        let active_count = self
+            .transfers
+            .iter()
+            .filter(|transfer| transfer_belongs_to_tab(transfer, SftpTransferTab::Active))
+            .count();
+        let failed_count = self
+            .transfers
+            .iter()
+            .filter(|transfer| transfer_belongs_to_tab(transfer, SftpTransferTab::Failed))
+            .count();
+        let completed_count = self
+            .transfers
+            .iter()
+            .filter(|transfer| transfer_belongs_to_tab(transfer, SftpTransferTab::Completed))
+            .count();
+        let transfers = self
+            .transfers
+            .iter()
+            .filter(|transfer| transfer_belongs_to_tab(transfer, selected_tab))
+            .cloned()
+            .collect::<Vec<_>>();
+        let rows = transfers
+            .into_iter()
+            .map(|transfer| self.render_sftp_transfer_row(transfer, cx))
+            .collect::<Vec<_>>();
+        let scroll_handle = self.sftp_transfer_scroll_handle.clone();
+
+        v_flex()
+            .size_full()
+            .min_h(px(0.))
+            .border_t_1()
+            .border_color(cx.theme().border)
+            .bg(cx.theme().background)
+            .child(
+                h_flex()
+                    .flex_none()
+                    .h(px(36.))
+                    .px_3()
+                    .items_center()
+                    .gap_2()
+                    .border_b_1()
+                    .border_color(cx.theme().border)
+                    .bg(cx.theme().tab_bar)
+                    .child(Self::sftp_transfer_tab_button(
+                        SftpTransferTab::Active,
+                        t!("sftp_transfer_active").to_string(),
+                        active_count,
+                        selected_tab,
+                        cx,
+                    ))
+                    .child(Self::sftp_transfer_tab_button(
+                        SftpTransferTab::Failed,
+                        t!("failed").to_string(),
+                        failed_count,
+                        selected_tab,
+                        cx,
+                    ))
+                    .child(Self::sftp_transfer_tab_button(
+                        SftpTransferTab::Completed,
+                        t!("completed").to_string(),
+                        completed_count,
+                        selected_tab,
+                        cx,
+                    ))
+                    .child(div().flex_1()),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .relative()
+                    .min_h(px(0.))
+                    .child(
+                        div()
+                            .id("sftp-transfer-scroll-view")
+                            .size_full()
+                            .overflow_y_scroll()
+                            .track_scroll(&scroll_handle)
+                            .pr(px(14.))
+                            .child(if rows.is_empty() {
+                                div()
+                                    .size_full()
+                                    .p_4()
+                                    .text_center()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child(t!("no_transfers_yet").to_string())
+                                    .into_any_element()
+                            } else {
+                                v_flex().w_full().children(rows).into_any_element()
+                            }),
+                    )
+                    .child(
+                        div()
+                            .absolute()
+                            .top_0()
+                            .right_0()
+                            .bottom_0()
+                            .w(px(16.))
+                            .child(
+                                Scrollbar::vertical(&scroll_handle)
+                                    .scrollbar_show(ScrollbarShow::Always),
+                            ),
+                    ),
+            )
+    }
+
+    fn sftp_transfer_tab_button(
+        tab: SftpTransferTab,
+        label: String,
+        count: usize,
+        selected_tab: SftpTransferTab,
+        cx: &mut Context<Self>,
+    ) -> Button {
+        Button::new(ElementId::Name(format!("sftp-transfer-tab-{tab:?}").into()))
+            .ghost()
+            .small()
+            .selected(tab == selected_tab)
+            .label(format!("{label} ({count})"))
+            .on_click(cx.listener(move |this, _, _, cx| {
+                this.set_sftp_transfer_tab(tab, cx);
+            }))
+    }
+
+    fn render_sftp_transfer_row(
+        &self,
+        transfer: crate::terminal::Transfer,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let icon = match transfer.info.kind {
+            crate::terminal::TransferType::Upload => IconName::ArrowUp,
+            crate::terminal::TransferType::Download => IconName::ArrowDown,
+        };
+        let status_text = sftp_transfer_status_text(&transfer);
+        let percent = sftp_transfer_percent(&transfer);
+        let mut actions = h_flex().flex_none().items_center().gap_1();
+
+        match &transfer.state {
+            crate::terminal::TransferState::Running => {
+                let pause_id = transfer.info.id.clone();
+                let cancel_id = transfer.info.id.clone();
+                actions = actions
+                    .child(
+                        Button::new(ElementId::Name(format!("sftp-pause-{pause_id}").into()))
+                            .ghost()
+                            .small()
+                            .icon(IconName::Pause)
+                            .on_click(cx.listener(move |this, _, _, _| {
+                                if let Some(handle) = this.active_sftp_handle() {
+                                    handle.pause_transfer(pause_id.clone());
+                                }
+                            })),
+                    )
+                    .child(
+                        Button::new(ElementId::Name(format!("sftp-cancel-{cancel_id}").into()))
+                            .ghost()
+                            .small()
+                            .icon(IconName::Close)
+                            .on_click(cx.listener(move |this, _, _, _| {
+                                if let Some(handle) = this.active_sftp_handle() {
+                                    handle.cancel_transfer(cancel_id.clone());
+                                }
+                            })),
+                    );
+            }
+            crate::terminal::TransferState::Paused => {
+                let resume_id = transfer.info.id.clone();
+                let cancel_id = transfer.info.id.clone();
+                actions = actions
+                    .child(
+                        Button::new(ElementId::Name(format!("sftp-resume-{resume_id}").into()))
+                            .ghost()
+                            .small()
+                            .icon(IconName::Play)
+                            .on_click(cx.listener(move |this, _, _, _| {
+                                if let Some(handle) = this.active_sftp_handle() {
+                                    handle.resume_transfer(resume_id.clone());
+                                }
+                            })),
+                    )
+                    .child(
+                        Button::new(ElementId::Name(format!("sftp-cancel-{cancel_id}").into()))
+                            .ghost()
+                            .small()
+                            .icon(IconName::Close)
+                            .on_click(cx.listener(move |this, _, _, _| {
+                                if let Some(handle) = this.active_sftp_handle() {
+                                    handle.cancel_transfer(cancel_id.clone());
+                                }
+                            })),
+                    );
+            }
+            crate::terminal::TransferState::Completed => {
+                if matches!(transfer.info.kind, crate::terminal::TransferType::Download) {
+                    let target = transfer.info.target.clone();
+                    actions = actions.child(
+                        Button::new(ElementId::Name(
+                            format!("sftp-open-folder-{}", transfer.info.id).into(),
+                        ))
+                        .ghost()
+                        .small()
+                        .icon(IconName::Folder)
+                        .on_click(move |_, _, _| {
+                            let _ = std::process::Command::new("open").arg(&target).spawn();
+                        }),
+                    );
+                }
+                let remove_id = transfer.info.id.clone();
+                actions = actions.child(
+                    Button::new(ElementId::Name(format!("sftp-remove-{remove_id}").into()))
+                        .ghost()
+                        .small()
+                        .icon(IconName::Close)
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.remove_transfer(&remove_id, cx);
+                        })),
+                );
+            }
+            crate::terminal::TransferState::Failed(_)
+            | crate::terminal::TransferState::Interrupted(_)
+            | crate::terminal::TransferState::Zombie(_) => {
+                let remove_id = transfer.info.id.clone();
+                actions = actions.child(
+                    Button::new(ElementId::Name(format!("sftp-remove-{remove_id}").into()))
+                        .ghost()
+                        .small()
+                        .icon(IconName::Close)
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.remove_transfer(&remove_id, cx);
+                        })),
+                );
+            }
+        }
+
+        v_flex()
+            .w_full()
+            .gap_1()
+            .px_3()
+            .py_2()
+            .border_b_1()
+            .border_color(cx.theme().border.opacity(0.35))
+            .child(
+                h_flex()
+                    .w_full()
+                    .items_center()
+                    .gap_2()
+                    .child(
+                        Icon::new(icon)
+                            .with_size(Size::Small)
+                            .text_color(cx.theme().primary),
+                    )
+                    .child(
+                        v_flex()
+                            .flex_1()
+                            .min_w(px(0.))
+                            .overflow_hidden()
+                            .child(
+                                div()
+                                    .overflow_hidden()
+                                    .text_ellipsis()
+                                    .whitespace_nowrap()
+                                    .text_size(rems(0.917))
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(cx.theme().foreground)
+                                    .child(transfer.info.name.clone()),
+                            )
+                            .child(
+                                div()
+                                    .overflow_hidden()
+                                    .text_ellipsis()
+                                    .whitespace_nowrap()
+                                    .text_size(rems(0.833))
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child(format!("{}: {}", t!("session"), transfer.tab_title)),
+                            )
+                            .child(
+                                div()
+                                    .overflow_hidden()
+                                    .text_ellipsis()
+                                    .whitespace_nowrap()
+                                    .text_size(rems(0.833))
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child(status_text),
+                            ),
+                    )
+                    .child(actions),
+            )
+            .when(
+                matches!(
+                    transfer.state,
+                    crate::terminal::TransferState::Running
+                        | crate::terminal::TransferState::Paused
+                ),
+                |this| {
+                    this.child(
+                        Progress::new(format!("sftp-progress-{}", transfer.info.id))
+                            .with_size(px(4.))
+                            .value(percent)
+                            .color(cx.theme().primary)
+                            .w_full(),
+                    )
+                },
+            )
+            .into_any_element()
+    }
+}
+
+trait SftpSortableEntry {
+    fn sort_name(&self) -> &str;
+    fn sort_is_dir(&self) -> bool;
+    fn sort_size(&self) -> u64;
+    fn sort_modified(&self) -> u32;
+}
+
+impl SftpSortableEntry for crate::sftp::RemoteEntry {
+    fn sort_name(&self) -> &str {
+        &self.name
+    }
+
+    fn sort_is_dir(&self) -> bool {
+        self.is_dir
+    }
+
+    fn sort_size(&self) -> u64 {
+        self.size
+    }
+
+    fn sort_modified(&self) -> u32 {
+        self.modified
+    }
+}
+
+impl SftpSortableEntry for LocalFileEntry {
+    fn sort_name(&self) -> &str {
+        &self.name
+    }
+
+    fn sort_is_dir(&self) -> bool {
+        self.is_dir
+    }
+
+    fn sort_size(&self) -> u64 {
+        self.size
+    }
+
+    fn sort_modified(&self) -> u32 {
+        self.modified
+    }
+}
+
+fn sort_sftp_entries<T: SftpSortableEntry>(
+    entries: &mut [T],
+    column: SftpSortColumn,
+    direction: SortDirection,
+) {
+    entries.sort_by(|a, b| {
+        let dir_order = b.sort_is_dir().cmp(&a.sort_is_dir());
+        if dir_order != Ordering::Equal {
+            return dir_order;
+        }
+
+        let name_order = || {
+            a.sort_name()
+                .to_ascii_lowercase()
+                .cmp(&b.sort_name().to_ascii_lowercase())
+                .then_with(|| a.sort_name().cmp(b.sort_name()))
+        };
+        let order = match column {
+            SftpSortColumn::Name => name_order(),
+            SftpSortColumn::Size => a.sort_size().cmp(&b.sort_size()).then_with(name_order),
+            SftpSortColumn::Modified => a
+                .sort_modified()
+                .cmp(&b.sort_modified())
+                .then_with(name_order),
+        };
+
+        match direction {
+            SortDirection::Asc => order,
+            SortDirection::Desc => order.reverse(),
+        }
+    });
+}
+
+fn transfer_belongs_to_tab(transfer: &crate::terminal::Transfer, tab: SftpTransferTab) -> bool {
+    match tab {
+        SftpTransferTab::Active => matches!(
+            transfer.state,
+            crate::terminal::TransferState::Running | crate::terminal::TransferState::Paused
+        ),
+        SftpTransferTab::Failed => matches!(
+            transfer.state,
+            crate::terminal::TransferState::Failed(_)
+                | crate::terminal::TransferState::Interrupted(_)
+                | crate::terminal::TransferState::Zombie(_)
+        ),
+        SftpTransferTab::Completed => {
+            matches!(transfer.state, crate::terminal::TransferState::Completed)
+        }
+    }
+}
+
+fn sftp_transfer_percent(transfer: &crate::terminal::Transfer) -> f32 {
+    match transfer.state {
+        crate::terminal::TransferState::Completed => 100.0,
+        _ => transfer
+            .total
+            .filter(|total| *total > 0)
+            .map(|total| (transfer.transferred as f64 / total as f64 * 100.0) as f32)
+            .unwrap_or(0.0)
+            .clamp(0.0, 100.0),
+    }
+}
+
+fn sftp_transfer_status_text(transfer: &crate::terminal::Transfer) -> String {
+    match &transfer.state {
+        crate::terminal::TransferState::Running => {
+            if let Some(total) = transfer.total.filter(|total| *total > 0) {
+                format!(
+                    "{:.1}% ({}/{})",
+                    sftp_transfer_percent(transfer),
+                    format_bytes(transfer.transferred),
+                    format_bytes(total)
+                )
+            } else {
+                match transfer.info.kind {
+                    crate::terminal::TransferType::Upload => format!("{}...", t!("uploading")),
+                    crate::terminal::TransferType::Download => {
+                        format!("{}...", t!("downloading"))
+                    }
+                }
+            }
+        }
+        crate::terminal::TransferState::Paused => t!("paused").to_string(),
+        crate::terminal::TransferState::Completed => t!("completed").to_string(),
+        crate::terminal::TransferState::Failed(err) => format!("{}: {err}", t!("failed")),
+        crate::terminal::TransferState::Interrupted(reason) => {
+            format!("{}: {reason}", t!("interrupted"))
+        }
+        crate::terminal::TransferState::Zombie(reason) => format!("{}: {reason}", t!("zombie")),
     }
 }
