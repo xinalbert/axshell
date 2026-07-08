@@ -2,14 +2,14 @@
 
 ## 当前目标
 
-- 目标：增强运行日志可观测性，增加日志/崩溃目录入口、启动摘要日志，并扩大日志保留窗口
-- 交付物：About 页面日志目录入口、启动摘要 `tracing` 日志、更合理的默认日志 filter 和保留数量、格式化/编译/测试验证结果，以及同步的 tracking 记录
+- 目标：继续拆分 `src/app/dialogs/` 目录模块，并将 `src/app/ui.rs` 拆分为 `src/app/ui/` 目录模块
+- 交付物：`src/app/dialogs/` 按 dialog 类型拆分后的子模块、`src/app/dialogs/settings/` 低风险子模块、`src/app/ui/` 按 UI 区域拆分后的目录模块、更新后的项目地图和验证结果
 
 ## 项目边界
 
 - 根目录：`<repo-root>`
-- 当前范围：`src/app/startup.rs`，`src/app/dialogs.rs`，`locales/en.yml`，`locales/zh-CN.yml`，`docs/project-env-audit/`，`docs/project-implementation-tracker/`
-- 不在本轮范围内：捕获所有 stdout/stderr、dev-reload 日志合并、第三方库 tracing 接管、GUI 手工回归、依赖升级
+- 当前范围：`src/app/dialogs.rs`，`src/app/dialogs/`，`src/app/ui.rs`，`src/app/ui/`，`docs/project-env-audit/`，`docs/project-implementation-tracker/`
+- 不在本轮范围内：重写 settings 页面结构、拆成独立 Cargo crate、改 UI 行为、删除旧注释代码、GUI 手工回归
 
 ## 当前状态
 
@@ -22,42 +22,44 @@
 
 | Step | Status | Deliverable | Verification | Notes |
 | --- | --- | --- | --- | --- |
-| P1 | completed | 本轮环境预检、实施计划和地图范围确认 | tracking docs validator | 不联网、不使用多 agent |
-| P2 | completed | 日志/崩溃目录公开入口和 About 页面按钮 | `cargo check`，源码级检查 | 只打开目录，不读取或上传日志内容 |
-| P3 | completed | 启动摘要日志、默认 filter 收紧、日志保留数量提升 | `cargo check`，源码级检查 | 保持 tracing 全局 subscriber 结构 |
-| P4 | completed | 文案同步和收口验证 | `rustfmt`，`cargo check`，`cargo test`，tracking docs validator | GUI 打开目录需手工验证 |
+| P1 | completed | 本轮环境预检和实施计划刷新 | tracking docs validator | 不联网、不使用多 agent |
+| P2 | completed | `src/app/dialogs.rs` 拆分为 `src/app/dialogs/` 多文件目录模块 | `cargo check`，源码级路径检查 | 保持 `pub mod dialogs;` 外部路径不变 |
+| P3 | completed | `src/app/dialogs/settings/` 低风险子模块和 `src/app/ui/` 目录模块拆分 | `cargo check`，源码级路径检查 | `settings` 只抽低耦合 helper/page；`ui` 按功能区拆分 |
+| P4 | completed | 格式化、全仓编译/测试和收口验证 | `rustfmt`，`cargo check`，`cargo test` | GUI dialog 行为留作手工验证 |
 
 ## 已完成
 
-- 已确认当前日志系统是全局 tracing subscriber，但只覆盖 `tracing::*` 调用
-- 已确认 `src/app/startup.rs` 负责运行日志和 crash report 路径，`src/app/dialogs.rs` About 页面适合放目录入口
-- 已在 About 页面显示运行日志和崩溃报告目录，并提供打开目录按钮
-- 已将默认日志 filter 调整为 `ax_shell=info,warn`，并在启动后写入版本、平台、配置目录、日志目录和保留数量摘要
-- 已将运行日志保留数量从 6 个提升到 48 个
-- 已同步中英文文案和开发文档日志说明
+- 已评估 `src/app/dialogs.rs` 适合迁移为目录模块，不适合做独立 Cargo 子包
+- 已将 `src/app/dialogs.rs` 拆分为 `src/app/dialogs/mod.rs`、`ssh.rs`、`selector.rs`、`transfers.rs`、`delete_confirm.rs` 和 `settings/`
+- 已将 Settings 页面的低耦合部分拆到 `settings/fonts.rs`、`settings/about.rs`、`settings/help.rs`、`settings/keybindings.rs`、`settings/sync.rs`、`settings/proxy.rs`
+- 已确认 `src/app/ui.rs` 不适合合并到 dialogs/session 等模块，已拆分为 `src/app/ui/mod.rs`、`helpers.rs`、`layout.rs`、`monitoring.rs`、`sftp_panel.rs`、`sidebar.rs`、`tab_bar.rs`、`terminal_panel.rs`
+- 已刷新项目地图，记录当前 dialogs 与 ui 子模块边界
 
 ## 验证
 
-- 已完成：日志实现只读评估
+- 已完成：结构评估
 - 已完成：施工前环境预检刷新
-- 已完成：`rustfmt --edition 2024 src/app/startup.rs src/app/dialogs.rs`
+- 已完成：`rustfmt --edition 2024 src/app/ui/*.rs src/app/dialogs/*.rs src/app/dialogs/settings/*.rs`
 - 已完成：`cargo check`
 - 已完成：`cargo test`，15 个测试全部通过
 - 已完成：`python3 /Users/albertxin/.codex/skills/project-implementation-tracker/scripts/validate_tracking_docs.py .`
-- 未完成：GUI 打开日志目录 / 崩溃报告目录手工验证
+- 未完成：GUI dialog 手工验证
 
 ## 风险与阻塞
 
 - 阻塞：无
-- 风险一：默认 filter 收紧不能隐藏应用自身 `info` 日志
-- 风险二：打开目录入口需要处理目录不存在或打开失败，不能影响设置页渲染
-- 风险三：GUI 打开目录行为仍需用户手工验证
-- 风险四：这仍不是全 stdout/stderr 捕获方案；只有 `tracing::*` 进入主应用日志
+- 风险一：路径迁移必须保持 `crate::app::dialogs` 模块名不变，否则外部调用会失效
+- 风险二：本轮只改文件布局，不应夹带 UI 行为调整
+- 风险三：GUI dialog 交互仍需用户手工验证
+- 风险四：`src/app/dialogs/settings/mod.rs` 仍有约 942 行，主要剩余 General 和 Custom 两个高耦合页面；后续若继续拆需要先设计页面上下文结构体，避免大量闭包参数散落
+- 风险五：`src/app/ui/sftp_panel.rs` 仍有约 1025 行，`src/app/ui/sidebar.rs` 仍有约 925 行；后续可继续把列表行、context menu 和工具栏构造抽成更小模块
 
 ## 下一步
 
-- 在应用内手工打开 About 页面，确认两个目录按钮能正常唤起系统文件管理器
+- 后续可继续把 `settings/mod.rs` 的 General 和 Custom 页面按上下文结构体拆分
+- 后续可继续拆 `src/app/ui/sftp_panel.rs` 的远端列表、本地列表、传输摘要和 context menu
+- 后续可继续拆 `src/app/ui/sidebar.rs` 的 expanded/collapsed saved entry 渲染
 
 ## 最后更新时间
 
-- 2026-07-08 11:34 CST
+- 2026-07-08 12:40 CST

@@ -546,3 +546,33 @@
 - 计划状态变更：无
 - 验证结果：`rustfmt` 通过；`cargo check` 通过；`cargo test` 通过，15 个测试全部通过；仍保留既有 `block v0.1.6` future-incompat warning；GUI 打开目录行为未手工验证
 - 对 plan 的更新：本轮验证入口固定为格式化、全仓编译、全仓测试和 tracking docs 校验；日志目录按钮的实际系统打开行为留作手工验证
+
+## 2026-07-08 刷新环境记录到 dialogs 子模块目录迁移
+
+- 时间：2026-07-08 11:44 +0800
+- 触发原因：用户确认将 `src/app/dialogs.rs` 做成子模块目录，需要把环境/验证边界切换到行为保持型结构迁移
+- 执行内容：复查 `src/app/mod.rs`、`src/app/dialogs.rs`、项目地图和现有 env/tracking 记录；确认 Rust 会将 `pub mod dialogs;` 解析到 `src/app/dialogs/mod.rs`；实施后执行格式化、编译和全量测试
+- 影响文件：`src/app/dialogs.rs`，`src/app/dialogs/mod.rs`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/project-map.md`，`docs/project-implementation-tracker/changes/2026/07.md`
+- 计划状态变更：无
+- 验证结果：`rustfmt --edition 2024 src/app/dialogs/mod.rs` 通过；`cargo check` 通过；`cargo test` 通过，15 个测试全部通过；仍保留既有 `block v0.1.6` future-incompat warning；GUI dialog 行为未手工验证
+- 对 plan 的更新：本轮只完成目录模块迁移；后续可继续按 `ssh.rs`、`selector.rs`、`transfers.rs`、`delete_confirm.rs`、`settings/` 拆分
+
+## 2026-07-08 刷新环境记录到 dialogs 与 ui 目录模块拆分
+
+- 时间：2026-07-08 12:08 +0800
+- 触发原因：用户要求继续拆 `src/app/dialogs/`，随后要求继续拆 `src/app/ui.rs`
+- 执行内容：复查 `src/app/mod.rs`、`src/app/dialogs/`、`src/app/ui.rs` 和项目地图；确认 `pub mod dialogs;` 与 `pub mod ui;` 均可保持外部路径不变并解析到目录模块；本轮不新增依赖、不联网、不使用多 agent
+- 影响文件：`src/app/dialogs.rs`，`src/app/dialogs/`，`src/app/dialogs/settings/`，`src/app/ui.rs`，`src/app/ui/`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/project-map.md`，`docs/project-implementation-tracker/changes/2026/07.md`
+- 计划状态变更：无
+- 验证结果：`rustfmt` 通过；`cargo check` 通过；`cargo test` 通过，15 个测试全部通过；tracking docs 校验通过；仍保留既有 `block v0.1.6` future-incompat warning
+- 对 plan 的更新：本轮验证入口固定为格式化、全仓编译、全仓测试和 tracking docs 校验；GUI 交互仍需手工验证
+
+## 2026-07-08 刷新环境记录到 settings 模块细分
+
+- 时间：2026-07-08 12:40 +0800
+- 触发原因：用户点名 `setting/mod.rs`，需要继续降低 settings 主模块体积
+- 执行内容：复查 `src/app/dialogs/settings/mod.rs` 的页面分区和旧注释块；确认本轮不新增依赖、不联网、不使用多 agent；删除未编译旧 Custom 注释块，并将 Sync、Proxy/X11 页面迁移到独立子模块
+- 影响文件：`src/app/dialogs/settings/mod.rs`，`src/app/dialogs/settings/sync.rs`，`src/app/dialogs/settings/proxy.rs`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/project-map.md`，`docs/project-implementation-tracker/changes/2026/07.md`
+- 计划状态变更：无
+- 验证结果：`rustfmt` 通过；`cargo check` 通过；`cargo test` 通过，15 个测试全部通过；tracking docs 校验通过；仍保留既有 `block v0.1.6` future-incompat warning
+- 对 plan 的更新：本轮验证入口不变；GUI 设置页行为仍需手工验证
