@@ -518,3 +518,13 @@
 - 计划状态变更：无
 - 验证结果：已确认工具链、依赖锁定和现有 Rust 测试环境可支撑本轮结构重构；当前主要风险来自模块边界与可见性调整，而非外部环境
 - 对 plan 的更新：本轮验证入口切换为 `cargo check`、`cargo test` 和 tracking docs 校验；待模块拆分完成后刷新 `project-map.md`
+
+## 2026-07-08 刷新环境记录到公共 helper 抽取任务
+
+- 时间：2026-07-08 11:12 +0800
+- 触发原因：用户确认继续把相似/相同代码收敛到公共内容中，需要把环境/验证边界切换到行为保持型重构任务
+- 执行内容：复查 `Cargo.toml`、`.github/workflows/ci.yml`、`src/backend/ssh.rs`、`src/sftp/auth.rs`、`src/sftp/mod.rs`、`src/app/constants.rs` 与现有 env/tracking 记录；确认本轮不新增依赖、不需要联网和外部服务
+- 影响文件：`src/backend/`，`src/sftp/`，`src/app/constants.rs`，`src/app/dialogs.rs`，`src/app/startup.rs`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/project-map.md`，`docs/project-implementation-tracker/changes/2026/07.md`
+- 计划状态变更：无
+- 验证结果：`rustfmt` 通过；`cargo check` 通过；`cargo test` 通过，13 个测试全部通过；仍保留既有 `block v0.1.6` future-incompat warning
+- 对 plan 的更新：本轮验证入口固定为格式化、全仓编译、全仓测试和 tracking docs 校验；真实 SSH / SFTP 联机验证不在自动验证范围内

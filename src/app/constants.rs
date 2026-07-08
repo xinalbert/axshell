@@ -11,6 +11,8 @@ pub(crate) const TERMINAL_PADDING_X: f32 = 32.0;
 pub(crate) const TERMINAL_PADDING_Y: f32 = 32.0;
 
 pub(crate) const TERMINAL_KEY_CONTEXT: &str = "AxShellTerminal";
+pub(crate) const REPOSITORY_URL: &str = "https://github.com/xinalbert/axshell";
+pub(crate) const ISSUES_URL: &str = "https://github.com/xinalbert/axshell/issues";
 
 pub(crate) fn public_version_label() -> String {
     format_public_version(env!("CARGO_PKG_VERSION"))

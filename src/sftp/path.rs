@@ -1,5 +1,3 @@
-use std::path::{Path, PathBuf};
-
 use chrono::{DateTime, TimeZone, Utc};
 
 pub(super) fn base_name(path: &str) -> String {
@@ -83,17 +81,4 @@ pub(super) fn remote_parent(path: &str) -> String {
 
 pub(super) fn shell_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\"'\"'"))
-}
-
-pub(super) fn expand_key_path(value: &str) -> Option<PathBuf> {
-    if value.is_empty() {
-        return None;
-    }
-    if value == "~" {
-        return directories::BaseDirs::new().map(|dirs| dirs.home_dir().to_path_buf());
-    }
-    if let Some(rest) = value.strip_prefix("~/") {
-        return directories::BaseDirs::new().map(|dirs| dirs.home_dir().join(rest));
-    }
-    Some(Path::new(value).to_path_buf())
 }

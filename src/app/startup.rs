@@ -5,12 +5,12 @@ use std::path::PathBuf;
 use std::sync::Once;
 
 use crate::AxShell;
+use crate::app::constants::ISSUES_URL;
 use crate::session::config::ConfigStore;
 
 const INSTANCE_KIND_ENV: &str = "AX_SHELL_INSTANCE_KIND";
 const INSTANCE_APP_ID_ENV: &str = "AX_SHELL_APP_ID";
 const DEV_RELOAD_INSTANCE_KIND: &str = "dev-reload";
-const FEEDBACK_ISSUES_URL: &str = "https://github.com/xinalbert/ax_shell/issues";
 static CRASH_HOOK: Once = Once::new();
 
 fn current_instance_kind() -> Option<String> {
@@ -184,22 +184,22 @@ pub(crate) fn install_crash_hook() {
                     tracing::error!(
                         "AxShell crashed; crash report saved to {}. Please report it at {}",
                         path.display(),
-                        FEEDBACK_ISSUES_URL
+                        ISSUES_URL
                     );
                     eprintln!(
                         "AxShell crashed. Crash report saved to: {}\nPlease report it at: {}",
                         path.display(),
-                        FEEDBACK_ISSUES_URL
+                        ISSUES_URL
                     );
                 }
                 None => {
                     tracing::error!(
                         "AxShell crashed, but writing the crash report failed. Please report it at {}",
-                        FEEDBACK_ISSUES_URL
+                        ISSUES_URL
                     );
                     eprintln!(
                         "AxShell crashed, but writing the crash report failed.\nPlease report it at: {}",
-                        FEEDBACK_ISSUES_URL
+                        ISSUES_URL
                     );
                 }
             }
@@ -269,7 +269,7 @@ fn build_crash_report(
     let _ = writeln!(report, "location: {location}");
     let _ = writeln!(report, "panic: {panic_payload}");
     let _ = writeln!(report, "runtime_log_dir: {}", app_log_dir().display());
-    let _ = writeln!(report, "feedback: {FEEDBACK_ISSUES_URL}");
+    let _ = writeln!(report, "feedback: {ISSUES_URL}");
     let _ = writeln!(report);
     let _ = writeln!(report, "backtrace:");
     let _ = writeln!(report, "{backtrace}");
@@ -291,7 +291,7 @@ fn notify_user_about_crash(crash_path: Option<&PathBuf>) {
         .map(|path| path.display().to_string())
         .unwrap_or_else(|| "<failed to write crash report>".to_string());
     let description = format!(
-        "AxShell crashed.\n\nCrash report:\n{crash_path}\n\nPlease create an issue and attach this file:\n{FEEDBACK_ISSUES_URL}"
+        "AxShell crashed.\n\nCrash report:\n{crash_path}\n\nPlease create an issue and attach this file:\n{ISSUES_URL}"
     );
 
     let _ = std::panic::catch_unwind(|| {

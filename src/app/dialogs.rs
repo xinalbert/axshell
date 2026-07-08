@@ -3063,10 +3063,10 @@ impl AxShell {
                                                         )
                                                         .child(
                                                             Button::new("github-link")
-                                                                .label("https://github.com/xinalbert/axshell")
+                                                                .label(crate::app::constants::REPOSITORY_URL)
                                                                 .ghost()
                                                                 .on_click(|_, _window, _cx| {
-                                                                    let _ = open::that("https://github.com/xinalbert/axshell");
+                                                                    let _ = open::that(crate::app::constants::REPOSITORY_URL);
                                                                 }),
                                                         )
                                                 }))

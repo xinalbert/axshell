@@ -23,7 +23,10 @@ use zip::read::ZipArchive;
 
 use rust_i18n::t;
 
-use crate::{session::config::Session, terminal::BackendEvent};
+use crate::{
+    session::config::Session,
+    terminal::{BackendEvent, TransferState},
+};
 
 use self::{
     auth::{SftpClientHandler, connect_and_authenticate},
@@ -101,7 +104,7 @@ impl TransferStateFlag {
 
     pub async fn yield_if_paused(
         &self,
-        events: &std::sync::mpsc::Sender<crate::terminal::BackendEvent>,
+        events: &std::sync::mpsc::Sender<BackendEvent>,
         tab_id: &str,
         id: &str,
         transferred: u64,
@@ -115,30 +118,85 @@ impl TransferStateFlag {
             }
             if state == 1 {
                 if !was_paused {
-                    let _ = events.send(crate::terminal::BackendEvent::TransferProgress {
-                        tab_id: tab_id.to_string(),
-                        id: id.to_string(),
+                    send_transfer_progress(
+                        events,
+                        tab_id,
+                        id,
                         transferred,
                         total,
-                        state: crate::terminal::TransferState::Paused,
-                    });
+                        TransferState::Paused,
+                    );
                     was_paused = true;
                 }
                 tokio::time::sleep(std::time::Duration::from_millis(100)).await;
             } else {
                 if was_paused {
-                    let _ = events.send(crate::terminal::BackendEvent::TransferProgress {
-                        tab_id: tab_id.to_string(),
-                        id: id.to_string(),
+                    send_transfer_progress(
+                        events,
+                        tab_id,
+                        id,
                         transferred,
                         total,
-                        state: crate::terminal::TransferState::Running,
-                    });
+                        TransferState::Running,
+                    );
                 }
                 return Ok(());
             }
         }
     }
+}
+
+fn send_sftp_status(
+    events: &std::sync::mpsc::Sender<BackendEvent>,
+    tab_id: &str,
+    text: impl Into<String>,
+) {
+    let _ = events.send(BackendEvent::SftpStatus {
+        tab_id: tab_id.to_string(),
+        text: text.into(),
+    });
+}
+
+fn send_transfer_progress(
+    events: &std::sync::mpsc::Sender<BackendEvent>,
+    tab_id: &str,
+    id: &str,
+    transferred: u64,
+    total: Option<u64>,
+    state: TransferState,
+) {
+    let _ = events.send(BackendEvent::TransferProgress {
+        tab_id: tab_id.to_string(),
+        id: id.to_string(),
+        transferred,
+        total,
+        state,
+    });
+}
+
+fn send_transfer_error(
+    events: &std::sync::mpsc::Sender<BackendEvent>,
+    tab_id: &str,
+    id: &str,
+    err_msg: String,
+    failed_status: String,
+) {
+    let is_cancelled = err_msg.contains("transfer cancelled");
+    let state = if is_cancelled {
+        TransferState::Interrupted("User cancelled".to_string())
+    } else {
+        TransferState::Failed(err_msg)
+    };
+    send_sftp_status(
+        events,
+        tab_id,
+        if is_cancelled {
+            "Transmission cancelled".to_string()
+        } else {
+            failed_status
+        },
+    );
+    send_transfer_progress(events, tab_id, id, 0, None, state);
 }
 
 pub struct SftpHandle {
@@ -358,10 +416,11 @@ async fn run_sftp(
                         return;
                     };
 
-                    let _ = events_clone.send(BackendEvent::SftpStatus {
-                        tab_id: tab_id_clone.clone(),
-                        text: t!("downloading_file", base = base_name(&remote)).to_string(),
-                    });
+                    send_sftp_status(
+                        &events_clone,
+                        &tab_id_clone,
+                        t!("downloading_file", base = base_name(&remote)).to_string(),
+                    );
 
                     match download_path_impl(
                         &handle_clone,
@@ -376,36 +435,17 @@ async fn run_sftp(
                     .await
                     {
                         Ok(summary) => {
-                            let _ = events_clone.send(BackendEvent::SftpStatus {
-                                tab_id: tab_id_clone,
-                                text: summary,
-                            });
+                            send_sftp_status(&events_clone, &tab_id_clone, summary);
                         }
                         Err(err) => {
                             let err_msg = format!("{err:#}");
-                            let is_cancelled = err_msg.contains("transfer cancelled");
-                            let state = if is_cancelled {
-                                crate::terminal::TransferState::Interrupted(
-                                    "User cancelled".to_string(),
-                                )
-                            } else {
-                                crate::terminal::TransferState::Failed(err_msg.clone())
-                            };
-                            let _ = events_clone.send(BackendEvent::SftpStatus {
-                                tab_id: tab_id_clone.clone(),
-                                text: if is_cancelled {
-                                    "Transmission cancelled".to_string()
-                                } else {
-                                    t!("download_failed", err = err_msg.clone()).to_string()
-                                },
-                            });
-                            let _ = events_clone.send(BackendEvent::TransferProgress {
-                                tab_id: tab_id_clone,
-                                id: id.clone(),
-                                transferred: 0,
-                                total: None,
-                                state,
-                            });
+                            send_transfer_error(
+                                &events_clone,
+                                &tab_id_clone,
+                                &id,
+                                err_msg.clone(),
+                                t!("download_failed", err = err_msg).to_string(),
+                            );
                         }
                     }
                     let _ = commands_tx_clone.send(SftpCommand::TransferFinished(id));
@@ -471,10 +511,7 @@ async fn run_sftp(
                         return;
                     };
 
-                    let _ = events_clone.send(BackendEvent::SftpStatus {
-                        tab_id: tab_id_clone.clone(),
-                        text: t!("uploading").to_string(),
-                    });
+                    send_sftp_status(&events_clone, &tab_id_clone, t!("uploading").to_string());
 
                     match upload_paths_impl(
                         &sftp_session,
@@ -488,37 +525,18 @@ async fn run_sftp(
                     .await
                     {
                         Ok(summary) => {
-                            let _ = events_clone.send(BackendEvent::SftpStatus {
-                                tab_id: tab_id_clone.clone(),
-                                text: summary,
-                            });
+                            send_sftp_status(&events_clone, &tab_id_clone, summary);
                             let _ = commands_tx_clone.send(SftpCommand::ListDir(remote_dir));
                         }
                         Err(err) => {
                             let err_msg = format!("{err:#}");
-                            let is_cancelled = err_msg.contains("transfer cancelled");
-                            let state = if is_cancelled {
-                                crate::terminal::TransferState::Interrupted(
-                                    "User cancelled".to_string(),
-                                )
-                            } else {
-                                crate::terminal::TransferState::Failed(err_msg.clone())
-                            };
-                            let _ = events_clone.send(BackendEvent::SftpStatus {
-                                tab_id: tab_id_clone.clone(),
-                                text: if is_cancelled {
-                                    "Transmission cancelled".to_string()
-                                } else {
-                                    t!("upload_failed", err = err_msg.clone()).to_string()
-                                },
-                            });
-                            let _ = events_clone.send(BackendEvent::TransferProgress {
-                                tab_id: tab_id_clone,
-                                id: id.clone(),
-                                transferred: 0,
-                                total: None,
-                                state,
-                            });
+                            send_transfer_error(
+                                &events_clone,
+                                &tab_id_clone,
+                                &id,
+                                err_msg.clone(),
+                                t!("upload_failed", err = err_msg).to_string(),
+                            );
                         }
                     }
                     let _ = commands_tx_clone.send(SftpCommand::TransferFinished(id));
@@ -1118,23 +1136,25 @@ async fn download_file_impl(
             .with_context(|| format!("write {}", local.display()))?;
 
         transferred += read as u64;
-        let _ = events.send(BackendEvent::TransferProgress {
-            tab_id: tab_id.to_string(),
-            id: id.to_string(),
+        send_transfer_progress(
+            events,
+            tab_id,
+            id,
             transferred,
             total,
-            state: crate::terminal::TransferState::Running,
-        });
+            TransferState::Running,
+        );
     }
     local_file.flush().await.context("flush local file")?;
 
-    let _ = events.send(BackendEvent::TransferProgress {
-        tab_id: tab_id.to_string(),
-        id: id.to_string(),
+    send_transfer_progress(
+        events,
+        tab_id,
+        id,
         transferred,
         total,
-        state: crate::terminal::TransferState::Completed,
-    });
+        TransferState::Completed,
+    );
 
     Ok(())
 }
@@ -1254,13 +1274,14 @@ async fn upload_paths_impl(
         res?;
     }
 
-    let _ = events.send(BackendEvent::TransferProgress {
-        tab_id: tab_id.to_string(),
-        id: id.to_string(),
-        transferred: total_bytes,
-        total: Some(total_bytes),
-        state: crate::terminal::TransferState::Completed,
-    });
+    send_transfer_progress(
+        events,
+        tab_id,
+        id,
+        total_bytes,
+        Some(total_bytes),
+        TransferState::Completed,
+    );
 
     let summary = if file_count == 1 && folder_count == 0 {
         t!("uploaded_file").to_string()
@@ -1314,13 +1335,7 @@ async fn upload_file_impl(
             .with_context(|| format!("write remote {remote_path}"))?;
 
         let new_cur = transferred.fetch_add(read as u64, Ordering::Relaxed) + read as u64;
-        let _ = events.send(BackendEvent::TransferProgress {
-            tab_id: tab_id.to_string(),
-            id: id.to_string(),
-            transferred: new_cur,
-            total,
-            state: crate::terminal::TransferState::Running,
-        });
+        send_transfer_progress(events, tab_id, id, new_cur, total, TransferState::Running);
     }
     remote.flush().await.context("flush remote file")?;
     Ok(())
