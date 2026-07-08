@@ -782,3 +782,35 @@
 - 执行内容：删除空的 deferred output 机制；让 backend output 始终进入 `TerminalTab::feed`；新增选区 frozen snapshot 状态、复制优先 frozen text、渲染层 frozen row 覆盖和倒置索引 + live selection 校准；执行 `rustfmt --edition 2024 --config skip_children=true src/app/mod.rs src/app/init.rs src/app/event_loop.rs src/app/ui/terminal_panel.rs src/app/ui/layout.rs src/app/workspace.rs src/session/mod.rs src/session/pane.rs src/terminal/input.rs src/terminal/element.rs src/terminal/mod.rs`、`cargo check` 和 `cargo test`
 - 验证结果：格式化通过；`cargo check` 通过；`cargo test` 通过，25 个测试全部通过；新增测试覆盖 UTF-16 composition range、frozen bottom index 随 history 增长上移、history 到上限后跟随 live selection 行偏移；仍保留既有 `block v0.1.6` future-incompat warning
 - 风险/待办：GUI 手工验证未执行，仍需在真实持续输出和系统中文输入法场景确认只有选中行冻结、其他行刷新、候选框位置和预编辑高亮稳定
+
+## 2026-07-09 刷新环境记录到 release highlights 展示修复
+
+- 目的：在修改 GitHub Release workflow 发布正文生成逻辑前，确认本轮环境边界和验证方式
+- 改动范围：`.github/workflows/release.yml`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/changes/2026/07.md`
+- 执行内容：复查 release workflow 的 publish job、`Generate release highlights` Bash 片段和版本脚本；确认主技术栈与依赖版本未变，本轮不新增依赖、不调整 Rust 源码、不联网、不使用多 agent
+- 验证结果：待执行 release workflow YAML 静态检查、`Generate release highlights` shell 片段静态检查和 tracking docs validator；真实 GitHub Release 页面效果需下次 tag 发布时确认
+- 风险/待办：GitHub 平台最终 Markdown 渲染以线上 Release 页面为准；本轮通过显式 commit URL 链接避免依赖自动链接规则
+
+## 2026-07-09 完成 release highlights 展示修复环境验证
+
+- 目的：在 GitHub Release workflow 发布正文生成逻辑修复后，把实际验证结果和剩余风险回写到环境记忆
+- 改动范围：`.github/workflows/release.yml`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/changes/2026/07.md`
+- 执行内容：修改 release highlights 生成逻辑，使 commit 条目使用完整 hash 构造 URL、短 hash 带 `#` 作为展示文本；移除 release body 中的 Keyword Rules，改写入 GitHub Actions step summary；执行 workflow YAML 解析、Bash 静态检查、`git diff --check`、本地样例生成和 tracking docs validator
+- 验证结果：workflow YAML 解析通过；`Generate release highlights` Bash 静态检查通过；`git diff --check` 通过；本地样例生成确认 release body 输出 `[#短hash](.../commit/完整hash)`，且不包含 `Keyword Rules`；tracking docs validator 通过
+- 风险/待办：真实 GitHub Release 页面渲染仍需在下次 tag 发布后确认；本轮未运行 Rust 编译/测试，因为未修改 Rust 源码、依赖或构建矩阵
+
+## 2026-07-09 刷新环境记录到 release highlights 格式收敛
+
+- 目的：在进一步调整 GitHub Release workflow 发布正文格式前，确认本轮环境边界和验证方式
+- 改动范围：`.github/workflows/release.yml`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/changes/2026/07.md`
+- 执行内容：复查 release workflow 的 publish job、`Generate release highlights` Bash 片段和本地模拟输出；确认主技术栈与依赖版本未变，本轮不新增依赖、不调整 Rust 源码、不联网、不使用多 agent
+- 验证结果：待执行 workflow YAML 解析、`Generate release highlights` Bash 静态检查、本地样例生成、`git diff --check` 与 tracking docs validator；真实 GitHub Release 页面效果需下次 tag 发布时确认
+- 风险/待办：关键词分组仍是启发式规则，真实发布页最终效果仍需 tag 发布后确认
+
+## 2026-07-09 完成 release highlights 格式收敛环境验证
+
+- 目的：在 GitHub Release workflow 发布正文格式收敛后，把实际验证结果和剩余风险回写到环境记忆
+- 改动范围：`.github/workflows/release.yml`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/changes/2026/07.md`
+- 执行内容：修改 release highlights 输出结构和关键词规则；执行 workflow YAML 解析、Bash 静态检查、`git diff --check`、本地样例生成和 tracking docs validator；确认本轮未修改 Rust 源码、依赖或构建矩阵
+- 验证结果：workflow YAML 解析通过；`Generate release highlights` Bash 静态检查通过；`git diff --check` 通过；本地样例生成确认 `Full changelog`、句尾 commit 链接、SFTP 独立分组和关键词误匹配修正生效；tracking docs validator 通过
+- 风险/待办：关键词分组仍是启发式规则；真实 GitHub Release 页面渲染仍需在下次 tag 发布后确认
