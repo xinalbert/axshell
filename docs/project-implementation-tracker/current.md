@@ -2,14 +2,14 @@
 
 ## 当前目标
 
-- 目标：将自定义主题里的亮度控制收口为终端显示亮度，并把允许范围调整为 0.60-1.20
-- 交付物：`src/app/theme.rs` 中移除 theme 生成阶段的全局亮度改写、`src/session/config.rs` 中的亮度夹取范围、`locales/` 中的设置文案和更新后的实施/环境记录
+- 目标：降低终端动态等待输出时的无效整屏刷新，先完成第一阶段的内容比较刷新和选区期节流
+- 交付物：`src/terminal/mod.rs` 中的 viewport 签名缓存、`src/app/event_loop.rs` 中的终端刷新节流、`src/app/mod.rs` / `src/app/init.rs` 中新增的刷新状态字段，以及更新后的实施/环境记录
 
 ## 项目边界
 
 - 根目录：`<repo-root>`
-- 当前范围：`src/app/theme.rs`，`src/session/config.rs`，`locales/`，`docs/project-env-audit/`，`docs/project-implementation-tracker/`
-- 不在本轮范围内：新增配置键迁移、改变 terminal 颜色算法、改变页面级主题字段、GUI 手工回归
+- 当前范围：`src/terminal/mod.rs`，`src/app/event_loop.rs`，`src/app/mod.rs`，`src/app/init.rs`，`docs/project-env-audit/`，`docs/project-implementation-tracker/`
+- 不在本轮范围内：行级 layout cache、局部 dirty-rect 绘制、GPUI 渲染模型重构、GUI 手工回归
 
 ## 当前状态
 
@@ -22,40 +22,40 @@
 
 | Step | Status | Deliverable | Verification | Notes |
 | --- | --- | --- | --- | --- |
-| P1 | completed | 本轮环境预检和实施计划刷新 | tracking docs validator | 当前工作区已有菜单栏和光标未提交改动，本轮只追加亮度作用域收口 |
-| P2 | completed | 亮度作用域从 theme 生成收口到 terminal 渲染 | `cargo check`，`cargo test` | 已移除 `apply_brightness` 对 colors/highlight 的改写，保留 terminal 前景色亮度逻辑 |
-| P3 | completed | 亮度范围和设置文案调整为 0.60-1.20 / 终端字体亮度 | `cargo check` | 保持既有配置字段名，避免配置迁移 |
-| P4 | completed | 格式化、编译、测试和文档校验 | `rustfmt`，`cargo check`，`cargo test`，tracking docs validator | GUI 设置页和终端视觉效果留作手工验证 |
+| P1 | completed | 本轮环境预检、项目地图复核和实施计划刷新 | tracking docs validator | 当前工作树干净，可直接进入第一阶段实现 |
+| P2 | completed | `TerminalTab` viewport 签名比较 | `cargo check`，`cargo test` | 只比较当前 viewport，不做 row cache |
+| P3 | completed | 选区期终端刷新节流与 blink/空闲刷新避让 | `cargo check`，`cargo test` | 选区存在时，终端输出刷新最多每 100ms 触发一次 |
+| P4 | completed | 文档收口与最终验证 | `rustfmt`，`cargo check`，`cargo test`，tracking docs validator | GUI 选区体验仍留作手工验证 |
 
 ## 已完成
 
-- 已确认 `font_brightness` 当前同时参与 custom theme 生成和 terminal 前景色渲染
-- 已确认用户期望是控制命令行显示部分，而不是整个页面
-- 已确认本轮不新增配置键，继续复用现有 `font_brightness` 字段并改变语义文案
-- 已从 custom theme 生成阶段移除全局亮度改写，避免影响页面级 theme colors/highlight
-- 已将结构化 custom theme 和旧兼容 `custom_font_brightness` 的夹取范围统一为 0.60-1.20
-- 已将设置文案改为 `终端字体亮度` / `Terminal Font Brightness`
+- 已确认当前问题的主因是终端区域在动态等待输出时仍频繁整块重绘，而不是输出路径主动清 selection
+- 已在 `TerminalTab` 增加 viewport 签名缓存，并在输出、resize、scroll 后只根据可见内容变化决定是否需要终端刷新
+- 已在事件泵中把“终端刷新”与“其他 UI 变化”拆开，避免 SFTP、状态栏等普通界面更新被终端节流拖慢
+- 已在选区存在时暂停 blink 驱动刷新，并将待刷新的终端输出节流为最多每 100ms 一次
+- 已保留无选区时的即时刷新路径，避免常规终端交互明显变钝
 
 ## 验证
 
-- 已完成：源码级确认亮度当前有 theme 生成和 terminal 渲染两条路径
-- 已完成：`rustfmt --edition 2024 --config skip_children=true src/app/theme.rs src/session/config.rs`
+- 已完成：源码级确认终端输出刷新、blink 和空闲 notify 的触发路径
+- 已完成：`rustfmt --edition 2024 src/terminal/mod.rs src/app/mod.rs src/app/init.rs src/app/event_loop.rs`
 - 已完成：`cargo check`
 - 已完成：`cargo test`，18 个测试全部通过
 - 已完成：tracking docs validator
-- 未完成：GUI 设置页和终端亮度视觉验证
+- 未完成：GUI 终端选区与动态输出体验手工验证
 
 ## 风险与阻塞
 
 - 阻塞：无
-- 风险一：已有用户配置中大于 1.20 的值会在读取或保存时被夹取到 1.20，属于本轮预期变化
-- 风险二：不改配置键名会减少迁移成本，但旧文档或用户记忆里的“字体亮度”需要通过 UI 文案纠正
-- 风险三：GUI 中设置页提示和 terminal 视觉效果仍需要手工确认
+- 风险一：viewport 签名当前按整个可见网格 hash，能减少无意义刷新，但不会带来真正的局部重绘
+- 风险二：选区期 100ms 节流会让超高频 spinner 的更新略慢一点，但这是为换取选区稳定性做的显式权衡
+- 风险三：若后续仍存在明显闪烁，下一阶段需要上 row hash + row layout cache，改动面会明显变大
 
 ## 下一步
 
-- 用户可在 GUI 中确认设置页文案，以及亮度调整只影响 terminal 输出文字、不影响页面整体主题颜色
+- 可在 GUI 中重点验证：动态输出时选区是否更稳定、无选区时终端是否仍保持及时刷新
+- 若第一阶段收益仍不够，再进入 row hash + row layout cache 的第二阶段
 
 ## 最后更新时间
 
-- 2026-07-08 15:23 +0800
+- 2026-07-08 15:46 +0800

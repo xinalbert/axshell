@@ -636,3 +636,13 @@
 - 计划状态变更：无
 - 验证结果：`rustfmt` 通过；`cargo check` 通过；`cargo test` 通过，18 个测试全部通过；tracking docs 校验通过；仍保留既有 `block v0.1.6` future-incompat warning；GUI 设置页和终端亮度视觉效果未手工验证
 - 对 plan 的更新：验证入口保持不变；后续如需控制非 terminal 页面亮度，应单独设计为页面主题设置而非复用终端字体亮度
+
+## 2026-07-08 刷新环境记录到终端刷新第一阶段优化
+
+- 时间：2026-07-08 15:46 +0800
+- 触发原因：用户确认先实现“内容签名比较 + 有选区时降频刷新”的第一阶段方案，减少动态等待输出时无意义整屏刷新
+- 执行内容：复查 `src/terminal/mod.rs`、`src/terminal/element.rs`、`src/app/event_loop.rs`、`src/app/mod.rs` 和 `src/app/init.rs`；确认本轮不新增依赖、不调整配置格式、不联网、不使用多 agent；实现路径收敛为 viewport 内容比较与选区期节流，不进入 row cache 或局部绘制
+- 影响文件：`src/terminal/mod.rs`，`src/app/event_loop.rs`，`src/app/mod.rs`，`src/app/init.rs`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`
+- 计划状态变更：无
+- 验证结果：`rustfmt` 通过；`cargo check` 通过；`cargo test` 与 tracking docs 校验待执行；GUI 终端选区稳定性未手工验证
+- 对 plan 的更新：验证入口保持不变；若第一阶段收益不足，下一阶段再评估 row hash / row layout cache
