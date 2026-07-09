@@ -830,3 +830,43 @@
 - 执行内容：新增 Linux ARM64 CI/Release matrix；在 Release workflow 中为 Linux 输出 `.tar.gz` 和 `.deb`；新增 macOS universal job 组合双架构 `.app`；同步中英文发布文档；确认本轮未修改 Rust 源码、依赖或 lockfile
 - 验证结果：workflow YAML 解析通过；Release workflow 所有 `run` 脚本经本地占位替换后通过 `bash -n`；`git diff --check` 通过；tracking docs validator 通过
 - 风险/待办：Linux ARM64 runner、Linux `.deb` 构建安装和 macOS universal app 需要 GitHub Actions 实际发布后下载验证；Windows ARM64 仍因 runner preview 状态留作后续实验项
+
+## 2026-07-09 刷新环境记录到 Windows 菜单栏缺失修复
+
+- 目的：在修复 Windows 中菜单栏不可见问题前，确认当前项目环境、平台依赖实现和验证边界
+- 改动范围：`src/app/app_menu.rs`，`src/app/init.rs`，`src/app/mod.rs`，`src/app/ui/layout.rs`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/changes/2026/07.md`
+- 执行内容：复查 `Cargo.toml`、`src/main.rs`、`src/app/startup.rs`、`src/app/app_menu.rs`、`src/app/ui/layout.rs` 和 `gpui` / `gpui_component` 依赖实现；确认 Windows/Linux 的 `gpui::set_menus` 只保存菜单数据，不自动显示菜单 UI，本轮需要在应用层显式渲染
+- 验证结果：确认主技术栈与依赖版本未变；本轮验证命令收敛为 `rustfmt`、`cargo check`、`cargo check --target x86_64-pc-windows-msvc` 和 tracking docs 校验
+- 风险/待办：若后续要求完全原生 Win32 menubar，而不是应用内菜单栏，还需继续评估平台层实现成本
+
+## 2026-07-09 完成 Windows 菜单栏显式渲染环境验证
+
+- 目的：在 Windows 菜单栏显式渲染修复后，把实际编译验证结果和剩余实机边界回写到环境记忆
+- 改动范围：`src/app/app_menu.rs`，`src/app/init.rs`，`src/app/mod.rs`，`src/app/ui/layout.rs`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/changes/2026/07.md`
+- 执行内容：在 `AxShell` 中接入 Windows `AppMenuBar` 实体；让 `app_menu::refresh()` 同时刷新平台菜单、`gpui_component::GlobalState` 和窗口菜单栏；在 Windows 原生标题栏布局顶部渲染菜单栏；执行 `rustfmt` 和 `cargo check`，并启动 Windows 目标编译验证
+- 验证结果：`rustfmt --edition 2024 src/app/mod.rs src/app/init.rs src/app/app_menu.rs src/app/ui/layout.rs` 通过；`cargo check` 通过；`cargo check --target x86_64-pc-windows-msvc` 下载依赖后因本机缺少该 Rust target 而未完成；tracking docs validator 通过；GUI 手工验证尚未执行
+- 风险/待办：最终菜单显示与点击行为仍需 Windows 实机确认；若要继续做 Windows target 编译，需要使用带 `rustup` 或预装 `x86_64-pc-windows-msvc` target 的工具链
+
+## 2026-07-09 扩展环境记录到 Linux 菜单栏缺失修复
+
+- 目的：在确认 Linux 菜单栏路径与 Windows 同类后，把 Linux 菜单栏缺失修复纳入当前环境边界
+- 改动范围：`src/app/app_menu.rs`，`src/app/init.rs`，`src/app/ui/layout.rs`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/changes/2026/07.md`
+- 执行内容：复查 `gpui_linux` 的 `set_menus` 实现，确认其与 Windows 一样只保存菜单数据；将 `AppMenuBar` 初始化、刷新与布局渲染从仅 Windows 泛化到 Windows / Linux 共用路径；执行 `rustfmt`、`cargo check` 和 Linux target 编译验证
+- 验证结果：`rustfmt --edition 2024 src/app/init.rs src/app/app_menu.rs src/app/ui/layout.rs` 通过；`cargo check` 通过；`cargo check --target x86_64-unknown-linux-gnu` 下载依赖后因本机缺少该 Rust target 而未完成；Linux GUI 手工验证尚未执行
+- 风险/待办：Linux 最终显示与点击行为仍需在实际桌面环境确认；若要继续做 Linux target 编译，需要使用带 `rustup` 或预装 `x86_64-unknown-linux-gnu` target 的工具链
+
+## 2026-07-09 刷新环境记录到 SFTP 交互体验修正
+
+- 目的：在修改 SFTP 页面传输默认位置、传输信息呈现和列表点击习惯前，确认当前项目环境、入口和验证边界
+- 改动范围：`src/app/actions/sftp.rs`，`src/app/views/sftp_panel.rs`，`src/app/views/sftp_panel/transfer_panel.rs`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/changes/2026/07.md`
+- 执行内容：复查 `Cargo.toml`、`.github/workflows/ci.yml`、SFTP action 层和 SFTP 双栏页面；确认主技术栈与依赖版本未变，本轮不新增依赖、不联网、不使用多 agent
+- 验证结果：待执行 `rustfmt`、`cargo check`、`cargo test` 和 tracking docs validator；真实 SFTP 双栏交互仍需 GUI 手工验证
+- 风险/待办：全局 Transfers 弹窗保留菜单入口，本轮只取消上传/下载启动时的自动弹窗；列表二次点击行为需要实机确认手感
+
+## 2026-07-09 完成 SFTP 交互体验修正环境验证
+
+- 目的：在 SFTP 页面交互修正完成后，把实际编译测试结果和剩余验证边界回写到环境记忆
+- 改动范围：`src/app/actions/sftp.rs`，`src/app/views/sftp_panel/transfer_panel.rs`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/changes/2026/07.md`
+- 执行内容：将下载默认目录改为右侧本地浏览器当前目录；上传保持左侧远端当前目录并取消自动弹出传输历史；将远端/本地列表改为单击选中、再次点击目录打开；将 SFTP 页面底部传输行压缩为单行显示
+- 验证结果：`rustfmt --edition 2024 src/app/actions/sftp.rs src/app/views/sftp_panel.rs src/app/views/sftp_panel/transfer_panel.rs` 通过；`cargo check` 通过；`cargo test` 通过，25 个测试全部通过；tracking docs validator 通过
+- 风险/待办：GUI 手工验证和真实 SSH/SFTP 连接验证未执行；传输弹窗仍可通过菜单手动打开，本轮只取消自动弹窗

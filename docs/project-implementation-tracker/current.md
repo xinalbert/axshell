@@ -2,64 +2,57 @@
 
 ## 当前目标
 
-- 目标：扩展 GitHub Release 发布产物覆盖范围，新增 Linux ARM64 构建、Linux `.deb` 安装包和 macOS universal `.app` 压缩包
-- 交付物：更新后的 `.github/workflows/ci.yml` / `.github/workflows/release.yml` 构建矩阵与打包步骤、中英文发布文档说明、同步后的实施记录和环境记录
+- 目标：修正 SFTP 页面传输默认位置、传输信息呈现和文件列表点击习惯
+- 交付物：SFTP 下载默认落到右侧本地浏览器当前目录；上传默认发到左侧远端当前目录；上传/下载启动后不弹出传输历史窗口，只在页面底部 Active 传输列表单行显示；远端和本地列表改为单击选中、再次点击目录才打开
 
 ## 项目边界
 
 - 根目录：`<repo-root>`
-- 当前范围：`.github/workflows/ci.yml`，`.github/workflows/release.yml`，`docs/development.md`，`docs/development.en.md`，`README.md`，`README.en.md`，`docs/project-env-audit/`，`docs/project-implementation-tracker/`
-- 不在本轮范围内：Windows ARM64 preview runner、老 Linux glibc / musl 兼容包、Homebrew cask 发布、Rust 应用源码功能改动
+- 当前范围：`src/app/actions/sftp.rs`，`src/app/views/sftp_panel.rs`，`src/app/views/sftp_panel/transfer_panel.rs`，`docs/project-env-audit/`，`docs/project-implementation-tracker/`
+- 不在本轮范围内：SFTP 后端协议重写、真实 SSH/SFTP 联机验证、传输队列持久化策略、全局传输弹窗功能删除
 
 ## 当前状态
 
 - 阶段：已完成
 - 开工判定：允许开工
-- 是否需要联网：是，已完成
+- 是否需要联网：否
 - 多 agent：未使用
 
 ## 活动计划
 
 | Step | Status | Deliverable | Verification | Notes |
 | --- | --- | --- | --- | --- |
-| P1 | completed | 复查当前 CI / Release 矩阵、Debian metadata 和 GitHub runner 可用性 | 源码检查，GitHub 官方 runner 文档核对 | Windows ARM64 标为后续实验项 |
-| P2 | completed | CI / Release 增加 Linux ARM64，Release Linux 产物增加 `.deb` | workflow YAML 静态检查，Bash 静态检查 | 不改 Rust 源码 |
-| P3 | completed | Release 增加 macOS universal zip 组合 job | workflow YAML 静态检查，Bash 静态检查 | 依赖两个 macOS 架构 artifact |
-| P4 | completed | 更新发布文档和跟踪记录 | docs 检查，tracking docs validator | 真实 tag 发布验证留到 GitHub Actions |
+| P1 | completed | 环境预检和实施计划切换到 SFTP 交互修正 | tracking docs validator | 已确认本轮不依赖联网和新增依赖 |
+| P2 | completed | SFTP 上传/下载默认路径和传输提示行为修正 | `cargo check`，源码检查 | 上传仍可用 picker 选择源，下载不再要求选择目录 |
+| P3 | completed | 远端/本地列表单击选中、再次点击目录打开 | `cargo check`，源码检查 | 本地文件再次点击用系统默认应用打开 |
+| P4 | completed | 格式化、编译测试和文档收口 | `rustfmt`，`cargo check`，`cargo test`，tracking docs validator | GUI 手工验证仍需用户本机确认 |
 
 ## 已完成
 
-- 已读取 `project-map.md`、当前实施记录和环境记录，确认 `.github/workflows/`、`README`、`docs/development` 和 tracking 文档均在项目地图覆盖范围内
-- 已复查当前 Release/CI 只覆盖 `windows-x86_64`、`linux-x86_64`、`macos-aarch64`、`macos-x86_64`
-- 已确认 `Cargo.toml` 已有 Debian metadata，但当前 GitHub Release workflow 尚未输出 `.deb`
-- 已查 GitHub 官方 runner 文档，确认 Linux ARM64 runner 标签可用；Windows ARM64 为 public preview，暂不并入主发布矩阵
-- 已确认本轮不新增 Rust 依赖、不修改应用源码、不使用多 agent
-- 已在 CI 和 Release matrix 中新增 `linux-aarch64`
-- 已让 Linux Release 产物同时上传 `.tar.gz` 和 `.deb`，其中 `.deb` 使用 `dpkg-deb` 在 workflow 内组装，暂不引入 `cargo-deb` 依赖
-- 已新增 `macos-universal` job，从 `macos-aarch64` 与 `macos-x86_64` artifacts 组合 universal `.app`，重新 ad-hoc codesign 后上传 universal zip
-- 已同步 README 与中英文开发文档的发布产物清单
+- 已完成施工前环境预检，确认项目仍为 Rust / GPUI 桌面应用
+- 已定位 SFTP 行为入口：`src/app/actions/sftp.rs` 与 `src/app/views/sftp_panel.rs`
+- 已将远端下载默认目录改为右侧本地浏览器当前目录
+- 已将本地上传默认远端目录保持为左侧远端当前目录，并取消传输历史自动弹窗
+- 已将远端/本地列表改为单击选中、再次点击目录打开；本地文件再次点击用系统默认应用打开
+- 已将 SFTP 页面底部传输行压缩为单行显示
 
 ## 验证
 
-- 已完成：当前 workflow / manifest / Debian metadata 源码检查
-- 已完成：GitHub-hosted runner 官方文档核对
-- 已完成：`.github/workflows/ci.yml` 和 `.github/workflows/release.yml` YAML 解析
-- 已完成：Release workflow 所有 `run` 脚本经本地占位替换后通过 `bash -n`
-- 已完成：`git diff --check`
-- 已完成：tracking docs validator
-- 未完成：真实 GitHub Actions tag 发布验证、Linux `.deb` 安装体验验证、macOS universal 下载后启动验证
+- 已完成：`rustfmt --edition 2024 src/app/actions/sftp.rs src/app/views/sftp_panel.rs src/app/views/sftp_panel/transfer_panel.rs`
+- 已完成：`cargo check` 通过
+- 已完成：`cargo test` 通过，25 个测试全部通过
+- 已完成：tracking docs validator 通过
+- 未完成：GUI 手工验证、真实 SSH/SFTP 连接验证
 
 ## 风险与阻塞
 
-- 阻塞：无
-- 风险一：Linux ARM64 和 macOS universal 需要 GitHub Actions 实际 runner 执行才能最终确认；本机只能做静态校验
-- 风险二：手写 `.deb` 控制文件需要在真实 runner 上确认安装体验；本轮先保持最小 Debian metadata
-- 风险三：macOS universal 重新 ad-hoc codesign 后仍需下载实测 Gatekeeper / Finder 展示
+- 风险一：GUI 单击/再次点击行为需要真实应用中确认手感；本轮以源码行为和编译测试验证为主
+- 风险二：全局 Transfers 弹窗仍保留菜单入口，本轮只取消 SFTP 启动传输后的自动弹窗
 
 ## 下一步
 
-- 推送后观察 CI / Release workflow；下次 tag 发布后下载验证 Linux `.deb` 和 macOS universal `.app`
+- 在真实 SFTP 连接中确认双栏默认目录、Active 单行传输显示和二次点击打开目录的手感
 
 ## 最后更新时间
 
-- 2026-07-09 08:08 +0800
+- 2026-07-09 12:45 +0800

@@ -4,47 +4,47 @@
 
 - 类型：独立项目
 - 根目录：`<repo-root>`
-- 结论：当前为独立 Rust / GPUI 桌面应用中的 GitHub Actions 发布矩阵扩展；本轮目标是新增 Linux ARM64、Linux `.deb` 和 macOS universal 发布产物
+- 结论：当前为独立 Rust / GPUI 桌面应用；本轮目标是修正 SFTP 页面传输默认位置、传输信息呈现和列表点击习惯
 
 ## 环境记忆目录
 
 - 目录：`docs/project-env-audit/`
 - current.md：存在
 - changes.md：存在
-- 处理动作：读取现有记录并刷新为“发布产物覆盖范围扩展”任务语境
+- 处理动作：读取现有记录并刷新为“SFTP 交互体验修正”任务语境
 
 ## 运行环境
 
-- 主技术栈：Rust 桌面应用，GitHub Actions CI / Release workflow，Bash 打包脚本段
+- 主技术栈：Rust 桌面应用，`gpui` 窗口框架，`gpui_component` UI 组件，`tokio` 运行时
 - 版本约束：`rust-version = 1.88.0`
 - 包管理器：`cargo`
-- 构建 / 运行入口：`.github/workflows/ci.yml` 和 `.github/workflows/release.yml` 中 `cargo build --release --target ...`
-- 本轮代码入口：`.github/workflows/ci.yml` build matrix；`.github/workflows/release.yml` build matrix、Linux package step、macOS universal package job
-- 发布依据：Release workflow 在 tag 构建时用 `scripts/release_version.py` 同步版本，再按 matrix 生成平台产物并上传到 GitHub Release
+- 构建 / 运行入口：`src/main.rs`，`src/app.rs`，`src/app/lifecycle/startup.rs`，`src/app/lifecycle/init.rs`
+- 本轮代码入口：`src/app/actions/sftp.rs`，`src/app/views/sftp_panel.rs`，`src/app/views/sftp_panel/transfer_panel.rs`，`src/terminal.rs`
 - 依赖统一策略：本轮不新增 Rust 依赖，不调整 `Cargo.toml` / `Cargo.lock`
-- 证据文件：`.github/workflows/ci.yml`，`.github/workflows/release.yml`，`Cargo.toml`，`assets/ax_shell.desktop`，`docs/project-implementation-tracker/project-map.md`
+- 证据文件：`Cargo.toml`，`.github/workflows/ci.yml`，`.github/workflows/release.yml`，`src/main.rs`，`src/app.rs`，`src/app/actions/sftp.rs`，`src/app/views/sftp_panel.rs`，`src/app/views/sftp_panel/transfer_panel.rs`，`src/terminal.rs`，`docs/project-implementation-tracker/project-map.md`
 
 ## 测试环境
 
-- 测试框架：workflow YAML / shell 静态检查、tracking docs validator
+- 测试框架：Rust 编译检查、Rust 单元测试、tracking docs validator
 - 默认测试命令：`cargo test`
-- 当前实施验证命令：workflow YAML 解析，CI / Release Bash 片段静态检查，tracking docs validator
-- CI 测试命令：`.github/workflows/ci.yml` 当前执行 `cargo build --release --target ...`
-- 外部依赖：本轮需要核对 GitHub-hosted runner 当前标签；真实构建需 GitHub Actions runner 执行
-- 工具可用性：本机可做 workflow YAML / shell 静态检查；Linux ARM64 runner、Linux `.deb` 构建和 macOS universal 产物需 GitHub Actions 实际执行确认
-- 证据文件：`.github/workflows/ci.yml`，`.github/workflows/release.yml`，`Cargo.toml`
-- 本轮验证结果：workflow YAML 解析通过；Release workflow 所有 `run` 脚本经本地占位替换后通过 `bash -n`；`git diff --check` 通过；tracking docs validator 通过
+- 当前实施验证命令：`rustfmt --edition 2024 src/app/actions/sftp.rs src/app/views/sftp_panel.rs src/app/views/sftp_panel/transfer_panel.rs`，`cargo check`，`cargo test`，`python3 /Users/albertxin/.codex/skills/project-implementation-tracker/scripts/validate_tracking_docs.py .`
+- CI 测试命令：`.github/workflows/ci.yml` 运行 `cargo check --all-targets` 和 `cargo test --all`
+- 外部依赖：无额外服务依赖；如需完整 GUI 行为验证，仍需本机手工运行桌面应用
+- 工具可用性：本机可直接执行 `cargo check`、`cargo test` 与 tracking docs validator
+- 证据文件：`Cargo.toml`，`.github/workflows/release.yml`
+- 本轮验证结果：`rustfmt` 通过；`cargo check` 通过；`cargo test` 通过，25 个测试全部通过；tracking docs validator 通过
 
 ## 环境变化检查
 
 - 是否发现变化：是
-- 变化摘要：本轮任务从 release highlights 格式收敛切换为发布产物矩阵扩展；运行环境仍是 GitHub Actions + Rust release build，不新增 Rust 依赖
-- 受影响文件：`.github/workflows/ci.yml`，`.github/workflows/release.yml`，`README.md`，`README.en.md`，`docs/development.md`，`docs/development.en.md`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/research.md`，`docs/project-implementation-tracker/changes/2026/07.md`
+- 变化摘要：当前环境主体未变，但 `current.md` 语境从源码结构重构切换到 SFTP UI 行为修正；验证重点收敛到 `src/app/actions/sftp.rs` 与 `src/app/views/sftp_panel.rs` 的交互和可编译性
+- 受影响文件：`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/project-map.md`，`docs/project-implementation-tracker/changes/2026/07.md`
 - 是否需要更新 `current.md` / `changes.md`：是
 
 ## 开工判定
 
-- 状态：已完成
-- 原因：新增产物已在现有 GitHub Actions workflow 内完成，不需要修改 Rust 应用源码；Linux ARM64 有官方 runner 标签，`.deb` 用 `dpkg-deb` 组装，macOS universal 由两个 macOS `.app` artifact 组合
-- 开工前动作：已复查现有 CI / Release matrix、Linux GUI 依赖安装、macOS bundle 打包段、Debian metadata 和官方 runner 文档；已确认不使用多 agent
-- 完成后动作：已执行 workflow YAML 解析、Release `run` 脚本 Bash 静态检查、`git diff --check` 和 tracking docs validator；真实 GitHub Actions 发布验证留到下次 tag 发布
+- 状态：允许开工
+- 原因：项目边界清晰，运行环境稳定，本轮不依赖联网和外部服务；SFTP 页面和 action 层入口已明确，代码修改已通过本机编译和测试
+- 开工前动作：已复查 `Cargo.toml`、`.github/workflows/ci.yml`、`src/app/actions/sftp.rs`、`src/app/views/sftp_panel.rs`、`src/app/views/sftp_panel/transfer_panel.rs` 与现有 tracking 文档
+- 开工前动作：已确认先改默认传输目标和点击语义，再用 `cargo check` / `cargo test` 验证
+- 完成后动作：已执行 `rustfmt`、`cargo check`、`cargo test` 和 tracking docs validator；GUI 手工验证仍需在真实 SFTP 连接中确认
