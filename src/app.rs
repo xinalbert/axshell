@@ -42,9 +42,10 @@ use state::{
 };
 
 pub(crate) use types::{
-    ConnectionProgress, DialogKind, HoveredUrl, LocalFileBrowserState, LocalFileEntry, PaneLayout,
-    SelectorEntry, SftpContextMenuState, SftpSortColumn, SftpTransferTab, SortDirection, TabGroup,
-    TerminalFontMetrics, TerminalScrollbarHandle, WorkspacePage, WorkspaceTabDescriptor,
+    ConnectionProgress, DialogKind, HoverTargetKind, HoveredUrl, LocalFileBrowserState,
+    LocalFileEntry, PaneLayout, SelectorEntry, SftpContextMenuState, SftpSortColumn,
+    SftpTransferTab, SortDirection, TabGroup, TerminalFontMetrics, TerminalScrollbarHandle,
+    WorkspacePage, WorkspaceTabDescriptor,
 };
 
 pub(crate) struct AxShell {
@@ -109,6 +110,7 @@ pub(crate) struct AxShell {
     pub(crate) connection_scroll_handle: gpui::ScrollHandle,
     pub(crate) connection_progress: Option<ConnectionProgress>,
     pub(crate) pending_sftp_path_sync: Option<String>,
+    pub(crate) pending_sftp_selection_path: Option<String>,
     pub(crate) pending_local_sftp_path_sync: Option<String>,
     pub(crate) local_file_browser: LocalFileBrowserState,
     pub(crate) sftp_context_menu: Option<SftpContextMenuState>,

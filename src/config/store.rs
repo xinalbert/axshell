@@ -185,26 +185,124 @@ pub fn default_local_x_server_app_path() -> String {
 }
 
 pub fn default_local_x_display() -> String {
+    local_x_display_from_env().unwrap_or_else(default_local_x_display_fallback)
+}
+
+fn local_x_display_from_env() -> Option<String> {
     std::env::var("DISPLAY")
         .ok()
         .map(|display| display.trim().to_string())
         .filter(|display| !display.is_empty())
-        .unwrap_or_else(|| {
-            if cfg!(target_os = "windows") {
-                "127.0.0.1:0".to_string()
-            } else {
-                ":0".to_string()
-            }
-        })
+}
+
+fn default_local_x_display_fallback() -> String {
+    if cfg!(target_os = "windows") {
+        "127.0.0.1:0".to_string()
+    } else {
+        ":0".to_string()
+    }
+}
+
+pub fn resolve_local_x_display(_path: &str, _launch_local_x_server: bool) -> String {
+    let display = default_local_x_display();
+
+    #[cfg(target_os = "windows")]
+    {
+        if _launch_local_x_server && windows_local_x_server_supports_display_arg(_path) {
+            return select_available_windows_local_x_display(&display);
+        }
+    }
+
+    display
 }
 
 #[cfg(target_os = "windows")]
-pub fn default_local_x_server_launch_args(path: &str) -> Vec<&'static str> {
-    let lower = path.to_ascii_lowercase();
-    if lower.ends_with("vcxsrv.exe") || lower.ends_with("xming.exe") {
-        vec![":0", "-multiwindow", "-clipboard", "-ac"]
+pub fn default_local_x_server_launch_args(path: &str, display: &str) -> Vec<String> {
+    if windows_local_x_server_supports_display_arg(path) {
+        vec![
+            windows_display_arg(display),
+            "-multiwindow".to_string(),
+            "-clipboard".to_string(),
+            "-ac".to_string(),
+        ]
     } else {
         Vec::new()
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn windows_local_x_server_supports_display_arg(path: &str) -> bool {
+    let lower = path.to_ascii_lowercase();
+    lower.ends_with("vcxsrv.exe") || lower.ends_with("xming.exe")
+}
+
+#[cfg(target_os = "windows")]
+fn select_available_windows_local_x_display(preferred_display: &str) -> String {
+    if !display_uses_localhost(preferred_display) {
+        return preferred_display.to_string();
+    }
+
+    let Some(start_display) = local_x_display_number(preferred_display) else {
+        return preferred_display.to_string();
+    };
+
+    for offset in 0..64u16 {
+        let Some(display_number) = start_display.checked_add(offset) else {
+            break;
+        };
+        let Some(port) = 6000u16.checked_add(display_number) else {
+            break;
+        };
+        if windows_local_port_available(port) {
+            return display_with_number(preferred_display, display_number);
+        }
+    }
+
+    preferred_display.to_string()
+}
+
+#[cfg(target_os = "windows")]
+fn windows_local_port_available(port: u16) -> bool {
+    std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, port)).is_ok()
+}
+
+#[cfg(target_os = "windows")]
+fn windows_display_arg(display: &str) -> String {
+    format!(":{}", local_x_display_number(display).unwrap_or(0))
+}
+
+#[cfg(target_os = "windows")]
+fn local_x_display_number(display: &str) -> Option<u16> {
+    let (_, rest) = display.rsplit_once(':')?;
+    let number = rest.split('.').next().unwrap_or(rest);
+    number.parse::<u16>().ok()
+}
+
+#[cfg(target_os = "windows")]
+fn display_uses_localhost(display: &str) -> bool {
+    if display.starts_with(':') {
+        return true;
+    }
+    let Some((host, _)) = display.rsplit_once(':') else {
+        return false;
+    };
+    let host = host.trim_start_matches("tcp/").trim();
+    host.is_empty() || host.eq_ignore_ascii_case("localhost") || host == "127.0.0.1"
+}
+
+#[cfg(target_os = "windows")]
+fn display_with_number(display: &str, display_number: u16) -> String {
+    let screen_suffix = display
+        .rsplit_once(':')
+        .and_then(|(_, rest)| rest.split_once('.').map(|(_, screen)| format!(".{screen}")))
+        .unwrap_or_default();
+
+    if display.starts_with(':') {
+        format!(":{display_number}{screen_suffix}")
+    } else if let Some((host, _)) = display.rsplit_once(':') {
+        format!("{host}:{display_number}{screen_suffix}")
+    } else {
+        format!("127.0.0.1:{display_number}{screen_suffix}")
     }
 }
 
@@ -1281,5 +1379,41 @@ pub fn active_proxy(session: &Session) -> Option<(String, String, Option<u16>)> 
         Some((proxy_type, proxy_host, proxy_port))
     } else {
         None
+    }
+}
+
+#[cfg(all(test, target_os = "windows"))]
+mod tests {
+    use super::{
+        default_local_x_server_launch_args, display_with_number, local_x_display_number,
+        windows_display_arg, windows_local_x_server_supports_display_arg,
+    };
+
+    #[test]
+    fn windows_display_helpers_parse_and_replace_display_numbers() {
+        assert_eq!(local_x_display_number("127.0.0.1:0"), Some(0));
+        assert_eq!(local_x_display_number(":12.0"), Some(12));
+        assert_eq!(display_with_number("127.0.0.1:0", 3), "127.0.0.1:3");
+        assert_eq!(display_with_number(":12.1", 7), ":7.1");
+        assert_eq!(windows_display_arg("127.0.0.1:5"), ":5");
+    }
+
+    #[test]
+    fn windows_launch_args_follow_selected_display() {
+        assert!(windows_local_x_server_supports_display_arg(
+            r"C:\Program Files\VcXsrv\vcxsrv.exe"
+        ));
+        assert_eq!(
+            default_local_x_server_launch_args(
+                r"C:\Program Files\VcXsrv\vcxsrv.exe",
+                "127.0.0.1:2",
+            ),
+            vec![
+                ":2".to_string(),
+                "-multiwindow".to_string(),
+                "-clipboard".to_string(),
+                "-ac".to_string(),
+            ]
+        );
     }
 }

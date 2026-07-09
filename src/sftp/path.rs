@@ -33,6 +33,57 @@ pub(crate) fn join_remote(parent: &str, child: &str) -> String {
     }
 }
 
+pub(crate) fn normalize_remote_path(path: &str) -> String {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return "/".to_string();
+    }
+
+    let anchored = trimmed.starts_with('/');
+    let mut parts: Vec<&str> = Vec::new();
+    for part in trimmed.split('/') {
+        match part {
+            "" | "." => {}
+            ".." => {
+                parts.pop();
+            }
+            _ => parts.push(part),
+        }
+    }
+
+    if anchored {
+        if parts.is_empty() {
+            "/".to_string()
+        } else {
+            format!("/{}", parts.join("/"))
+        }
+    } else if parts.is_empty() {
+        ".".to_string()
+    } else {
+        parts.join("/")
+    }
+}
+
+pub(crate) fn resolve_remote_path(current_dir: &str, path: &str, home_dir: &str) -> String {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return normalize_remote_path(current_dir);
+    }
+
+    if trimmed == "~" {
+        return normalize_remote_path(home_dir);
+    }
+    if let Some(rest) = trimmed.strip_prefix("~/") {
+        return normalize_remote_path(&join_remote(home_dir, rest));
+    }
+
+    if trimmed.starts_with('/') {
+        return normalize_remote_path(trimmed);
+    }
+
+    normalize_remote_path(&join_remote(current_dir, trimmed))
+}
+
 #[allow(dead_code)]
 pub(super) fn strip_archive_suffix(name: &str) -> &str {
     for suffix in [".tar.gz", ".tgz", ".zip", ".tar"] {
@@ -81,4 +132,38 @@ pub(super) fn remote_parent(path: &str) -> String {
 
 pub(super) fn shell_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\"'\"'"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{normalize_remote_path, resolve_remote_path};
+
+    #[test]
+    fn normalize_remote_path_resolves_dot_segments() {
+        assert_eq!(
+            normalize_remote_path("/srv/app/./logs/../tmp"),
+            "/srv/app/tmp"
+        );
+        assert_eq!(normalize_remote_path("/../../etc"), "/etc");
+    }
+
+    #[test]
+    fn resolve_remote_path_uses_current_dir_for_relative_paths() {
+        assert_eq!(
+            resolve_remote_path("/srv/app/current", "../logs/output.txt", "/home/test"),
+            "/srv/app/logs/output.txt"
+        );
+    }
+
+    #[test]
+    fn resolve_remote_path_preserves_absolute_paths_and_home() {
+        assert_eq!(
+            resolve_remote_path("/srv/app", "/var/log/syslog", "/home/test"),
+            "/var/log/syslog"
+        );
+        assert_eq!(
+            resolve_remote_path("/srv/app", "~/notes/todo.txt", "/home/test"),
+            "/home/test/notes/todo.txt"
+        );
+    }
 }

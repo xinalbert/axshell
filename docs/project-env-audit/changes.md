@@ -118,6 +118,22 @@
 ## 2026-07-06 收口 README 与日期版本策略
 
 - 触发原因：用户要求维护双语 README、说明 fork 来源，并改用日期版本规则
+
+## 2026-07-09 刷新环境记录到 Windows X11 display 自动选择
+
+- 目的：在修改 Windows 本地 X server 启动逻辑前，确认当前项目环境、X11 入口和验证边界
+- 改动范围：`src/config/store.rs`，`src/app/lifecycle/startup.rs`，`src/backend/ssh/x11.rs`，`src/app/actions/session.rs`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/changes/2026/07.md`
+- 执行内容：复查 Windows 本地 X server 默认 display、启动参数和 relay 入口；确认主技术栈与依赖版本未变，本轮不新增依赖、不联网、不使用多 agent；将 current 记录切换到“Windows X11 display 自动避让”任务语境
+- 验证结果：确认本轮验证命令收敛为 `rustfmt`、`cargo check`、`cargo test`、`git diff --check` 与 tracking docs validator；Windows GUI / 真实 SSH X11 联机验证仍需用户侧实机确认
+- 风险/待办：只对内置识别的 `VcXsrv` / `Xming` 启用自动 display 参数；自定义可执行文件的专用参数不在本轮范围
+
+## 2026-07-09 完成 Windows X11 display 自动选择环境验证
+
+- 目的：在 Windows 本地 X server 自动 display 避让实现后，把实际编译测试结果和剩余实机边界回写到环境记忆
+- 改动范围：`src/config/store.rs`，`src/app/lifecycle/startup.rs`，`src/backend/ssh/x11.rs`，`src/app/actions/session.rs`，`locales/en.yml`，`locales/zh-CN.yml`，`docs/user-guide.md`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/changes/2026/07.md`
+- 执行内容：实现 Windows 本地 X server 按 `:0`、`:1`、`:2` 探测空闲 display；让启动函数返回实际 display；让 X11 relay 复用实际 display 进行 cookie 查询和本地 TCP 连接；同步设置页文案与用户文档；执行 `rustfmt`、`cargo check`、`cargo test` 和 `git diff --check`
+- 验证结果：`rustfmt --edition 2024 src/config/store.rs src/app/lifecycle/startup.rs src/backend/ssh/x11.rs src/app/actions/session.rs` 通过；`cargo check` 通过；`cargo test` 通过，30 个测试全部通过；`git diff --check` 通过；tracking docs validator 通过
+- 风险/待办：Windows GUI 与真实 SSH X11 forwarding 仍需在 `:0` 被占用的实际机器上确认；当前远端 `DISPLAY=localhost:10.0` 语义未改变
 - 执行内容：复查 `README.md`、`README.en.md`、`Cargo.toml`、`src/app/dialogs.rs` 与 `scripts/package-macos-app.sh`，确认运行环境未变，仅将验证重点扩展到 README 当前态、版本展示映射与打包元数据一致性
 - 影响文件：`README.md`，`README.en.md`，`Cargo.toml`，`Cargo.lock`，`src/app/constants.rs`，`src/app/dialogs.rs`，`scripts/package-macos-app.sh`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`
 - 计划状态变更：无
@@ -879,3 +895,19 @@
 - 执行内容：将下载默认目录改为右侧本地浏览器当前目录；上传保持左侧远端当前目录并取消自动弹出传输历史；将远端/本地列表改为单击选中、再次点击目录打开；将 SFTP 页面底部传输行压缩为单行显示
 - 验证结果：`rustfmt --edition 2024 src/app/actions/sftp.rs src/app/views/sftp_panel.rs src/app/views/sftp_panel/transfer_panel.rs` 通过；`cargo check` 通过；`cargo test` 通过，25 个测试全部通过；tracking docs validator 通过
 - 风险/待办：GUI 手工验证和真实 SSH/SFTP 连接验证未执行；传输弹窗仍可通过菜单手动打开，本轮只取消自动弹窗
+
+## 2026-07-09 刷新环境记录到终端路径识别与 SFTP 跳转
+
+- 目的：在实现终端路径识别和 Command/Ctrl+单击跳转 SFTP 前，确认当前项目环境、已有 shell 工作目录链路和验证边界
+- 改动范围：`src/terminal/highlight.rs`，`src/sftp/path.rs`，`src/sftp.rs`，`src/app/actions/session.rs`，`src/app/actions/terminal.rs`，`src/app/actions/sftp.rs`，`src/app/lifecycle/event_loop.rs`，`src/app/workspace/workspace.rs`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/changes/2026/07.md`
+- 执行内容：复查终端 URL 命中逻辑、shell 工作目录采集、SFTP 列目录返回结构和工作区 SFTP 切页行为；确认主技术栈与依赖版本未变，本轮不新增依赖、不联网、不使用多 agent；将验证命令收敛为 `rustfmt`、`cargo check`、定向单元测试、`cargo test`、`git diff --check` 与 tracking docs validator
+- 验证结果：已确认终端点击当前只识别 URL，现有 shell cwd 采集链路可作为相对路径解析基准；SFTP 导航目前缺少统一绝对化与文件自动定位，需要本轮补齐
+- 风险/待办：真实 GUI 点击体验和实际 SSH / SFTP 会话行为仍需手工确认；当前路径识别规则需要避免把普通文本误判成路径
+
+## 2026-07-09 完成终端路径识别与 SFTP 跳转环境验证
+
+- 目的：在终端路径识别和 Command/Ctrl+单击 SFTP 跳转实现后，把实际编译测试结果和剩余 GUI / 联机边界回写到环境记忆
+- 改动范围：`src/terminal/highlight.rs`，`src/sftp/path.rs`，`src/sftp.rs`，`src/app.rs`，`src/app/core/types.rs`，`src/app/lifecycle/init.rs`，`src/app/lifecycle/event_loop.rs`，`src/app/workspace/workspace.rs`，`src/app/actions/sftp.rs`，`src/app/actions/terminal.rs`，`src/app/actions/session.rs`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/changes/2026/07.md`
+- 执行内容：为远端路径新增归一化和绝对化 helper；扩展终端 hover / click 目标为 URL 或路径，并对路径 token 裁掉尾部标点与 `:行号` / `:列号`；让 Command/Ctrl+单击路径时打开当前 group 的 SFTP 页面，按当前 shell 工作目录把相对路径解析成绝对路径，并在目录列表返回后自动定位到目标目录或文件；同时抑制显式点击跳转被“切到 SFTP 页自动同步 cwd”逻辑覆盖
+- 验证结果：`rustfmt --edition 2024 src/sftp/path.rs src/sftp.rs src/app.rs src/app/core/types.rs src/app/lifecycle/init.rs src/app/lifecycle/event_loop.rs src/app/workspace/workspace.rs src/app/actions/sftp.rs src/app/actions/terminal.rs src/app/actions/session.rs src/terminal/highlight.rs` 通过；`cargo check` 通过；`cargo test --quiet terminal::highlight -- --nocapture` 通过；`cargo test --quiet normalize_remote_path -- --nocapture` 通过；`cargo test --quiet resolve_remote_path -- --nocapture` 通过；`cargo test --quiet` 通过，40 个测试全部通过；`git diff --check` 通过；tracking docs validator 通过
+- 风险/待办：GUI 手工验证和真实 SSH / SFTP 联机验证未执行；复杂 shell 转义、符号链接大小写差异和更激进的路径启发式仍留待后续迭代

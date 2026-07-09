@@ -251,8 +251,14 @@ pub(crate) struct WorkspaceTabDescriptor {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum HoverTargetKind {
+    Url(String),
+    Path(String),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct HoveredUrl {
-    pub(crate) url: String,
+    pub(crate) target: HoverTargetKind,
     pub(crate) tab_id: String,
     pub(crate) cells: Vec<(usize, usize)>,
 }

@@ -1,4 +1,7 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 
 use anyhow::{Context, Result, anyhow};
 use rand::RngCore;
@@ -22,11 +25,10 @@ trait AsyncReadWrite: AsyncRead + AsyncWrite + Unpin + Send {}
 
 impl<T> AsyncReadWrite for T where T: AsyncRead + AsyncWrite + Unpin + Send {}
 
-#[derive(Clone)]
 pub(super) struct X11ForwardingState {
     fake_cookie: [u8; 16],
     pub(super) fake_cookie_hex: String,
-    local_display: String,
+    local_display: Mutex<String>,
     pub(super) remote_display: String,
     pub(super) screen_number: u32,
     launch_local_x_server: bool,
@@ -41,17 +43,34 @@ impl X11ForwardingState {
 
         let mut fake_cookie = [0u8; 16];
         rand::rngs::OsRng.fill_bytes(&mut fake_cookie);
-        let local_display = crate::session::config::default_local_x_display();
+        let local_display = crate::session::config::resolve_local_x_display(
+            config.local_x_server_app_path(),
+            config.x11_launch_local_x_server(),
+        );
 
         Some(Arc::new(Self {
             fake_cookie,
             fake_cookie_hex: hex::encode(fake_cookie),
-            local_display,
+            local_display: Mutex::new(local_display),
             remote_display: X11_REMOTE_DISPLAY.to_string(),
             screen_number: X11_DEFAULT_SCREEN,
             launch_local_x_server: config.x11_launch_local_x_server(),
             local_x_server_app_path: config.local_x_server_app_path().to_string(),
         }))
+    }
+
+    fn local_display(&self) -> String {
+        self.local_display
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
+    }
+
+    fn set_local_display(&self, display: String) {
+        *self
+            .local_display
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = display;
     }
 }
 
@@ -102,14 +121,21 @@ pub(super) async fn handle_x11_channel(
 async fn prepare_x11_relay(
     x11: &X11ForwardingState,
 ) -> Result<(LocalX11Auth, Box<dyn AsyncReadWrite>)> {
+    let mut local_display = x11.local_display();
     if x11.launch_local_x_server {
         match crate::app::startup::launch_local_x_server_app(&x11.local_x_server_app_path) {
-            Ok(()) => sleep(Duration::from_millis(700)).await,
+            Ok(display) => {
+                if display != local_display {
+                    x11.set_local_display(display.clone());
+                    local_display = display;
+                }
+                sleep(Duration::from_millis(700)).await;
+            }
             Err(err) => tracing::warn!("[ssh:x11] failed to launch configured X server: {err:#}"),
         }
     }
 
-    let auth = match load_local_x11_cookie(&x11.local_display) {
+    let auth = match load_local_x11_cookie(&local_display) {
         Ok(cookie) => LocalX11Auth {
             protocol: X11_AUTH_PROTOCOL.as_bytes().to_vec(),
             data: cookie,
@@ -117,7 +143,7 @@ async fn prepare_x11_relay(
         Err(err) => {
             tracing::warn!(
                 "[ssh:x11] no local X11 MIT cookie found for {}; falling back to no-auth setup: {err:#}",
-                x11.local_display
+                local_display
             );
             LocalX11Auth {
                 protocol: Vec::new(),
@@ -125,9 +151,9 @@ async fn prepare_x11_relay(
             }
         }
     };
-    let local_x = connect_local_x11(&x11.local_display)
+    let local_x = connect_local_x11(&local_display)
         .await
-        .with_context(|| format!("connect local X server at {}", x11.local_display))?;
+        .with_context(|| format!("connect local X server at {}", local_display))?;
     Ok((auth, local_x))
 }
 

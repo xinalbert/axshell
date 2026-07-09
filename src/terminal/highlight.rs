@@ -886,6 +886,12 @@ fn is_boundary(c: char) -> bool {
     !c.is_ascii_alphanumeric() && c != '_'
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TerminalTarget {
+    Url(String),
+    Path(String),
+}
+
 fn find_urls(text: &str) -> Vec<usize> {
     let mut positions = Vec::new();
     let mut start = 0;
@@ -902,9 +908,143 @@ fn find_urls(text: &str) -> Vec<usize> {
     positions
 }
 
+fn trim_wrapped_terminal_token_len(text: &str) -> usize {
+    let mut len = text.len();
+
+    while len > 0 {
+        let candidate = &text[..len];
+        let Some(last_char) = candidate.chars().next_back() else {
+            break;
+        };
+
+        let trimmed_len = match last_char {
+            '"' | '\'' | '`' | '<' | '>' | '“' | '”' | '‘' | '’' | '«' | '»' | '「' | '」'
+            | '『' | '』' | '《' | '》' | '〈' | '〉' => len - last_char.len_utf8(),
+            ')' if candidate.matches('(').count() < candidate.matches(')').count() => {
+                len - last_char.len_utf8()
+            }
+            ']' if candidate.matches('[').count() < candidate.matches(']').count() => {
+                len - last_char.len_utf8()
+            }
+            '}' if candidate.matches('{').count() < candidate.matches('}').count() => {
+                len - last_char.len_utf8()
+            }
+            '.' | ',' | ';' | ':' | '!' | '?' => len - last_char.len_utf8(),
+            _ => break,
+        };
+
+        len = trimmed_len;
+    }
+
+    len
+}
+
 fn find_url_len(text: &str) -> usize {
-    text.find(|c: char| c.is_ascii_whitespace())
-        .unwrap_or(text.len())
+    let len = text
+        .find(|c: char| c.is_ascii_whitespace())
+        .unwrap_or(text.len());
+    trim_wrapped_terminal_token_len(&text[..len])
+}
+
+fn trim_path_leading_wrappers_len(text: &str) -> usize {
+    let mut trimmed = 0;
+    for ch in text.chars() {
+        match ch {
+            '"' | '\'' | '`' | '<' | '(' | '[' | '{' | '“' | '‘' | '«' | '「' | '『' | '《'
+            | '〈' => trimmed += ch.len_utf8(),
+            _ => break,
+        }
+    }
+    trimmed
+}
+
+fn trim_trailing_location_suffix_len(text: &str) -> usize {
+    let mut len = text.len();
+    let mut trimmed_any = false;
+
+    loop {
+        let candidate = &text[..len];
+        let Some((head, tail)) = candidate.rsplit_once(':') else {
+            break;
+        };
+        if tail.is_empty() || !tail.as_bytes().iter().all(|b| b.is_ascii_digit()) {
+            break;
+        }
+        len = head.len();
+        trimmed_any = true;
+    }
+
+    if trimmed_any { len } else { text.len() }
+}
+
+fn find_path_len(text: &str) -> usize {
+    let len = text
+        .find(|c: char| c.is_ascii_whitespace())
+        .unwrap_or(text.len());
+    let mut len = trim_wrapped_terminal_token_len(&text[..len]);
+    let location_trimmed = trim_trailing_location_suffix_len(&text[..len]);
+    if location_trimmed != len {
+        len = trim_wrapped_terminal_token_len(&text[..location_trimmed]);
+    }
+    len
+}
+
+fn is_path_candidate(text: &str) -> bool {
+    if text.is_empty() || text.contains("://") {
+        return false;
+    }
+
+    if matches!(text, "." | ".." | "~") {
+        return true;
+    }
+
+    if text.starts_with('/')
+        || text.starts_with("./")
+        || text.starts_with("../")
+        || text.starts_with("~/")
+    {
+        return true;
+    }
+
+    text.contains('/')
+}
+
+fn find_path_spans(text: &str) -> Vec<(usize, usize)> {
+    let mut spans = Vec::new();
+    let bytes = text.as_bytes();
+    let mut index = 0;
+
+    while index < bytes.len() {
+        while index < bytes.len() && bytes[index].is_ascii_whitespace() {
+            index += 1;
+        }
+        if index >= bytes.len() {
+            break;
+        }
+
+        let token_start = index;
+        while index < bytes.len() && !bytes[index].is_ascii_whitespace() {
+            index += 1;
+        }
+        let token_end = index;
+        let token = &text[token_start..token_end];
+        let leading_trim = trim_path_leading_wrappers_len(token);
+        if leading_trim >= token.len() {
+            continue;
+        }
+        let candidate_start = token_start + leading_trim;
+        let candidate = &token[leading_trim..];
+        let candidate_len = find_path_len(candidate);
+        if candidate_len == 0 {
+            continue;
+        }
+        let candidate = &candidate[..candidate_len];
+        if is_path_candidate(candidate) {
+            spans.push((candidate_start, candidate_len));
+        }
+    }
+
+    spans
 }
 
 fn find_ports(text: &str) -> Vec<usize> {
@@ -1054,9 +1194,49 @@ pub fn find_url_at_cell(
     None
 }
 
+pub fn find_terminal_target_at_cell(
+    cells: &[RenderCell],
+    rows: usize,
+    row: usize,
+    col: usize,
+) -> Option<(TerminalTarget, Vec<(usize, usize)>)> {
+    if let Some((url, cells)) = find_url_at_cell(cells, rows, row, col) {
+        return Some((TerminalTarget::Url(url), cells));
+    }
+
+    let logical_lines = build_logical_lines(cells, rows);
+    for line in logical_lines {
+        let text = line.text.as_str();
+        for (start, path_len) in find_path_spans(text) {
+            let mut path_cells = Vec::with_capacity(path_len);
+            let mut matched = false;
+            for i in 0..path_len {
+                let idx = start + i;
+                if idx < line.byte_to_cell.len() {
+                    let (r, c) = line.byte_to_cell[idx];
+                    if r == row && c == col {
+                        matched = true;
+                    }
+                    path_cells.push((r, c));
+                }
+            }
+            if matched {
+                let path = text[start..start + path_len].to_string();
+                return Some((TerminalTarget::Path(path), path_cells));
+            }
+        }
+    }
+
+    None
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{highlight_keywords, hsla};
+    use super::{
+        TerminalTarget, find_path_len, find_path_spans, find_terminal_target_at_cell, find_url_len,
+        highlight_keywords, hsla,
+    };
+    use crate::terminal::RenderCell;
     use std::collections::HashMap;
 
     fn highlighted_columns(text: &str, keywords: &[&str]) -> Vec<i32> {
@@ -1099,6 +1279,75 @@ mod tests {
         assert_eq!(
             highlighted_columns("panic: OUT OF MEMORY!", &["OUT OF MEMORY"]),
             expected
+        );
+    }
+
+    #[test]
+    fn find_url_len_trims_trailing_quotes_and_punctuation() {
+        let text = "https://example.com/path?q=1\",";
+        assert_eq!(find_url_len(text), "https://example.com/path?q=1".len());
+    }
+
+    #[test]
+    fn find_url_len_trims_unmatched_closing_parenthesis_only() {
+        let wrapped = "https://example.com/path(foo))";
+        let balanced = "https://example.com/path(foo)";
+
+        assert_eq!(find_url_len(wrapped), balanced.len());
+        assert_eq!(find_url_len(balanced), balanced.len());
+    }
+
+    #[test]
+    fn find_url_len_trims_angle_brackets_and_cjk_quotes() {
+        let markdown = "https://example.com/docs>)";
+        let chinese = "https://example.com/path?q=1》”";
+
+        assert_eq!(find_url_len(markdown), "https://example.com/docs".len());
+        assert_eq!(find_url_len(chinese), "https://example.com/path?q=1".len());
+    }
+
+    #[test]
+    fn find_path_len_trims_line_column_suffix() {
+        let path = "./src/main.rs:12:3),";
+        assert_eq!(find_path_len(path), "./src/main.rs".len());
+    }
+
+    #[test]
+    fn find_path_spans_detects_absolute_and_relative_paths() {
+        let text = "open /srv/app and ../logs/build.log:14";
+        let spans = find_path_spans(text);
+        let extracted: Vec<&str> = spans
+            .iter()
+            .map(|(start, len)| &text[*start..*start + *len])
+            .collect();
+        assert_eq!(extracted, vec!["/srv/app", "../logs/build.log"]);
+    }
+
+    #[test]
+    fn find_path_spans_ignores_plain_words() {
+        assert!(find_path_spans("warning error output").is_empty());
+    }
+
+    #[test]
+    fn find_terminal_target_at_cell_returns_path_when_hovering_path() {
+        let text = "../logs/app.log";
+        let cells = text
+            .chars()
+            .enumerate()
+            .map(|(col, ch)| RenderCell {
+                row: 0,
+                col: col as i32,
+                cell: alacritty_terminal::term::cell::Cell {
+                    c: ch,
+                    ..Default::default()
+                },
+            })
+            .collect::<Vec<_>>();
+
+        let target = find_terminal_target_at_cell(&cells, 1, 0, 3);
+        assert_eq!(
+            target.map(|(target, _)| target),
+            Some(TerminalTarget::Path("../logs/app.log".to_string()))
         );
     }
 }

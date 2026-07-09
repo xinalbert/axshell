@@ -9,7 +9,7 @@ use gpui::{Context, PathPromptOptions, Pixels, Point, Window};
 
 use crate::{
     AxShell, SftpContextMenuState,
-    app::LocalFileEntry,
+    app::{LocalFileEntry, WorkspacePage},
     sftp::{RemoteEntry, SftpHandle},
     terminal,
 };
@@ -173,15 +173,76 @@ impl AxShell {
             .and_then(|id| self.sftp_handles.get(id))
     }
 
+    pub(crate) fn active_shell_working_dir(&self) -> Option<String> {
+        let active_group_id = self.active_group.as_ref()?;
+        let tab_id = self.group_primary_ssh_tab_id(active_group_id)?;
+        self.tabs
+            .iter()
+            .find(|tab| tab.id == tab_id)
+            .and_then(|tab| tab.shell_working_dir.clone())
+    }
+
+    pub(crate) fn resolve_active_sftp_path(&self, path: &str) -> String {
+        let current_dir = self
+            .active_shell_working_dir()
+            .or_else(|| self.active_sftp().map(|sftp| sftp.current_path.clone()))
+            .unwrap_or_else(|| "/".to_string());
+        let home_dir = self
+            .active_sftp()
+            .map(|sftp| sftp.home_dir.clone())
+            .unwrap_or_else(|| "/".to_string());
+        crate::sftp::resolve_remote_path(&current_dir, path, &home_dir)
+    }
+
     pub(crate) fn navigate_sftp(&mut self, path: String, cx: &mut Context<Self>) {
+        let resolved = self.resolve_active_sftp_path(&path);
         if let Some(handle) = self.active_sftp_handle() {
-            tracing::info!("[sftp] navigating to directory: '{}'", path);
-            handle.list_dir(path.clone());
+            tracing::info!("[sftp] navigating to directory: '{}'", resolved);
+            handle.list_dir(resolved.clone());
             if let Some(sftp) = self.active_sftp_mut() {
-                sftp.status = path;
+                sftp.status = resolved;
             }
             cx.notify();
         }
+    }
+
+    pub(crate) fn open_sftp_and_reveal_path(
+        &mut self,
+        path: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(active_group_id) = self.active_group.clone() else {
+            return false;
+        };
+        let resolved = self.resolve_active_sftp_path(path);
+
+        if let Some(group) = self
+            .tab_groups
+            .iter_mut()
+            .find(|group| group.id == active_group_id)
+        {
+            if group.sftp.is_none() {
+                return false;
+            }
+            group.sftp_page_open = true;
+        } else {
+            return false;
+        }
+
+        self.pending_sftp_selection_path = Some(resolved);
+        self.activate_group_page(active_group_id, WorkspacePage::Sftp, window, cx);
+        if let Some(handle) = self.active_sftp_handle() {
+            if let Some(target_path) = self.pending_sftp_selection_path.clone() {
+                handle.reveal_path(target_path.clone());
+                if let Some(sftp) = self.active_sftp_mut() {
+                    sftp.status = target_path;
+                }
+                cx.notify();
+                return true;
+            }
+        }
+        true
     }
 
     pub(crate) fn select_sftp_entry(&mut self, entry: RemoteEntry, cx: &mut Context<Self>) {

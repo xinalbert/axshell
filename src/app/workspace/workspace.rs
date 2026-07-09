@@ -256,6 +256,9 @@ impl AxShell {
     }
 
     pub(crate) fn sync_active_sftp_to_shell_working_dir(&mut self, cx: &mut Context<Self>) {
+        if self.pending_sftp_selection_path.is_some() {
+            return;
+        }
         if self.workspace_page != WorkspacePage::Sftp {
             return;
         }
@@ -288,6 +291,9 @@ impl AxShell {
         path: &str,
         cx: &mut Context<Self>,
     ) {
+        if self.pending_sftp_selection_path.is_some() {
+            return;
+        }
         if self.workspace_page != WorkspacePage::Sftp {
             return;
         }
@@ -305,7 +311,7 @@ impl AxShell {
         }
     }
 
-    fn group_primary_ssh_tab_id(&self, group_id: &str) -> Option<String> {
+    pub(crate) fn group_primary_ssh_tab_id(&self, group_id: &str) -> Option<String> {
         let group = self.tab_groups.iter().find(|group| group.id == group_id)?;
         if let Some(active_tab) = self.active_tab.as_ref()
             && group.pane_root.contains(active_tab)

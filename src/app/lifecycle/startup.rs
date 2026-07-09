@@ -447,7 +447,7 @@ fn read_proxy_from_env() -> Option<(String, String, Option<u16>, String, String)
 pub(crate) fn sync_macos_launch_environment() {}
 
 #[cfg(target_os = "macos")]
-pub(crate) fn launch_local_x_server_app(path: &str) -> Result<()> {
+pub(crate) fn launch_local_x_server_app(path: &str) -> Result<String> {
     let path = path.trim();
     if path.is_empty() {
         return Err(anyhow!("local X server app path is empty"));
@@ -464,11 +464,11 @@ pub(crate) fn launch_local_x_server_app(path: &str) -> Result<()> {
         .arg(app_path)
         .spawn()
         .with_context(|| format!("launch local X server at {}", app_path.display()))?;
-    Ok(())
+    Ok(crate::session::config::default_local_x_display())
 }
 
 #[cfg(target_os = "windows")]
-pub(crate) fn launch_local_x_server_app(path: &str) -> Result<()> {
+pub(crate) fn launch_local_x_server_app(path: &str) -> Result<String> {
     let path = path.trim();
     if path.is_empty() {
         return Err(anyhow!("local X server executable path is empty"));
@@ -480,21 +480,22 @@ pub(crate) fn launch_local_x_server_app(path: &str) -> Result<()> {
             app_path.display()
         ));
     }
+    let display = crate::session::config::resolve_local_x_display(path, true);
     let mut command = std::process::Command::new(app_path);
-    for arg in crate::session::config::default_local_x_server_launch_args(path) {
+    for arg in crate::session::config::default_local_x_server_launch_args(path, &display) {
         command.arg(arg);
     }
     command
         .spawn()
         .with_context(|| format!("launch local X server at {}", app_path.display()))?;
-    Ok(())
+    Ok(display)
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-pub(crate) fn launch_local_x_server_app(path: &str) -> Result<()> {
+pub(crate) fn launch_local_x_server_app(path: &str) -> Result<String> {
     let path = path.trim();
     if path.is_empty() {
-        return Ok(());
+        return Ok(crate::session::config::default_local_x_display());
     }
     let app_path = std::path::Path::new(path);
     if !app_path.exists() {
@@ -506,7 +507,7 @@ pub(crate) fn launch_local_x_server_app(path: &str) -> Result<()> {
     std::process::Command::new(app_path)
         .spawn()
         .with_context(|| format!("launch local X server at {}", app_path.display()))?;
-    Ok(())
+    Ok(crate::session::config::default_local_x_display())
 }
 
 pub(crate) fn open_main_window(cx: &mut App) {

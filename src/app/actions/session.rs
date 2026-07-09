@@ -394,8 +394,8 @@ impl AxShell {
         self.save_x11_settings(cx);
         match crate::app::startup::launch_local_x_server_app(self.config.local_x_server_app_path())
         {
-            Ok(()) => {
-                self.status = "local X server launch requested".into();
+            Ok(display) => {
+                self.status = format!("local X server launch requested at {display}").into();
             }
             Err(err) => {
                 self.status = format!("failed to launch local X server: {err:#}").into();
@@ -1019,14 +1019,25 @@ impl AxShell {
             if event.modifiers.platform {
                 if let Some((row, col, _side)) = self.terminal_grid_point_and_side(event.position) {
                     if let Some(snapshot) = self.active_snapshot() {
-                        if let Some((url, _)) = crate::terminal::highlight::find_url_at_cell(
-                            &snapshot.cells,
-                            snapshot.rows,
-                            row,
-                            col,
-                        ) {
-                            let _ = open::that(&url);
-                            return;
+                        if let Some((target, _)) =
+                            crate::terminal::highlight::find_terminal_target_at_cell(
+                                &snapshot.cells,
+                                snapshot.rows,
+                                row,
+                                col,
+                            )
+                        {
+                            match target {
+                                crate::terminal::highlight::TerminalTarget::Url(url) => {
+                                    let _ = open::that(&url);
+                                    return;
+                                }
+                                crate::terminal::highlight::TerminalTarget::Path(path) => {
+                                    if self.open_sftp_and_reveal_path(&path, window, cx) {
+                                        return;
+                                    }
+                                }
+                            }
                         }
                     }
                 }

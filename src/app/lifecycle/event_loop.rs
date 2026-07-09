@@ -93,7 +93,7 @@ impl AxShell {
                     .to_string()
                     .trim()
                     .to_string();
-                self.navigate_sftp(if path.is_empty() { "/".into() } else { path }, cx);
+                self.navigate_sftp(path, cx);
                 window.prevent_default();
                 cx.stop_propagation();
             }
@@ -257,6 +257,28 @@ impl AxShell {
                     {
                         sftp.current_path = path;
                         sftp.entries = entries;
+                        if let Some(target_path) = self.pending_sftp_selection_path.clone() {
+                            let matched = sftp
+                                .entries
+                                .iter()
+                                .find(|entry| entry.full_path == target_path);
+                            if let Some(entry) = matched {
+                                sftp.selected_path = Some(entry.full_path.clone());
+                                sftp.selected_entries.clear();
+                                sftp.selected_entries.insert(entry.full_path.clone());
+                            } else if sftp.current_path == target_path {
+                                sftp.selected_path = None;
+                                sftp.selected_entries.clear();
+                            }
+                            if sftp.current_path == target_path
+                                || sftp
+                                    .selected_path
+                                    .as_deref()
+                                    .is_some_and(|selected| selected == target_path)
+                            {
+                                self.pending_sftp_selection_path = None;
+                            }
+                        }
                         self.pending_sftp_path_sync = Some(sftp.current_path.clone());
                     }
                 }

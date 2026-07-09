@@ -33,7 +33,7 @@ use self::{
 };
 
 pub use self::path::format_mtime;
-pub(crate) use self::path::{join_remote, parent_dir};
+pub(crate) use self::path::{join_remote, parent_dir, resolve_remote_path};
 
 const SFTP_BROWSE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
@@ -58,6 +58,7 @@ pub struct PreviewData {
 #[derive(Debug)]
 pub enum SftpCommand {
     ListDir(String),
+    RevealPath(String),
     #[allow(dead_code)]
     Preview(String),
     Download {
@@ -82,6 +83,13 @@ pub enum SftpCommand {
     CancelTransfer(String),
     TransferFinished(String),
     Close,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RevealPathKind {
+    Directory,
+    File,
+    Missing,
 }
 
 use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
@@ -237,6 +245,10 @@ impl SftpHandle {
         let _ = self.commands.send(SftpCommand::ListDir(path));
     }
 
+    pub fn reveal_path(&self, path: String) {
+        let _ = self.commands.send(SftpCommand::RevealPath(path));
+    }
+
     #[allow(dead_code)]
     pub fn preview(&self, path: String) {
         let _ = self.commands.send(SftpCommand::Preview(path));
@@ -382,6 +394,35 @@ async fn run_sftp(
                         tab_id: tab_id.clone(),
                         text: format!("list failed: {err:#}"),
                     });
+                }
+            }
+            SftpCommand::RevealPath(path) => {
+                let actual_path = if path == "~" {
+                    home.clone()
+                } else if let Some(rest) = path.strip_prefix("~/") {
+                    crate::sftp::join_remote(&home, rest)
+                } else {
+                    path
+                };
+
+                match reveal_path_target(&handle, &actual_path).await {
+                    Ok(directory) => {
+                        if let Err(err) =
+                            emit_entries_from_fresh_session(&events, &tab_id, &handle, &directory)
+                                .await
+                        {
+                            let _ = events.send(BackendEvent::SftpStatus {
+                                tab_id: tab_id.clone(),
+                                text: format!("list failed: {err:#}"),
+                            });
+                        }
+                    }
+                    Err(err) => {
+                        let _ = events.send(BackendEvent::SftpStatus {
+                            tab_id: tab_id.clone(),
+                            text: format!("list failed: {err:#}"),
+                        });
+                    }
                 }
             }
             SftpCommand::Preview(path) => match preview_impl(&sftp, &path).await {
@@ -929,6 +970,39 @@ async fn emit_entries_from_fresh_session(
             SFTP_BROWSE_TIMEOUT.as_secs()
         )
     })?
+}
+
+async fn reveal_path_target(
+    handle: &russh::client::Handle<SftpClientHandler>,
+    path: &str,
+) -> Result<String> {
+    let sftp = open_sftp_session(handle).await?;
+    match sftp.metadata(path).await {
+        Ok(metadata) => {
+            let is_dir = metadata
+                .permissions
+                .map(|mode| (mode & 0o170_000) == 0o040_000)
+                .unwrap_or(false);
+            Ok(reveal_target_directory(
+                path,
+                if is_dir {
+                    RevealPathKind::Directory
+                } else {
+                    RevealPathKind::File
+                },
+            ))
+        }
+        Err(_) => Ok(reveal_target_directory(path, RevealPathKind::Missing)),
+    }
+}
+
+fn reveal_target_directory(path: &str, kind: RevealPathKind) -> String {
+    match kind {
+        RevealPathKind::Directory => path.to_string(),
+        RevealPathKind::File | RevealPathKind::Missing => {
+            parent_dir(path).unwrap_or_else(|| "/".to_string())
+        }
+    }
 }
 
 async fn list_dir_impl(sftp: &SftpSession, path: &str) -> Result<Vec<RemoteEntry>> {
@@ -1657,4 +1731,29 @@ async fn extract_archive_to(path: &Path, target_dir: &Path) -> Result<()> {
     .context("extract archive task join failure")??;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{RevealPathKind, reveal_target_directory};
+
+    #[test]
+    fn reveal_target_directory_enters_existing_directory() {
+        assert_eq!(
+            reveal_target_directory("/srv/app/logs", RevealPathKind::Directory),
+            "/srv/app/logs"
+        );
+    }
+
+    #[test]
+    fn reveal_target_directory_falls_back_for_file_or_missing_target() {
+        assert_eq!(
+            reveal_target_directory("/srv/app/logs/output.log", RevealPathKind::File),
+            "/srv/app/logs"
+        );
+        assert_eq!(
+            reveal_target_directory("/srv/app/missing/output.log", RevealPathKind::Missing),
+            "/srv/app/missing"
+        );
+    }
 }

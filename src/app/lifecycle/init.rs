@@ -389,6 +389,7 @@ impl AxShell {
             connection_scroll_handle: gpui::ScrollHandle::new(),
             connection_progress: None,
             pending_sftp_path_sync: Some("/".into()),
+            pending_sftp_selection_path: None,
             pending_local_sftp_path_sync: Some(default_local_dir.clone()),
             local_file_browser: LocalFileBrowserState {
                 current_path: default_local_dir.clone(),
