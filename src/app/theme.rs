@@ -663,9 +663,9 @@ impl AxShell {
 
     pub(crate) fn active_custom_font_brightness(&self, mode: ThemeMode) -> f32 {
         let current_name = if mode.is_dark() {
-            &self.dark_theme_name
+            &self.appearance.dark_theme_name
         } else {
-            &self.light_theme_name
+            &self.appearance.light_theme_name
         };
         if self.is_current_custom_theme_name(current_name, mode) {
             self.config.custom_theme_font_brightness_for_mode(mode)
@@ -707,8 +707,8 @@ impl AxShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.follow_system_theme = false;
-        self.theme_mode = mode;
+        self.appearance.follow_system_theme = false;
+        self.appearance.theme_mode = mode;
         self.apply_theme_preferences(window, cx);
         self.status = format!("theme mode: {}", cx.theme().mode.name()).into();
         self.persist_theme_preferences();
@@ -728,9 +728,9 @@ impl AxShell {
         };
 
         if theme_config.mode.is_dark() {
-            self.dark_theme_name = name.clone();
+            self.appearance.dark_theme_name = name.clone();
         } else {
-            self.light_theme_name = name.clone();
+            self.appearance.light_theme_name = name.clone();
         }
         self.apply_theme_preferences(window, cx);
         self.status = format!("theme: {name}").into();
@@ -760,7 +760,7 @@ impl AxShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.follow_system_theme = follow;
+        self.appearance.follow_system_theme = follow;
         if follow {
             self.status = "theme mode: system".into();
         } else {
@@ -797,18 +797,20 @@ impl AxShell {
     }
 
     pub(crate) fn apply_theme_preferences(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let light_theme = self.resolve_selected_theme(&self.light_theme_name, ThemeMode::Light, cx);
-        let dark_theme = self.resolve_selected_theme(&self.dark_theme_name, ThemeMode::Dark, cx);
+        let light_theme =
+            self.resolve_selected_theme(&self.appearance.light_theme_name, ThemeMode::Light, cx);
+        let dark_theme =
+            self.resolve_selected_theme(&self.appearance.dark_theme_name, ThemeMode::Dark, cx);
         let theme = Theme::global_mut(cx);
         theme.light_theme = light_theme;
         theme.dark_theme = dark_theme;
-        theme.font_size = px(self.ui_font_size);
-        set_theme_font_names(theme, &self.ui_font_family);
+        theme.font_size = px(self.appearance.ui_font_size);
+        set_theme_font_names(theme, &self.appearance.ui_font_family);
 
-        if self.follow_system_theme {
+        if self.appearance.follow_system_theme {
             Theme::sync_system_appearance(Some(window), cx);
         } else {
-            Theme::change(self.theme_mode, Some(window), cx);
+            Theme::change(self.appearance.theme_mode, Some(window), cx);
         }
     }
 
@@ -904,21 +906,21 @@ impl AxShell {
         let current_dark =
             custom_theme_registry_name(&self.current_custom_theme_draft_name(), ThemeMode::Dark);
 
-        if self.light_theme_name.as_ref() == previous_draft.theme_name
-            || self.light_theme_name.as_ref() == previous_light
+        if self.appearance.light_theme_name.as_ref() == previous_draft.theme_name
+            || self.appearance.light_theme_name.as_ref() == previous_light
         {
-            self.light_theme_name = current_light.clone().into();
+            self.appearance.light_theme_name = current_light.clone().into();
         }
-        if self.dark_theme_name.as_ref() == previous_draft.theme_name
-            || self.dark_theme_name.as_ref() == previous_dark
+        if self.appearance.dark_theme_name.as_ref() == previous_draft.theme_name
+            || self.appearance.dark_theme_name.as_ref() == previous_dark
         {
-            self.dark_theme_name = current_dark.clone().into();
+            self.appearance.dark_theme_name = current_dark.clone().into();
         }
 
         if Theme::global(cx).mode.is_dark() {
-            self.dark_theme_name = current_dark.into();
+            self.appearance.dark_theme_name = current_dark.into();
         } else {
-            self.light_theme_name = current_light.into();
+            self.appearance.light_theme_name = current_light.into();
         }
 
         self.apply_theme_preferences(window, cx);
@@ -962,15 +964,15 @@ impl AxShell {
     }
 
     pub(crate) fn persist_theme_preferences(&mut self) {
-        let theme_mode_str = match self.theme_mode {
+        let theme_mode_str = match self.appearance.theme_mode {
             ThemeMode::Light => "light",
             ThemeMode::Dark => "dark",
         };
         self.config.set_theme_preferences(
-            self.follow_system_theme,
+            self.appearance.follow_system_theme,
             theme_mode_str,
-            self.light_theme_name.to_string(),
-            self.dark_theme_name.to_string(),
+            self.appearance.light_theme_name.to_string(),
+            self.appearance.dark_theme_name.to_string(),
         );
         if let Err(err) = self.config.save() {
             tracing::warn!("failed to save theme preferences: {err:#}");

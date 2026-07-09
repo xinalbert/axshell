@@ -5,6 +5,7 @@ use gpui_component_assets::Assets;
 
 mod app;
 mod backend;
+mod config;
 mod session;
 mod sftp;
 mod sync;

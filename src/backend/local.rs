@@ -9,6 +9,8 @@ use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 
 use crate::terminal::{BackendCommand, BackendEvent, BackendTx};
 
+const LOCAL_CHILD_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(250);
+
 pub fn spawn_local_terminal(
     tab_id: String,
     cols: u16,
@@ -95,7 +97,7 @@ pub fn spawn_local_terminal(
     let write_events = events.clone();
     thread::spawn(move || {
         loop {
-            match cmd_rx.recv_timeout(std::time::Duration::from_millis(100)) {
+            match cmd_rx.recv_timeout(LOCAL_CHILD_POLL_INTERVAL) {
                 Ok(command) => match command {
                     BackendCommand::Input(bytes) => {
                         if let Err(err) = writer.write_all(&bytes) {
