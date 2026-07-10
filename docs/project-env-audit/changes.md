@@ -52,6 +52,15 @@
 - 验证结果：`rustfmt --edition 2024 src/app.rs src/app/lifecycle/init.rs src/app/lifecycle/event_loop.rs src/app/actions/sftp.rs src/app/actions/session.rs src/app/workspace/workspace.rs src/app/dialogs/transfers.rs src/app/views/sftp_panel/transfer_panel.rs` 通过；`cargo check` 通过；`cargo test --quiet` 通过，50 个测试全部通过；`git diff --check` 通过；tracking docs validator 通过；仍保留既有 `block v0.1.6` future-incompat warning
 - 对 plan 的更新：第二阶段代码侧实现已完成；下一步如需继续降低占用，可评估为远程编辑 watcher 增加会话 pin/refcount，或继续做 SSH 休眠策略
 
+## 2026-07-10 刷新环境记录到 SSH 可配置传输重试
+
+- 触发原因：用户要求把 SSH 登录时的网络重试做成可配置项，可在设置中配置重试次数与延时，并希望给出主流默认值依据
+- 执行内容：复查 `src/backend/ssh/connection.rs`、`src/sftp/auth.rs`、`src/config/store.rs`、`src/app.rs`、`src/app/lifecycle/init.rs`、`src/app/dialogs/settings/terminal.rs` 和本地 tracking 文档；补充一次外部检索，确认 OpenSSH `ConnectionAttempts` 默认更保守，但本轮默认值应先保持 AxShell 现有行为
+- 影响文件：`src/backend/ssh/connection.rs`，`src/sftp/auth.rs`，`src/config/store.rs`，`src/app.rs`，`src/app/lifecycle/init.rs`，`src/app/dialogs/settings/terminal.rs`，`locales/en.yml`，`locales/zh-CN.yml`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/research.md`，`docs/project-implementation-tracker/changes/2026/07.md`
+- 计划状态变更：无
+- 验证结果：确认本轮验证命令收敛为 `rustfmt --edition 2024 src/backend/ssh/connection.rs src/sftp/auth.rs src/config/store.rs src/app.rs src/app/lifecycle/init.rs src/app/dialogs/settings/terminal.rs`、`cargo check`、`cargo test --quiet`、`git diff --check` 与 tracking docs validator；GUI 手工验证仍需覆盖设置页输入与保存
+- 对 plan 的更新：允许继续实施“新增全局 SSH transport retry 配置；SSH/SFTP 复用同一 transport retry helper；设置页暴露重试次数和逗号分隔延时输入”
+
 ## 2026-07-09 刷新环境记录到非交互文本可选复制
 
 - 触发原因：用户希望程序中各处文字内容能复制，而不是完全不可选中

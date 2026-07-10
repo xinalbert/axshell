@@ -69,3 +69,13 @@
 - 关键结论：标准 runner 列表包含 `ubuntu-22.04-arm` / `ubuntu-24.04-arm` Linux ARM64 标签、`macos-15-intel` Intel macOS 标签、`macos-14` / `macos-15` ARM64 macOS 标签；Windows ARM64 以 `windows-11-arm` 等标签提供，但标注为 public preview
 - 对实施计划的影响：本轮纳入稳定收益更高的 Linux ARM64、Linux `.deb` 和 macOS universal 产物；Windows ARM64 不并入主发布矩阵，留作后续 experimental workflow 或手动验证
 - 未解决问题：Linux ARM64、`.deb` 安装体验和 macOS universal app 仍需 GitHub Actions 实际运行与下载验证
+
+## 2026-07-10 SSH 连接重试默认值依据
+
+- 时间：2026-07-10 10:48 +0800
+- 检索问题：SSH 客户端的连接重试默认值是否存在统一主流做法，AxShell 的可配置重试默认值应如何选择
+- 检索原因：用户要求把 SSH 登录网络重试做成可配置，并希望给出“主流软件的重复次数”为默认值依据；该信息可能随软件版本或文档更新变化，需要核实
+- 来源列表：OpenSSH `ssh_config(5)` 文档，`ConnectionAttempts` 默认值为 1 次尝试 <https://man7.org/linux/man-pages/man5/ssh_config.5.html>
+- 关键结论：OpenSSH 官方默认相对保守，`ConnectionAttempts` 为 1；不同 GUI SSH 客户端对自动重连/连接重试的默认策略并不统一，且不少产品把“断线自动重连”和“首次连接重试”分开定义；在缺少稳定统一官方对照的前提下，本轮默认值应优先保持 AxShell 当前已上线行为，即额外 2 次 transport retry，延时 0.5s / 1.5s
+- 对实施计划的影响：设置页说明里明确“默认值保持当前产品行为”；配置 schema 允许用户自定义重试次数与延时；不把 OpenSSH 的 1 次尝试直接强推为新默认，以避免回退已有用户体验
+- 未解决问题：未找到足够稳定且一致的多家 GUI SSH 客户端“首次连接重试”官方默认值对照；如用户后续明确指定对标某一产品，可再补充定向检索
