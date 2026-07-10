@@ -2,14 +2,14 @@
 
 ## 当前目标
 
-- 目标：按源码目录审查结论逐项收敛跨领域类型、配置职责和 app 物理模块树，使文件内容与所属模块一致并保持现有行为。
-- 交付物：全应用事件模块、归位后的 SFTP/transfer 状态模型、清晰的 session/config 边界、独立 proxy/platform 实现、现代 app 子模块入口、更新后的项目地图和回归验证。
+- 目标：每次通过快捷键或 Settings 标签关闭按钮关闭设置页时都弹出确认；弹窗打开后，再按一次 Settings 快捷键执行上次记住的“关闭”或“保持打开”动作。
+- 交付物：向后兼容的第二次快捷键动作偏好、始终出现的确认弹窗、记住选择持久化、Workspace 动作开关、快捷键/标签按钮接线、中英文文案和完整验证记录。
 
 ## 项目边界
 
 - 根目录：`<repo-root>`
-- 当前范围：`src/main.rs`，`src/events.rs`，`src/monitoring.rs`，`src/platform.rs`，`src/platform/`，`src/app.rs`，`src/app/`，`src/backend.rs`，`src/backend/`，`src/config.rs`，`src/config/`，`src/session.rs`，`src/sftp.rs`，`src/sftp/`，`src/terminal.rs`，`src/terminal/`，`docs/project-env-audit/`，`docs/project-implementation-tracker/`
-- 不在本轮范围内：改变终端、SSH、SFTP、同步或监控业务行为；修改配置 schema、依赖、manifest/lock、release/tag；重新设计 GUI 视觉或交互。
+- 当前范围：`src/config/model.rs`，`src/config/store.rs`，`src/app.rs`，`src/app/lifecycle/init.rs`，`src/app/dialogs.rs`，`src/app/dialogs/settings_close_confirm.rs`，`src/app/dialogs/settings/shell.rs`，`src/app/dialogs/settings/workspace.rs`，`src/app/workspace.rs`，`src/app/views/tab_bar.rs`，`locales/en.yml`，`locales/zh-CN.yml`，跟踪文档。
+- 不在本轮范围内：把所有 Settings 表单改造成统一草稿/撤销事务、自动提交带显式 Save 按钮的输入、调整复制粘贴键位、修改依赖或 manifest/lock。
 
 ## 当前状态
 
@@ -22,52 +22,49 @@
 
 | Step | Status | Deliverable | Verification | Notes |
 | --- | --- | --- | --- | --- |
-| P1 | completed | 模块边界审查、目标目录映射和环境预检记录 | 基线 `cargo check`、`git diff --check`、源码调用点统计 | 先迁移低耦合类型，再处理大量路径变更 |
-| P2 | completed | `src/events.rs` 及归位后的 SFTP UI/transfer 模型 | `rustfmt`、terminal/SFTP 定向测试、`cargo check` | 事件总线脱离 terminal，SFTP 类型不再由 terminal 所有 |
-| P3 | completed | session/config 类型所有权与兼容层清理 | `rustfmt`、配置/session 定向测试、`cargo check` | session 只保留连接领域类型 |
-| P4 | completed | `config/store.rs` 拆分及 proxy/platform 运行时职责迁移 | `rustfmt`、proxy/X11/配置测试、`cargo check` | 不改变配置文件字段和网络行为 |
-| P5 | completed | 真实 app 子模块入口、单文件目录压平和 core 类型分发 | `rustfmt`、app 相关定向测试、`cargo check` | 移除 `#[path]` 兼容声明，不新增 `mod.rs` |
-| P6 | completed | `system.rs` 命名收敛、项目地图刷新和完整回归 | `cargo test --quiet`、`git diff --check`、tracking validator | GUI 行为不变，无新增手工交互检查项 |
+| P14 | completed | 环境预检、现有确认模式复核、项目地图刷新和本轮计划 | 工具链、manifest、CI、配置、dialog、workspace 与工作树复核 | 保留现有未提交终端改动 |
+| P15 | completed | 默认关闭页面且向后兼容的第二次 Settings 快捷键动作偏好 | 配置默认值、getter/setter 与 serde/default 定向测试 | remember 可保存关闭或保持打开 |
+| P16 | completed | Settings 关闭确认弹窗、确认/取消和 remember 状态 | 源码差异、编译检查 | 文案明确即时保存与显式 Save 的边界 |
+| P17 | completed | 快捷键、标签关闭按钮、Workspace 恢复开关和中英文文案 | `cargo check`、调用点复核 | 所有显式关闭入口走同一 request 方法 |
+| P18 | completed | 首版“记住后跳过弹窗”实现的格式化和回归 | `cargo test --quiet`、`git diff --check`、tracking validator | 用户已纠正语义，本步骤结果仅作为中间验证 |
+| P19 | completed | 改为每次弹窗，第二次 Settings 快捷键执行记住动作 | 配置测试、`cargo check`、调用点复核 | 默认第二次快捷键确认关闭 |
+| P20 | completed | 修正后完整测试、空白检查和文档校验 | `cargo test --quiet`、`git diff --check`、tracking validator | GUI 行为保留手工验证边界 |
 
 ## 已完成
 
-- 已完成源码目录、模块声明、公开路径、文件规模和主要调用点审查。
-- 已确认主要边界问题：terminal 承载全应用事件/SFTP 类型，session 混入配置模型，config 执行 proxy/X server 运行时逻辑，app 物理目录依赖 `#[path]`，`app/core/types.rs` 成为跨功能类型集合。
-- 已完成施工前环境预检；工作树基线干净，`cargo check` 和 `git diff --check` 通过。
-- 已确定逐项实施顺序，不联网、不使用多 agent、不修改依赖或配置 schema。
-- 已新增 `src/events.rs`，保持 256 条 Tokio 有界队列和既有事件载荷；terminal backend 只保留命令、发送端和关闭控制。
-- 已将 `Transfer`、`TransferInfo`、`TransferState`、`TransferType` 迁到 `src/sftp/model.rs`，保留旧 `Cancelled` 反序列化兼容。
-- 已将 `SftpUiState` 迁到 `src/app/sftp.rs`，`TerminalTab` 不再依赖 SFTP 数据模型。
-- 已将 `Session`、`AuthMethod`、`SshConnectionMode` 和连接模式排序直接收敛到 `src/session.rs`。
-- 已新增 `src/config/model.rs` 承载窗口、标题栏、光标和 custom theme 配置类型；全部调用点已改用直接所有权路径。
-- 已删除 `src/session/config.rs` 和 `src/session/model.rs`，项目不再通过兼容层混用 session/config 类型。
-- 已新增 `src/backend/proxy.rs`，通过 `ConfigStore` getter 解析 session/env/global proxy 并执行 SOCKS5/HTTP/direct 连接。
-- 已新增 `src/platform.rs` 与 `src/platform/x_server.rs`，承载本地 X Server 路径、DISPLAY、Windows 空闲 display 和启动参数逻辑。
-- 已将 `ConfigFile`、默认值和规范化规则迁到 `src/config/model.rs`；`src/config/store.rs` 从 1649 行降到 935 行，只保留持久化、迁移和访问器。
-- 已新增 `src/app/input.rs` 和 `src/app/lifecycle.rs` 作为真实父模块入口，`src/app.rs` 不再使用 `#[path]`。
-- 已将 constants/config sync/search/workspace 单文件目录压平为 `src/app/constants.rs`、`config_sync.rs`、`search.rs`、`workspace.rs`。
-- 已把 `app/core/types.rs` 分发到 `pane.rs`、`workspace.rs`、`sftp.rs`、`terminal.rs`、`session_ui.rs` 和 `dialogs.rs`，并将 SearchState 与字体 helper 合并到实际功能文件。
-- 已将 `src/system.rs` 更名为 `src/monitoring.rs`，全部调用点改用 monitoring 领域路径。
-- 已刷新项目地图，清除旧 session/config、terminal transfer、app `#[path]` 和 system 路径记录。
+- 已确认 Settings 大多数控件在修改时立即保存，部分表单仍明确要求点击 Save，因此不能承诺关闭时统一提交全部输入。
+- 已确认 SFTP 关闭确认已提供 `DialogKind`、不可点击遮罩、remember checkbox 和配置持久化参考模式。
+- 已确定弹窗语义为“已应用的设置自动保存，确认关闭”；确认弹窗每次都出现。
+- 已确定 remember 保存的是“弹窗打开后再次按 Settings 快捷键执行关闭或保持打开”，而不是跳过后续弹窗。
+- 已完成施工前环境预检；不新增依赖、不联网、不使用多 agent，并刷新项目地图覆盖新增确认模块和配置偏好。
+- 已新增默认执行关闭的 `settings_close_shortcut_confirms` 配置字段、getter/setter 和默认值；旧配置缺少字段时默认让第二次快捷键确认关闭。
+- 已完成配置 Rust 格式化和 2 项设置关闭确认定向测试。
+- 已新增独立 `settings_close_confirm.rs`，支持确认、取消、remember checkbox 和确认偏好持久化。
+- 已新增 `request_close_settings_page`，快捷键与 Settings 标签关闭按钮统一打开确认弹窗。
+- 已在 Workspace 设置页加入“第二次设置快捷键关闭页面”开关，并补充中英文 dialog、checkbox、按钮和提示文案。
+- 已将配置偏好改为 `settings_close_shortcut_confirms`：默认第二次快捷键关闭，remember 可保存“关闭”或“保持打开”。
+- 已让 close request 始终打开确认框，并为 dialog content 建立独立焦点和当前 Settings 快捷键监听；第二次按键执行已记住动作。
+- 已将 Workspace 开关和中英文文案修正为“第二次 Settings 快捷键动作”，不再存在跳过后续弹窗的路径。
+- 已完成修正后的 Rust 格式化、2 项配置定向测试和 `cargo check`。
+- 已完成修正后的 85 项完整测试、`git diff --check` 和 tracking docs validator；项目地图已覆盖新增 dialog 与配置偏好。
 
 ## 验证
 
-- 已完成：环境预检；P2-P5 各阶段格式化、编译和定向测试；最终 `rustfmt`、`cargo check`、`cargo test --quiet`（78 项）、`git diff --check` 和 tracking docs validator。
-- 未完成：无自动化验证缺口；Windows 专用 X Server 测试和真实 proxy/X11 联机受当前平台/外部环境限制未执行。
+- 已完成：环境、工作树、配置持久化、dialog 模式、Settings 快捷键和标签关闭调用点复核；语义修正后的实现、Rust 格式化、2 项配置定向测试、`cargo check`、85 项完整测试、`git diff --check` 和 tracking docs validator。
+- 未完成：真实 GUI 中验证每次关闭均弹窗、第二次当前 Settings 快捷键执行记住动作，以及 remember 保存关闭/保持打开。
 
 ## 风险与阻塞
 
-- 风险一：`BackendEvent` 被 terminal、SSH、SFTP、sync 和 app event loop 共用；迁移时必须保持有界队列容量和发送语义。
-- 风险二：`session::config` 有大量内部调用点；必须先建立直接所有权出口，再删除兼容层。
-- 风险三：config 拆分包含平台条件编译和 proxy trait object；需逐阶段编译，避免一次性产生难定位错误。
-- 剩余风险一：Windows 专用 display/启动参数测试带 `target_os = "windows"`，当前 macOS 主机未执行；代码为原逻辑纯迁移。
-- 剩余风险二：proxy/X11 真实联机未执行；编译和现有 backend 测试已通过。
-- 无阻塞；未修改业务协议、配置 schema、依赖或 GUI 交互。
+- 风险一：确认弹窗必须避免声称会自动提交仍处于输入框中的显式 Save 表单。
+- 风险二：remember 只能改变弹窗内第二次快捷键动作，不能改变“每次都弹窗”的规则。
+- 风险三：快捷键和标签关闭按钮需要统一走 request 方法，实际关闭方法仍保留为内部确认后的最终动作。
+- 剩余风险：自动化检查无法替代真实窗口中确认、取消、记住与重新启用确认的交互验证。
+- 无阻塞。
 
 ## 下一步
 
-- 本轮源码模块边界治理完成，可进入 review/commit；未按用户请求创建 commit。
+- 功能和自动化验证完成，可按独立 review unit 提交并创建合规 release tag。
 
 ## 最后更新时间
 
-- 2026-07-10 21:27 +0800
+- 2026-07-10 22:47 +0800

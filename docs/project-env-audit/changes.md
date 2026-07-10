@@ -1404,3 +1404,59 @@
 - 受影响文件：`src/`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/project-map.md`，`docs/project-implementation-tracker/changes/2026/07.md`
 - 更新后的命令或环境：继续使用 Rust 2024 / Cargo；源码验证为 `rustfmt --edition 2024`、`cargo check`、`cargo test --quiet`、`git diff --check` 和 tracking docs validator。
 - 验证结果：`cargo check` 无源码告警；`cargo test --quiet` 78 项全部通过；`git diff --check` 通过。Windows 专用 X Server 单元测试在当前 macOS 主机不执行，真实 proxy/X11 联机未验证；保留既有 `block v0.1.6` future-incompat warning。
+
+## 2026-07-10 刷新环境记录到本地 PTY 能力与终端一致性测试
+
+- 日期：2026-07-10 21:53 +0800
+- 变化摘要：运行时、依赖和工具链未变化；本轮固定本地 PTY 的 `TERM=xterm-256color`，并新增 CSI `K/J`、DECSTBM 滚动区域和 `?1049` alternate screen 一致性测试。
+- 受影响文件：`src/backend/local.rs`，`src/terminal/tab.rs`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/changes/2026/07.md`
+- 更新后的命令或环境：继续使用 Rust 2024、Cargo 和现有锁定依赖；验证命令为相关 `rustfmt`、backend/terminal 定向测试、`cargo check`、`cargo test --quiet`、`git diff --check` 和 tracking docs validator。
+- 验证结果：本机 `rustc 1.96.1`、`cargo 1.96.1` 可用；工作树基线干净；`portable-pty` 与 `alacritty_terminal` 现有 API 足以覆盖本轮测试，无需新增依赖或联网。
+
+## 2026-07-10 完成本地 PTY 能力与终端一致性测试环境验证
+
+- 日期：2026-07-10 22:08 +0800
+- 变化摘要：本地 PTY 新建 shell 统一声明 `TERM=xterm-256color`；新增 1 项命令环境测试和 4 项终端 parser/grid 一致性测试；运行时、依赖、manifest/lock 与 CI 配置不变。
+- 受影响文件：`src/backend/local.rs`，`src/terminal/tab.rs`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/changes/2026/07.md`
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo；本地新建 PTY 使用固定 `xterm-256color` 能力基线，`COLORTERM=truecolor` 与其他现有环境保持不变。
+- 验证结果：相关 `rustfmt` 通过；5 项新增定向测试通过；`cargo check` 通过；`cargo test --quiet` 83 项全部通过；保留既有 `block v0.1.6` future-incompat warning。真实 Codex/类似 TUI 色块复现需在重启并新建本地终端后手工确认。
+
+## 2026-07-10 完成终端兼容性修复最终文档校验
+
+- 日期：2026-07-10 22:10 +0800
+- 变化摘要：本轮代码、测试和环境记录均已收口；运行环境和依赖事实没有进一步变化。
+- 受影响文件：`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/changes/2026/07.md`
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo；没有新增运行或测试依赖。
+- 验证结果：`git diff --check` 和 tracking docs validator 通过；自动化环境验证完整，剩余仅为新建本地 PTY 后的真实 TUI 手工复现。
+
+## 2026-07-10 刷新环境记录到 Settings 快捷键 toggle
+
+- 日期：2026-07-10 22:17 +0800
+- 变化摘要：运行时、依赖、工具链和测试入口不变；本轮只调整 Settings 页面内的快捷键事件路由，使当前设置快捷键可再次关闭页面。
+- 受影响文件：`src/app/dialogs/settings/shell.rs`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/changes/2026/07.md`
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo；验证命令为相关 `rustfmt`、`cargo check`、`cargo test --quiet`、`git diff --check` 和 tracking docs validator。
+- 验证结果：本机 `rustc 1.96.1`、`cargo 1.96.1` 可用；现有 Settings shell 和 `event_matches_action` 足以完成修改，无需新增依赖、联网或多 agent。工作树中已有本地 PTY/终端测试改动将原样保留。
+
+## 2026-07-10 完成 Settings 快捷键 toggle 环境验证
+
+- 日期：2026-07-10 22:22 +0800
+- 变化摘要：Settings 页面在非快捷键录制状态下可直接匹配当前配置的 `OpenSettings` 并关闭；运行时、依赖、manifest/lock 与 CI 配置不变。
+- 受影响文件：`src/app/dialogs/settings/shell.rs`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/changes/2026/07.md`
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo；没有新增运行或测试依赖。
+- 验证结果：相关 `rustfmt` 通过；`cargo check` 通过；`cargo test --quiet` 83 项全部通过；`git diff --check` 和 tracking docs validator 通过。保留既有 `block v0.1.6` future-incompat warning，真实 GUI toggle 仍需手工确认。
+
+## 2026-07-10 刷新环境记录到 Settings 关闭确认
+
+- 日期：2026-07-10 22:27 +0800
+- 变化摘要：运行时、依赖和工具链不变；本轮新增向后兼容的 Settings 关闭确认偏好、确认 dialog 和记住选择恢复入口。
+- 受影响文件：`src/config/model.rs`，`src/config/store.rs`，`src/app.rs`，`src/app/lifecycle/init.rs`，`src/app/dialogs.rs`，`src/app/dialogs/settings_close_confirm.rs`，`src/app/dialogs/settings/shell.rs`，`src/app/dialogs/settings/workspace.rs`，`src/app/workspace.rs`，`src/app/views/tab_bar.rs`，`locales/en.yml`，`locales/zh-CN.yml`，跟踪文档。
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo；验证命令为相关 `rustfmt`、配置定向测试、`cargo check`、`cargo test --quiet`、`git diff --check` 和 tracking docs validator。
+- 验证结果：本机工具链满足仓库约束；现有 config serde/default、`DialogKind`、`WindowExt::open_dialog` 和 SFTP remember 模式足以完成实施，无需新增依赖、联网或多 agent。
+
+## 2026-07-10 完成 Settings 二次快捷键确认环境验证
+
+- 日期：2026-07-10 22:47 +0800
+- 变化摘要：Settings 关闭确认每次都会出现；dialog 打开后第二次当前 Settings 快捷键执行记住的关闭/保持打开动作；运行时、依赖、manifest/lock 与 CI 配置不变。
+- 受影响文件：`src/config/model.rs`，`src/config/store.rs`，`src/app.rs`，`src/app/lifecycle/init.rs`，`src/app/dialogs.rs`，`src/app/dialogs/settings_close_confirm.rs`，`src/app/dialogs/settings/shell.rs`，`src/app/dialogs/settings/workspace.rs`，`src/app/workspace.rs`，`src/app/views/tab_bar.rs`，`locales/en.yml`，`locales/zh-CN.yml`，跟踪文档。
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo；没有新增运行或测试依赖。
+- 验证结果：相关 `rustfmt` 通过；配置定向测试 2 项通过；`cargo check` 通过；`cargo test --quiet` 85 项全部通过；`git diff --check` 和 tracking docs validator 通过。保留既有 `block v0.1.6` future-incompat warning。

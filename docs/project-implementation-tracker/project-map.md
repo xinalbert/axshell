@@ -51,8 +51,8 @@
 | `AGENTS.md` | Codex agents 默认读取的项目约束文件 | Rust module layout，verification，release tags，git hygiene | 新增模块、拆分文件、准备 release tag、提交或判断项目级 agent 行为时 |
 | `docs/resource-lifecycle.md` | 中文资源生命周期与深度休眠设计 | 状态机、阶段路线、资源策略、验证边界 | 实现或评审后台降载、SFTP pin、backend shutdown 与系统睡眠恢复时 |
 | `docs/resource-lifecycle.en.md` | English resource lifecycle and deep-sleep design | State machine, phases, resource policy, verification | Keep English documentation aligned with the Chinese lifecycle design |
-| `src/config/model.rs` | 配置文件与值模型、默认值和规范化规则 | `ConfigFile`，`SavedWindowBounds`，`TitleBarStyle`，`CursorStyle`，`CustomThemeConfig` | 改配置 serde、默认值、输入规范化、窗口/标题栏/光标或 custom theme 模型时 |
-| `src/config/store.rs` | 本地配置路径、迁移、getter/setter 和 `ConfigStore` | `ConfigStore::load/save`，`config_root_dir_path`，config path helpers | 改配置目录、旧目录迁移、sync 默认对象名、custom theme draft 或 registry file 路径时 |
+| `src/config/model.rs` | 配置文件与值模型、默认值和规范化规则 | `ConfigFile`，`SavedWindowBounds`，`TitleBarStyle`，`CursorStyle`，`CustomThemeConfig` | 改配置 serde、默认值、输入规范化、Settings 二次快捷键动作、窗口/标题栏/光标或 custom theme 模型时 |
+| `src/config/store.rs` | 本地配置路径、迁移、getter/setter 和 `ConfigStore` | `ConfigStore::load/save`，`config_root_dir_path`，config path helpers | 改配置目录、旧目录迁移、Settings 二次快捷键动作、sync 默认对象名、custom theme draft 或 registry file 路径时 |
 | `src/backend/proxy.rs` | SSH/SFTP transport proxy | `ProxyStream`，`ENV_PROXY`，`connect`，`active` | 改 SOCKS5/HTTP/direct 连接、环境代理或 session/global proxy 优先级时 |
 | `src/platform/x_server.rs` | 本地 X Server 平台 helper | `default_app_path`，`default_display`，`resolve_display`，`launch_args` | 改 macOS XQuartz、Windows VcXsrv/Xming、DISPLAY 或空闲 display 选择时 |
 | `src/app/state/` | `AxShell` 子状态模块 | `AppearanceState`，`LifecycleState`，`MonitoringState`，`RuntimeState` | 改应用外观、窗口生命周期、系统监控或 Tokio backend event channel 状态分组时 |
@@ -76,18 +76,19 @@
 | `src/app/session_ui.rs` | session selector 与连接进度 UI 模型 | `SelectorEntry`，`ConnectionProgress` | 改 session selector 条目或连接进度遮罩状态时 |
 | `src/app/search.rs` | terminal 搜索状态与行为 | `SearchState`，`perform_search`，`search_highlight_map` | 改搜索输入、全缓冲区匹配、跳转或高亮时 |
 | `src/app/config_sync.rs` | app 层配置同步动作 | sync credentials，upload/download action，`SyncFinished` | 改 WebDAV/S3 表单取值、同步触发或状态接线时 |
-| `src/app/dialogs/` | 弹窗和设置页渲染目录模块 | `ssh.rs`，`selector.rs`，`transfers.rs`，`delete_confirm.rs`，`sftp_close_confirm.rs`，`settings/` | 改 SSH 弹窗、session selector、传输关闭确认、transfer history、delete confirm、设置页和 About 页面时；入口为 `src/app/dialogs.rs` |
+| `src/app/dialogs/` | 弹窗和设置页渲染目录模块 | `ssh.rs`，`selector.rs`，`transfers.rs`，`delete_confirm.rs`，`sftp_close_confirm.rs`，`settings_close_confirm.rs`，`settings/` | 改 SSH 弹窗、session selector、关闭确认、transfer history、delete confirm、设置页和 About 页面时；入口为 `src/app/dialogs.rs` |
 | `src/app/dialogs.rs` | dialogs 目录模块入口和共享 imports | 子模块声明，`crate::app::dialogs` 路由 | 改 dialogs 模块可见性、共享 imports 或新增 dialog 子文件时 |
 | `src/app/dialogs/settings/` | 设置页子页面目录 | `appearance.rs`，`font_page.rs`，`terminal.rs`，`workspace.rs`，`monitoring.rs`，`language.rs`，`custom.rs`，`shell.rs`，`about.rs`，`help.rs`，`keybindings.rs`，`sync.rs`，`proxy.rs` | 字体枚举 helper 已并入 `font_page.rs`；入口为 `src/app/dialogs/settings.rs` |
 | `src/app/dialogs/settings/appearance.rs` | Settings 外观页 | `settings_appearance_page` | 改主题模式、light/dark theme 或标题栏样式时 |
 | `src/app/dialogs/settings/font_page.rs` | Settings 字体页 | `settings_fonts_page` | 改 UI/terminal 字体大小、字体族或光标样式时 |
 | `src/app/dialogs/settings/terminal.rs` | Settings 终端行为页 | `settings_terminal_page` | 改右键复制粘贴、关键词高亮、SSH 重试或传输中关闭 SFTP 的默认行为时 |
 | `src/app/dialogs/sftp_close_confirm.rs` | 活跃 SFTP 传输的页面关闭确认弹窗 | `show_sftp_transfer_close_dialog` | 改首次确认、group 绑定、二次快捷键、保持页面、后台继续、取消断开或记住动作时 |
-| `src/app/dialogs/settings/workspace.rs` | Settings 工作区页 | `settings_workspace_page` | 改布局锁定或 reset layout 入口时 |
+| `src/app/dialogs/settings_close_confirm.rs` | Settings 页面关闭确认弹窗 | `show_settings_close_confirm_dialog` | 改确认关闭、保持页面、记住第二次快捷键动作或关闭提示文案时 |
+| `src/app/dialogs/settings/workspace.rs` | Settings 工作区页 | `settings_workspace_page` | 改布局锁定、Settings 二次快捷键动作偏好或 reset layout 入口时 |
 | `src/app/dialogs/settings/monitoring.rs` | Settings 监控页 | `settings_monitoring_page` | 改监控仪表盘显示或监控位置设置时 |
 | `src/app/dialogs/settings/language.rs` | Settings 语言页 | `settings_language_page` | 改显示语言选择和 locale 保存行为时 |
 | `src/app/dialogs/settings/custom.rs` | Custom theme 设置页 | `settings_custom_page` | 改 custom theme name/base theme/override 输入和保存/重置入口时 |
-| `src/app/dialogs/settings/shell.rs` | 设置页外层交互壳 | `settings_page_shell` | 改设置页内 keybinding 录制、Prev/NextTab 捕获或失焦取消录制时 |
+| `src/app/dialogs/settings/shell.rs` | 设置页外层交互壳 | `settings_page_shell` | 改设置页内 keybinding 录制、关闭确认、Prev/NextTab 捕获或失焦取消录制时 |
 | `src/app/views/` | 主工作区视图目录模块，按渲染区域拆分 SFTP、监控、侧栏、顶部标签、终端 pane 和整体布局 | `helpers.rs`，`layout.rs`，`monitoring.rs`，`sftp_panel.rs`，`sidebar.rs`，`tab_bar.rs`，`terminal_panel.rs` | 增加固定 Local Terminal 入口、调整 SFTP 双列面板、saved session 分组、侧栏折叠态、顶部标签、监控面板或主布局时 |
 | `src/app/views.rs` | views 目录模块入口和共享 imports | 子模块声明，`crate::app::views` 路由 | 改 views 模块可见性、共享 imports 或新增 views 子文件时 |
 | `src/app/views/layout.rs` | `Render for AxShell` 和顶层菜单/workspace/body 布局 | `render`，platform menu row，workspace page route，resizable panels，overlays | 改 Windows/Linux 全宽菜单、主布局、集成标题栏、workspace/body split、SFTP 页面接线或全局 overlays 时 |
@@ -157,9 +158,9 @@
 
 ## 刷新规则
 
-- 刷新触发：项目命名、Cargo 包/二进制名、配置目录、同步默认文件名、启动初始化、日志/crash hook、非 macOS runtime 图标资源、release workflow、tag/version 映射规则、manifest/lock 临时同步、macOS/Linux 打包元数据、仓库级 agent 指令、Rust 模块布局约束、SAVED 侧栏入口、custom theme 持久化模型、theme file 注册策略、设置页字段分组、Settings 子页面新增/删除/改名、theme list 行为、terminal 亮度语义、终端字体 metrics、窗口激活/后台/深睡状态、workspace page / tab 模型、terminal tab UI 状态回收、terminal backend shutdown controller、SFTP 按需页面/标签关闭/快捷键焦点、SFTP worker/task 关闭所有权、SFTP 分页或受限目录浏览/预览、SFTP 列表排序/传输标签面板、SFTP 目录导航失败恢复、SSH 连接认证/legacy/远程系统探针/X11 relay、settings Custom/shell 拆分、app/backend 根目录收拢、app/actions/state/config/session/sftp/backend/ui/dialogs 模块拆分或用户文档范围发生变化时刷新
+- 刷新触发：项目命名、Cargo 包/二进制名、配置目录、同步默认文件名、启动初始化、日志/crash hook、非 macOS runtime 图标资源、release workflow、tag/version 映射规则、manifest/lock 临时同步、macOS/Linux 打包元数据、仓库级 agent 指令、Rust 模块布局约束、SAVED 侧栏入口、custom theme 持久化模型、theme file 注册策略、设置页字段分组、Settings 子页面新增/删除/改名、Settings 关闭确认偏好/dialog、theme list 行为、terminal 亮度语义、终端字体 metrics、窗口激活/后台/深睡状态、workspace page / tab 模型、terminal tab UI 状态回收、terminal backend shutdown controller、SFTP 按需页面/标签关闭/快捷键焦点、SFTP worker/task 关闭所有权、SFTP 分页或受限目录浏览/预览、SFTP 列表排序/传输标签面板、SFTP 目录导航失败恢复、SSH 连接认证/legacy/远程系统探针/X11 relay、settings Custom/shell 拆分、app/backend 根目录收拢、app/actions/state/config/session/sftp/backend/ui/dialogs 模块拆分或用户文档范围发生变化时刷新
 - 最近依据：`AGENTS.md`，`Cargo.toml`，`src/app.rs`，`src/app/`，`src/backend.rs`，`src/backend/`，`src/config.rs`，`src/config/`，`src/session.rs`，`src/session/`，`src/sftp.rs`，`src/sftp/`，`src/terminal.rs`，`src/terminal/`，`docs/project-env-audit/current.md`
 
 ## 最后更新时间
 
-- 2026-07-10 21:27 +0800
+- 2026-07-10 22:40 +0800
