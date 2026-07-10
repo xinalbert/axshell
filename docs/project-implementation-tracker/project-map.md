@@ -42,7 +42,10 @@
 | `scripts/` | 本地开发/打包脚本与发布辅助脚本 | 改 macOS `.app` 名称、bundle id、图标文件名、签名逻辑、tag/version 映射或发布前 manifest 同步时 | `package-macos-app.sh` 会运行 `cargo build --release` 并组装 bundle；本轮将新增共享版本脚本 |
 | `assets/*.desktop` | Linux desktop entry | 改应用显示名、Exec、Icon、StartupWMClass 或 Debian metadata 时 | 当前 desktop 文件为 `assets/ax_shell.desktop` |
 | `assets/icons/terminal_icon_all_formats/` | 应用图标资源目录 | 改 `build.rs` Windows icon、macOS bundle icon、Linux desktop/deb icon、非 macOS runtime window icon 或 release 打包图标路径时 | 批量图标不逐项索引；`terminal_icon_256.png` 是 `startup.rs` 非 macOS runtime window icon 的编译期资源 |
-| `docs/` | README、用户/开发文档、资源生命周期设计、环境审计和实施跟踪 | 改项目名称、配置目录、同步文件名、休眠策略、打包命令或验证边界时 | `resource-lifecycle*.md` 记录深睡分期与资源边界 |
+| `README.md` / `README.zh.md` | 英文默认项目入口与中文入口 | 改项目定位、快速开始、文档入口、贡献或支持信息时 | 保持简短并在顶部互链；详细功能放入 `docs/` |
+| `docs/README.md` / `docs/README.zh.md` | 英文默认文档导航与中文文档导航 | 新增、删除、移动用户/开发/设计文档时 | 用户功能页位于 `docs/features/`，两种语言结构对齐 |
+| `docs/features/` | 按功能拆分的双语用户文档 | 改终端/SSH、工作区、SFTP、设置、同步、代理/X11、监控或本地数据行为时 | 默认英文 `.md`，中文 `.zh.md`；截图建议路径记录在各页和 `docs/images/README.md` |
+| `docs/` | 用户/开发文档、资源生命周期设计、环境审计和实施跟踪 | 改项目名称、配置目录、同步文件名、休眠策略、打包命令或验证边界时 | 根导航为 `docs/README*.md`；`resource-lifecycle*.md` 记录深睡分期与资源边界 |
 
 ## 关键文件
 
@@ -137,7 +140,7 @@
 ## 常用定位
 
 - `rg -n 'init_logging|runtime_log_dir|crash_report_dir|panic|crash|open_main_window|current_window_title' src/main.rs src/app/lifecycle/startup.rs src/app/dialogs`
-- `rg -n 'AxAshell|ax_ashell|AX_ASHELL|AxShell|ax_shell|AX_SHELL' Cargo.toml Cargo.lock src examples scripts .github assets README.md README.en.md docs`
+- `rg -n 'AxAshell|ax_ashell|AX_ASHELL|AxShell|ax_shell|AX_SHELL' Cargo.toml Cargo.lock src examples scripts .github assets README.md README.zh.md docs`
 - `rg -n 'GITHUB_REF_NAME|refs/tags|CFBundleShortVersionString|CARGO_PKG_VERSION|version = ' .github/workflows scripts src Cargo.toml Cargo.lock`
 - `rg -n 'render_sftp_panel|render_monitoring_panel|sidebar\\(|render_collapsed_sidebar|render_tab_bar|render_terminal_panel|render_pane_tree|WorkspacePage' src/app/views src/app`
 - `rg -n 'sidebar\\(|render_collapsed_sidebar|saved_session_groups|open_local' src/app/views src/app/actions`
@@ -159,8 +162,8 @@
 ## 刷新规则
 
 - 刷新触发：项目命名、Cargo 包/二进制名、配置目录、同步默认文件名、启动初始化、日志/crash hook、非 macOS runtime 图标资源、release workflow、tag/version 映射规则、manifest/lock 临时同步、macOS/Linux 打包元数据、仓库级 agent 指令、Rust 模块布局约束、SAVED 侧栏入口、custom theme 持久化模型、theme file 注册策略、设置页字段分组、Settings 子页面新增/删除/改名、Settings 关闭确认偏好/dialog、theme list 行为、terminal 亮度语义、终端字体 metrics、窗口激活/后台/深睡状态、workspace page / tab 模型、terminal tab UI 状态回收、terminal backend shutdown controller、SFTP 按需页面/标签关闭/快捷键焦点、SFTP worker/task 关闭所有权、SFTP 分页或受限目录浏览/预览、SFTP 列表排序/传输标签面板、SFTP 目录导航失败恢复、SSH 连接认证/legacy/远程系统探针/X11 relay、settings Custom/shell 拆分、app/backend 根目录收拢、app/actions/state/config/session/sftp/backend/ui/dialogs 模块拆分或用户文档范围发生变化时刷新
-- 最近依据：`AGENTS.md`，`Cargo.toml`，`src/app.rs`，`src/app/`，`src/backend.rs`，`src/backend/`，`src/config.rs`，`src/config/`，`src/session.rs`，`src/session/`，`src/sftp.rs`，`src/sftp/`，`src/terminal.rs`，`src/terminal/`，`docs/project-env-audit/current.md`
+- 最近依据：`AGENTS.md`，`README.md`，`README.zh.md`，`docs/README.md`，`docs/README.zh.md`，`docs/features/`，`docs/images/`，`docs/development.md`，`docs/development.en.md`，`docs/project-env-audit/current.md`
 
 ## 最后更新时间
 
-- 2026-07-10 22:40 +0800
+- 2026-07-11 07:03 +0800

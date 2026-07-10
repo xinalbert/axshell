@@ -2,14 +2,14 @@
 
 ## 当前目标
 
-- 目标：每次通过快捷键或 Settings 标签关闭按钮关闭设置页时都弹出确认；弹窗打开后，再按一次 Settings 快捷键执行上次记住的“关闭”或“保持打开”动作。
-- 交付物：向后兼容的第二次快捷键动作偏好、始终出现的确认弹窗、记住选择持久化、Workspace 动作开关、快捷键/标签按钮接线、中英文文案和完整验证记录。
+- 目标：把根 README 收敛为英文默认入口和中文切换页，在 `docs/` 建立双语导航，并把用户功能说明拆成便于后续补图的独立 Markdown 页面。
+- 交付物：`README.md` / `README.zh.md`、`docs/README.md` / `docs/README.zh.md`、双语功能文档、截图目录约定、精简兼容用户指南、更新后的项目地图和链接验证。
 
 ## 项目边界
 
 - 根目录：`<repo-root>`
-- 当前范围：`src/config/model.rs`，`src/config/store.rs`，`src/app.rs`，`src/app/lifecycle/init.rs`，`src/app/dialogs.rs`，`src/app/dialogs/settings_close_confirm.rs`，`src/app/dialogs/settings/shell.rs`，`src/app/dialogs/settings/workspace.rs`，`src/app/workspace.rs`，`src/app/views/tab_bar.rs`，`locales/en.yml`，`locales/zh-CN.yml`，跟踪文档。
-- 不在本轮范围内：把所有 Settings 表单改造成统一草稿/撤销事务、自动提交带显式 Save 按钮的输入、调整复制粘贴键位、修改依赖或 manifest/lock。
+- 当前范围：`README.md`，`README.en.md`，`README.zh.md`，`docs/README*.md`，`docs/user-guide*.md`，`docs/features/`，`docs/images/`，`docs/development*.md`，跟踪文档。
+- 不在本轮范围内：修改应用功能、Rust 源码、配置 schema、依赖、manifest/lock、发布 workflow 或生成实际产品截图。
 
 ## 当前状态
 
@@ -22,49 +22,43 @@
 
 | Step | Status | Deliverable | Verification | Notes |
 | --- | --- | --- | --- | --- |
-| P14 | completed | 环境预检、现有确认模式复核、项目地图刷新和本轮计划 | 工具链、manifest、CI、配置、dialog、workspace 与工作树复核 | 保留现有未提交终端改动 |
-| P15 | completed | 默认关闭页面且向后兼容的第二次 Settings 快捷键动作偏好 | 配置默认值、getter/setter 与 serde/default 定向测试 | remember 可保存关闭或保持打开 |
-| P16 | completed | Settings 关闭确认弹窗、确认/取消和 remember 状态 | 源码差异、编译检查 | 文案明确即时保存与显式 Save 的边界 |
-| P17 | completed | 快捷键、标签关闭按钮、Workspace 恢复开关和中英文文案 | `cargo check`、调用点复核 | 所有显式关闭入口走同一 request 方法 |
-| P18 | completed | 首版“记住后跳过弹窗”实现的格式化和回归 | `cargo test --quiet`、`git diff --check`、tracking validator | 用户已纠正语义，本步骤结果仅作为中间验证 |
-| P19 | completed | 改为每次弹窗，第二次 Settings 快捷键执行记住动作 | 配置测试、`cargo check`、调用点复核 | 默认第二次快捷键确认关闭 |
-| P20 | completed | 修正后完整测试、空白检查和文档校验 | `cargo test --quiet`、`git diff --check`、tracking validator | GUI 行为保留手工验证边界 |
+| P1 | completed | README skill、现有双语文档、项目地图和环境预检 | 工作树、现有链接、文档标题和产品证据复核 | 用户指定默认英文 README |
+| P2 | completed | 根 README 双语入口与 `docs/` 双语总导航 | 结构对齐、语言互链、相对链接 | 根 README 只保留概览和快速开始 |
+| P3 | completed | terminal/SSH、workspace、SFTP、settings、sync、proxy/X11、monitoring 等双语功能页 | 功能覆盖和交叉链接检查 | 每页预留截图位置说明 |
+| P4 | completed | 精简兼容用户指南、截图目录说明和项目地图刷新 | 旧入口可继续导航到新页面 | 不保留重复长文 |
+| P5 | completed | Markdown-only 最终验证和实施记录收口 | 链接检查、`git diff --check`、tracking validator | 不运行无关 Rust 测试 |
 
 ## 已完成
 
-- 已确认 Settings 大多数控件在修改时立即保存，部分表单仍明确要求点击 Save，因此不能承诺关闭时统一提交全部输入。
-- 已确认 SFTP 关闭确认已提供 `DialogKind`、不可点击遮罩、remember checkbox 和配置持久化参考模式。
-- 已确定弹窗语义为“已应用的设置自动保存，确认关闭”；确认弹窗每次都出现。
-- 已确定 remember 保存的是“弹窗打开后再次按 Settings 快捷键执行关闭或保持打开”，而不是跳过后续弹窗。
-- 已完成施工前环境预检；不新增依赖、不联网、不使用多 agent，并刷新项目地图覆盖新增确认模块和配置偏好。
-- 已新增默认执行关闭的 `settings_close_shortcut_confirms` 配置字段、getter/setter 和默认值；旧配置缺少字段时默认让第二次快捷键确认关闭。
-- 已完成配置 Rust 格式化和 2 项设置关闭确认定向测试。
-- 已新增独立 `settings_close_confirm.rs`，支持确认、取消、remember checkbox 和确认偏好持久化。
-- 已新增 `request_close_settings_page`，快捷键与 Settings 标签关闭按钮统一打开确认弹窗。
-- 已在 Workspace 设置页加入“第二次设置快捷键关闭页面”开关，并补充中英文 dialog、checkbox、按钮和提示文案。
-- 已将配置偏好改为 `settings_close_shortcut_confirms`：默认第二次快捷键关闭，remember 可保存“关闭”或“保持打开”。
-- 已让 close request 始终打开确认框，并为 dialog content 建立独立焦点和当前 Settings 快捷键监听；第二次按键执行已记住动作。
-- 已将 Workspace 开关和中英文文案修正为“第二次 Settings 快捷键动作”，不再存在跳过后续弹窗的路径。
-- 已完成修正后的 Rust 格式化、2 项配置定向测试和 `cargo check`。
-- 已完成修正后的 85 项完整测试、`git diff --check` 和 tracking docs validator；项目地图已覆盖新增 dialog 与配置偏好。
+- 已读取 README maintenance skill 及参考规范，确认根 README 应保持简短并把详细说明移入 `docs/`。
+- 已确认项目现有语言约定是中文 `README.md`、英文 `README.en.md`，用户要求改为英文 `README.md`、中文 `README.zh.md`。
+- 已确认现有 `docs/user-guide*.md` 聚合了终端、SSH、SFTP、工作区、设置、同步、代理、X11、监控和日志内容，适合按功能拆分。
+- 已确认 `preview.png` 可继续作为根 README 首屏预览；后续功能截图应放入 `docs/images/`，不创建缺失图片链接。
+- 已完成施工前环境预检；无需联网、多 agent、依赖或 Rust 改动。
+- 已将英文内容写入默认 `README.md`，新增中文 `README.zh.md`，并删除旧 `README.en.md` 入口；两个根页面结构对齐并在顶部互链。
+- 已新增 `docs/README.md` 和 `docs/README.zh.md`，集中导航快速入门、功能指南、开发文档、资源生命周期和截图说明。
+- 已新增双语快速入门及 8 组独立功能页，覆盖 terminal/SSH、workspace、SFTP、appearance/settings、sync、proxy/X11、monitoring/lifecycle 和本地数据/故障排查。
+- 已将原单篇 `user-guide` 收敛为兼容索引，并修复中英文开发文档回链。
+- 已新增 `docs/images/` 截图规范和 `docs/images/features/` 实际目录说明；功能页使用 HTML 注释预留图片目标，不产生破损图片。
+- 已更新项目地图中的根 README、docs 导航、功能页和截图目录职责，并把常用定位命令切换到 `README.zh.md`。
+- 已检查 31 个用户可见 Markdown 文件的相对链接目标，全部存在；8 组功能页中英文配对完整，活动文档不再引用删除的 `README.en.md` 或 `user-guide.en.md`。
+- 已完成 `git diff --check` 和 tracking docs validator。
 
 ## 验证
 
-- 已完成：环境、工作树、配置持久化、dialog 模式、Settings 快捷键和标签关闭调用点复核；语义修正后的实现、Rust 格式化、2 项配置定向测试、`cargo check`、85 项完整测试、`git diff --check` 和 tracking docs validator。
-- 未完成：真实 GUI 中验证每次关闭均弹窗、第二次当前 Settings 快捷键执行记住动作，以及 remember 保存关闭/保持打开。
+- 已完成：工作树、README、双语用户/开发文档、项目地图、manifest/release 证据复核；31 个用户可见 Markdown 文件链接检查；功能页语言配对；旧活动链接检索；`git diff --check` 和 tracking docs validator。
+- 未完成：实际功能截图尚未提供，因此仅完成路径和插入位置准备；本轮无 Rust 改动，未运行无关编译测试。
 
 ## 风险与阻塞
 
-- 风险一：确认弹窗必须避免声称会自动提交仍处于输入框中的显式 Save 表单。
-- 风险二：remember 只能改变弹窗内第二次快捷键动作，不能改变“每次都弹窗”的规则。
-- 风险三：快捷键和标签关闭按钮需要统一走 request 方法，实际关闭方法仍保留为内部确认后的最终动作。
-- 剩余风险：自动化检查无法替代真实窗口中确认、取消、记住与重新启用确认的交互验证。
+- 剩余风险一：外部网站如果直接链接旧 `README.en.md` 或 `docs/user-guide.en.md`，仓库内无法自动改写；仓库活动文档已全部切换到新入口。
+- 剩余风险二：后续添加截图时需要按 `docs/images/README*.md` 清理敏感信息，并把功能页注释替换为真实图片链接。
 - 无阻塞。
 
 ## 下一步
 
-- 功能和自动化验证完成，可按独立 review unit 提交并创建合规 release tag。
+- 后续可按功能页逐步加入截图；README 与 docs 结构维护已完成。
 
 ## 最后更新时间
 
-- 2026-07-10 22:47 +0800
+- 2026-07-11 07:03 +0800

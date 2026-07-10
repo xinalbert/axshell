@@ -1390,6 +1390,26 @@
 - 计划状态变更：无
 - 验证结果：terminal 38 项与 SFTP 14 项定向测试通过；`cargo check` 和 `cargo test --quiet`（78 项）通过；`git diff --check` 和 tracking docs validator 通过；保留既有 `block v0.1.6` future-incompat warning。
 - 对 plan 的更新：运行环境、依赖和业务行为不变；允许按功能、重构、文档三个 review unit 提交。
+
+## 2026-07-11 刷新环境记录到 README 与用户文档维护
+
+- 时间：2026-07-11 06:50 +0800
+- 触发原因：用户要求维护项目 README，在 `docs/` 增加 README 导航，并按功能拆分文档以便后续添加图片；随后指定默认 `README.md` 使用英文、中文使用 `README.zh.md`。
+- 执行内容：复核 README maintenance skill、根 README、双语用户/开发文档、项目地图、manifest 和 release workflow；确定根入口、docs 导航、功能页和截图目录四层文档结构。
+- 影响文件：`README.md`，`README.en.md`，`README.zh.md`，`docs/` 用户文档，`docs/project-env-audit/`，`docs/project-implementation-tracker/`
+- 计划状态变更：无
+- 验证结果：开工前工作树干净；本轮无需联网、多 agent、Rust/依赖改动或 GUI 验证。
+- 对 plan 的更新：允许实施 Markdown-only 文档重构；最终检查相对链接、双语互链、空白和 tracking contract。
+
+## 2026-07-11 完成 README 与用户文档结构验证
+
+- 时间：2026-07-11 07:03 +0800
+- 触发原因：双语 README、docs 导航和功能页拆分完成，需要确认活动文档路径和最终跟踪契约。
+- 执行内容：检查用户可见 Markdown 相对链接、功能页中英文配对、旧入口残留、标题锚点、空白和 tracking docs；更新环境当前态和项目地图。
+- 影响文件：根 README、`docs/` 用户文档、`docs/project-env-audit/`，`docs/project-implementation-tracker/`
+- 计划状态变更：无
+- 验证结果：31 个用户可见 Markdown 文件相对链接目标全部存在；8 组功能页语言配对完整；活动文档无旧入口引用；`git diff --check` 和 tracking docs validator 通过。
+- 对 plan 的更新：Markdown-only 交付完成；实际截图留待后续按截图规范添加。
 ## 2026-07-10 刷新环境记录到源码模块边界治理
 
 - 日期：2026-07-10 20:40 +0800
