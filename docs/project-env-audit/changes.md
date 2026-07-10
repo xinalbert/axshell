@@ -1320,3 +1320,73 @@
 - 计划状态变更：无
 - 验证结果：`rustfmt --edition 2024`、`cargo check`、`cargo test --quiet sftp::lifecycle_tests`（7 项）、`cargo test --quiet`（76 项）、`git diff --check` 和 tracking docs validator 通过；保留既有 `block v0.1.6` future-incompat warning。GUI 手工验证未执行。
 - 对 plan 的更新：环境与依赖策略保持不变；需要真实 SFTP 目录验证多次加载、EOF 自动隐藏按钮、总上限提示、导航和 idle worker 重建后的 cursor 回收。
+
+## 2026-07-10 刷新环境记录到标签宽度和颜色显示策略
+
+- 时间：2026-07-10 19:23 +0800
+- 触发原因：用户要求限制顶部标签宽度，并把非激活标签是否显示状态色做成可配置设置。
+- 执行内容：复查 `Cargo.toml`、顶部 tab bar、工作区设置页和配置存储；确认可以复用 GPUI 尺寸 API、主题 token 与现有 Settings `Switch`，无需新增依赖或联网。
+- 影响文件：`src/app/core/constants.rs`，`src/app/views/tab_bar.rs`，`src/app/dialogs/settings/workspace.rs`，`src/config/store.rs`，`locales/en.yml`，`locales/zh-CN.yml`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`
+- 计划状态变更：无
+- 验证结果：本机 Rust/Cargo 环境可用；默认验证为 `rustfmt`、配置定向测试、`cargo check`、`cargo test --quiet`、`git diff --check` 和 tracking docs validator；GUI 视觉检查待实现后执行。
+- 对 plan 的更新：允许实施标签最大宽度和“为非激活标签着色”持久化开关；主题和 workspace/tab 数据模型保持不变。
+
+## 2026-07-10 完成标签宽度和颜色显示策略环境验证
+
+- 时间：2026-07-10 19:28 +0800
+- 触发原因：标签宽度和可配置颜色策略实现完成，需要记录实际环境验证结果。
+- 执行内容：所有 workspace 标签增加 220px 最大宽度；新增 `color_inactive_tabs` 配置和工作区设置开关，默认仅激活标签显示状态色，非激活标签使用主题灰色。
+- 影响文件：`src/app/core/constants.rs`，`src/app/views.rs`，`src/app/views/tab_bar.rs`，`src/app/dialogs/settings/workspace.rs`，`src/config/store.rs`，`locales/en.yml`，`locales/zh-CN.yml`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`
+- 计划状态变更：无
+- 验证结果：`rustfmt --edition 2024`、2 项配置定向测试、`cargo check`、`cargo test --quiet`（78 项）和 `git diff --check` 均通过；保留既有 `block v0.1.6` future-incompat warning。
+- 对 plan 的更新：运行环境和依赖策略保持不变；GUI 仍需验证长标题省略、亮/暗主题状态色和设置切换。
+
+## 2026-07-10 复核标签改动的 AGENTS 约束
+
+- 时间：2026-07-10 19:34 +0800
+- 触发原因：用户要求按仓库 `AGENTS.md` 约束本轮代码。
+- 执行内容：确认项目仍为 Rust 2024 / GPUI、使用 `cargo`、没有嵌套 `AGENTS.md`、未新增依赖或旧式 `mod.rs`；配置逻辑保留在 `src/config/store.rs`。补齐环境当前态中遗漏的 `src/app/views.rs` 范围记录。
+- 影响文件：`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/changes/2026/07.md`
+- 计划状态变更：无
+- 验证结果：源码合规，无需改动；完整规定命令将在记录修正后重跑。
+- 对 plan 的更新：运行环境、依赖和模块边界不变；保留 GUI 手工验证要求。
+
+## 2026-07-10 完成 AGENTS 规定环境复验
+
+- 时间：2026-07-10 19:36 +0800
+- 触发原因：完成仓库指令合规复核后，需要确认规定 Rust 命令在当前工具链下仍全部通过。
+- 执行内容：重跑变更文件格式化、标签配置定向测试、`cargo check` 和完整测试；未改变依赖、manifest、模块树或源码行为。
+- 影响文件：`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/changes/2026/07.md`
+- 计划状态变更：无
+- 验证结果：格式化和 2 项定向测试通过；`cargo check` 通过；`cargo test --quiet` 78 项通过；保留既有 `block v0.1.6` future-incompat warning。
+- 对 plan 的更新：环境和依赖策略无变化；最终空白检查、tracking docs validator 和 GUI 手工检查边界保持不变。
+
+## 2026-07-10 完成 AGENTS 最终环境校验
+
+- 时间：2026-07-10 19:36 +0800
+- 触发原因：Rust 规定命令通过后，需要确认最终差异和跟踪文档符合仓库约束。
+- 执行内容：运行 `git diff --check` 和 tracking docs validator，并同步环境当前态的完成状态。
+- 影响文件：`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/changes/2026/07.md`
+- 计划状态变更：无
+- 验证结果：空白检查和 tracking docs validator 通过；未发现新增环境、依赖或模块布局风险。
+- 对 plan 的更新：自动化环境复核完成，仅保留桌面 GUI 视觉检查。
+
+## 2026-07-10 刷新环境记录到 terminal/SFTP 模块拆分
+
+- 时间：2026-07-10 19:44 +0800
+- 触发原因：用户确认拆分 `src/terminal.rs` 和 `src/sftp.rs`，需要切换环境当前态和验证边界。
+- 执行内容：确认 Rust 2024、Cargo、GPUI、alacritty terminal、Tokio 和 russh/russh-sftp 环境未变；本轮只新增现代具名子模块并保持 root re-export，不新增依赖或修改 manifest/lock。
+- 影响文件：`src/terminal.rs`，`src/terminal/`，`src/sftp.rs`，`src/sftp/`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/project-map.md`，`docs/project-implementation-tracker/changes/2026/07.md`
+- 计划状态变更：无
+- 验证结果：本机工具链和现有 78 项测试基线可用；拆分后按 `AGENTS.md` 执行格式化、定向测试、`cargo check`、完整测试、空白检查和 tracking validator。
+- 对 plan 的更新：允许开工；重点保护 SFTP 单 worker 所有权和既有 `crate::terminal::*` / `crate::sftp::*` 路径。
+
+## 2026-07-10 完成 terminal/SFTP 模块拆分环境验证
+
+- 时间：2026-07-10 20:21 +0800
+- 触发原因：terminal/SFTP 具名子模块迁移完成，需要记录最终工具链和测试结果。
+- 执行内容：确认 root entry 收敛、兼容 re-export、最小 `pub(super)` 和单 SFTP runtime 所有权；未新增依赖、`mod.rs` 或 manifest/lock 修改。
+- 影响文件：`src/terminal.rs`，`src/terminal/`，`src/sftp.rs`，`src/sftp/`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/project-map.md`，`docs/project-implementation-tracker/changes/2026/07.md`
+- 计划状态变更：无
+- 验证结果：terminal 38 项与 SFTP 14 项定向测试通过；`cargo check` 和 `cargo test --quiet`（78 项）通过；`git diff --check` 和 tracking docs validator 通过；保留既有 `block v0.1.6` future-incompat warning。
+- 对 plan 的更新：运行环境、依赖和业务行为不变；允许按功能、重构、文档三个 review unit 提交。

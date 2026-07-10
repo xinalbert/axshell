@@ -2,14 +2,14 @@
 
 ## 当前目标
 
-- 目标：让超大 SFTP 目录按需加载后续页面，同时保持总内存预算和 cursor 的完整回收。
-- 交付物：持久目录 cursor、显式加载更多操作、页结果追加状态、EOF/上限/切换的 cursor 回收、回归测试和实施记录。
+- 目标：按 `AGENTS.md` 的现代 Rust 模块布局拆分过大的 `src/terminal.rs` 和 `src/sftp.rs`，保持行为与现有公开路径兼容。
+- 交付物：terminal backend/tab/input/CWD/transfer 子模块，SFTP model/session/browse/preview/transfer/archive/worker 子模块，兼容 re-export、迁移后的测试和项目地图。
 
 ## 项目边界
 
 - 根目录：`<repo-root>`
-- 当前范围：`src/sftp.rs`，`src/terminal.rs`，`src/app/actions/sftp.rs`，`src/app/views/sftp_panel.rs`，`src/app/lifecycle/event_loop.rs`，`locales/en.yml`，`locales/zh-CN.yml`，`docs/project-env-audit/`，`docs/project-implementation-tracker/`
-- 不在本轮范围内：自动滚动触发加载、全目录排序、文件预览 128 KiB 上限、传输协议、terminal scrollback 容量、remote-edit watcher、X11 relay、release/tag、提交。
+- 当前范围：`src/terminal.rs`，`src/terminal/`，`src/sftp.rs`，`src/sftp/`，直接受模块可见性影响的 `src/` 调用点，`docs/project-env-audit/`，`docs/project-implementation-tracker/`
+- 不在本轮范围内：改变 terminal/SFTP 业务行为、协议、并发所有权、公开 API 名称、依赖、`Cargo.toml`、`Cargo.lock`、release/tag 和上一轮标签功能行为。
 
 ## 当前状态
 
@@ -22,37 +22,39 @@
 
 | Step | Status | Deliverable | Verification | Notes |
 | --- | --- | --- | --- | --- |
-| P1 | completed | 分页 cursor、事件和 UI 路径定位 | 已读取 SFTP worker、事件/UI state、列表虚拟化和 `russh-sftp 2.3.0` | raw directory handle 可跨多次 `READDIR` 复用 |
-| P2 | completed | 持久 cursor、页追加和显式加载更多 | `rustfmt --edition 2024`、`cargo check` | 每页 250 项，保留 2,000 项/2 MiB 总预算和 30 秒读取 timeout |
-| P3 | completed | 回归验证和实施记录收口 | `cargo test --quiet`、`git diff --check`、tracking validator | GUI 多页、EOF、目录切换和总上限验证仍待执行 |
+| P1 | completed | 大文件职责、依赖和公开路径清单 | 已统计文件行数、符号分布、调用点和现有子模块 | `sftp.rs` 2542 行，`terminal.rs` 1505 行 |
+| P2 | completed | terminal 子模块与入口兼容 re-export | `rustfmt --edition 2024`、terminal 定向测试、`cargo check` | backend、tab、listener、key encoding、CWD 和 transfer 已迁移 |
+| P3 | completed | SFTP 子模块与单一 worker 所有权 | `rustfmt --edition 2024`、SFTP lifecycle 测试、`cargo check` | cursor、pin、JoinSet 和 transfer flags 仍由单一 runtime 持有 |
+| P4 | completed | 项目地图、完整回归和文档收口 | `cargo test --quiet`、`git diff --check`、tracking validator | 不新增 `mod.rs`，保持 root entry 文件 |
 
 ## 已完成
 
-- 已确认普通浏览和目录预览都经由高层 `SftpSession::read_dir()`；该 API 在依赖中连续请求至 EOF 并将全部条目收集到 `Vec` 后才返回。
-- 已确认 UI 在 render 时还会克隆和排序保留条目，因此只限制 backend event queue 不能限制单个目录的峰值。
-- 已确认 `RawSftpSession::opendir/readdir/close` 为公开 API，可按服务端批次采集、在预算耗尽时关闭目录句柄；不需要修改锁定依赖。
-- 已有目录浏览最多保留 2,000 条或 2 MiB 名称/路径数据，目录预览最多保留 200 条及 128 KiB 内容预算。
-- 已确认现有短生命周期 raw session 不能继续读取下一页；`RawSftpSession::opendir` 返回的 handle 可在同一会话上重复 `readdir`。
-- 已选择显式“加载更多”而非滚动触发，避免滚动/渲染重入造成重复加载；全目录排序不在本轮范围，仍只对已加载结果排序。
-- 已实现每页最多 250 项的持久 cursor；`SftpEntries` 事件携带追加、是否还有更多和是否达到总预算，UI 以虚拟列表追加结果并在页脚显示“加载更多”。
-- 已在 EOF、预算耗尽、目录切换、worker 关闭、worker 空闲重建和读取失败时关闭 cursor；加载失败会复位 UI 分页状态。
+- 已确认 `src/sftp.rs` 同时承担 worker、分页浏览、预览、传输、远程操作和归档，`run_sftp()` 单函数约 670 行。
+- 已确认 `src/terminal.rs` 同时承担 backend 协议、terminal tab、listener、按键编码、OSC/CWD 解析、SFTP UI state 和 transfer 模型。
+- 已确认项目只有根级 `AGENTS.md`；`src/sftp.rs` 和 `src/terminal.rs` 必须保留为模块入口，新子模块使用 `foo.rs` / `foo/bar.rs`，不能新增 `mod.rs`。
+- 已确认当前工作树包含上一轮标签功能的未提交改动；本轮保留这些改动，不修改其行为。
+- 已将 `src/terminal.rs` 收敛为模块入口；新增 `backend.rs`、`listener.rs`、`tab.rs`、`key_encoding.rs`、`cwd.rs` 和 `transfer.rs`，并通过 re-export 保持原路径。
+- terminal 拆分后 38 项 `terminal::` 定向测试通过；期间仅补充 sibling 路径、`pub(super)` 和 trait import。
+- 已将 `src/sftp.rs` 收敛为模块入口；model、session、browse、preview、transfer、archive、operations、worker 和 `worker/runtime.rs` 已按职责拆分。
+- `SftpHandle`、`SftpCommand`、work pin 和 shutdown controller 保留在 `worker.rs`；cursor、active transfer flags 和 `JoinSet` 仍由单一 `worker/runtime.rs` 持有。
+- SFTP 拆分后 `cargo check` 与 14 项 `sftp::` 定向测试通过，迁移产生的 unused imports 已清理。
+- `src/terminal.rs` 从 1505 行收敛为 17 行入口，`src/sftp.rs` 从 2542 行收敛为 20 行入口；最大业务文件按单一职责保留为 `worker/runtime.rs` 768 行和 `tab.rs` 615 行。
+- 项目地图已刷新为新模块职责；没有新增 `mod.rs`，`Cargo.toml` / `Cargo.lock` 未修改。
 
 ## 验证
 
-- 已完成：环境预检、项目地图、分页 cursor/API/UI 接线、`rustfmt --edition 2024`、`cargo check`、定向 SFTP 测试（7 项）、`cargo test --quiet`（76 项）、`git diff --check` 和 tracking docs validator。
-- 未完成：GUI 手工验证多页目录、EOF、总上限、目录切换和 idle worker 重建。
+- 已完成：环境预检、文件规模/调用点审查、terminal/SFTP 拆分、全量格式化、38 项 terminal 定向测试、14 项 SFTP 定向测试、`cargo check`、`cargo test --quiet`（78 项）、`git diff --check` 和 tracking docs validator。
+- 未完成：无自动化验证缺口；上一轮标签视觉行为仍需桌面 GUI 手工检查，本轮纯模块迁移无新增 GUI 行为。
 
 ## 风险与阻塞
 
-- 风险一：总预算达到后仍会停止加载；必须维持截断提示，不能让用户误认为目录已到 EOF。
-- 风险二：raw SFTP 的单个服务端 `NAME` 响应仍须先解码；分页限制跨批次累积和 UI 保留，不替代协议级的单包字节限制。
-- 风险三：持久 cursor 占用一个临时 SFTP channel；必须在 EOF、预算耗尽、导航、错误和 worker 关闭时释放。
-- 无阻塞：GUI 交互行为需在桌面端人工确认。
+- 剩余风险：`worker/runtime.rs` 仍有 768 行，但职责已收敛为单一命令循环；继续拆分 handler 需要引入运行时上下文，不应和本轮纯迁移混在同一提交。
+- 无阻塞；必要内部接口只提升到 `pub(super)`，SFTP 单 worker 所有权和 root 兼容路径均已保留。
 
 ## 下一步
 
-- 在 GUI 中连接至少 251 项的 SFTP 目录，重复点击“加载更多”，验证 EOF 自动隐藏按钮、总上限提示，以及切换目录或空闲回收后的 cursor 回收。
+- 后续若继续缩短 `worker/runtime.rs`，单独设计 command handler context 并保持同一所有权；桌面端补做上一轮标签视觉检查。
 
 ## 最后更新时间
 
-- 2026-07-10 17:41 +0800
+- 2026-07-10 20:21 +0800
