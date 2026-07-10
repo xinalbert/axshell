@@ -6,6 +6,7 @@ impl AxShell {
         let selected = self.active_workspace_tab_index(&workspace_tabs);
         let is_integrated =
             self.active_title_bar_style == crate::session::config::TitleBarStyle::Integrated;
+        let color_inactive_tabs = self.config.color_inactive_tabs();
 
         h_flex()
             .flex_1()
@@ -25,47 +26,57 @@ impl AxShell {
                             .selected_index(selected)
                             .children(workspace_tabs.iter().enumerate().map(|(ix, tab)| {
                                 match tab.page {
-                                    WorkspacePage::Settings => Tab::new()
-                                        .min_w(px(120.))
-                                        .prefix(div().w(px(5.)).h(px(32.)).bg(cx.theme().primary))
-                                        .child(
-                                            div()
-                                                .min_w(px(0.))
-                                                .overflow_hidden()
-                                                .text_ellipsis()
-                                                .whitespace_nowrap()
-                                                .when(self.workspace_tab_selected(tab), |this| {
-                                                    this.font_weight(FontWeight::BOLD)
-                                                        .text_color(cx.theme().primary)
-                                                        .text_base()
-                                                })
-                                                .child(t!("settings").to_string()),
-                                        )
-                                        .on_mouse_down(MouseButton::Left, |_, window, cx| {
-                                            window.prevent_default();
-                                            cx.stop_propagation();
-                                        })
-                                        .on_click(cx.listener(|this, _, _, cx| {
-                                            cx.stop_propagation();
-                                            this.open_settings_page(cx);
-                                        }))
-                                        .suffix(
-                                            Button::new("settings-tab-close")
-                                                .ghost()
-                                                .xsmall()
-                                                .icon(IconName::Close)
-                                                .mr(px(5.))
-                                                .on_mouse_down(
-                                                    MouseButton::Left,
-                                                    |_, window, cx| {
-                                                        window.prevent_default();
-                                                        cx.stop_propagation();
-                                                    },
-                                                )
-                                                .on_click(cx.listener(|this, _, _, cx| {
-                                                    this.close_settings_page(cx);
-                                                })),
-                                        ),
+                                    WorkspacePage::Settings => {
+                                        let selected = self.workspace_tab_selected(tab);
+                                        let indicator_color = if selected || color_inactive_tabs {
+                                            cx.theme().primary
+                                        } else {
+                                            cx.theme().muted_foreground.opacity(0.5)
+                                        };
+
+                                        Tab::new()
+                                            .min_w(px(120.))
+                                            .max_w(px(WORKSPACE_TAB_MAX_WIDTH))
+                                            .prefix(div().w(px(5.)).h(px(32.)).bg(indicator_color))
+                                            .child(
+                                                div()
+                                                    .min_w(px(0.))
+                                                    .overflow_hidden()
+                                                    .text_ellipsis()
+                                                    .whitespace_nowrap()
+                                                    .when(selected, |this| {
+                                                        this.font_weight(FontWeight::BOLD)
+                                                            .text_color(cx.theme().primary)
+                                                            .text_base()
+                                                    })
+                                                    .child(t!("settings").to_string()),
+                                            )
+                                            .on_mouse_down(MouseButton::Left, |_, window, cx| {
+                                                window.prevent_default();
+                                                cx.stop_propagation();
+                                            })
+                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                cx.stop_propagation();
+                                                this.open_settings_page(cx);
+                                            }))
+                                            .suffix(
+                                                Button::new("settings-tab-close")
+                                                    .ghost()
+                                                    .xsmall()
+                                                    .icon(IconName::Close)
+                                                    .mr(px(5.))
+                                                    .on_mouse_down(
+                                                        MouseButton::Left,
+                                                        |_, window, cx| {
+                                                            window.prevent_default();
+                                                            cx.stop_propagation();
+                                                        },
+                                                    )
+                                                    .on_click(cx.listener(|this, _, _, cx| {
+                                                        this.close_settings_page(cx);
+                                                    })),
+                                            )
+                                    }
                                     page => {
                                         let group_index = tab.group_index.unwrap_or(ix);
                                         let group_id = tab.group_id.clone().unwrap_or_default();
@@ -92,7 +103,8 @@ impl AxShell {
                                         } else {
                                             pane_ids.first().cloned().unwrap_or_default()
                                         };
-                                        let dot_color = pane_ids
+                                        let selected = self.workspace_tab_selected(tab);
+                                        let status_color = pane_ids
                                             .first()
                                             .and_then(|id| {
                                                 self.tabs.iter().find(|tab| tab.id == *id)
@@ -105,6 +117,11 @@ impl AxShell {
                                                 }
                                             })
                                             .unwrap_or(cx.theme().success);
+                                        let indicator_color = if selected || color_inactive_tabs {
+                                            status_color
+                                        } else {
+                                            cx.theme().muted_foreground.opacity(0.5)
+                                        };
                                         let label = match page {
                                             WorkspacePage::Terminal => {
                                                 let title = group
@@ -126,7 +143,6 @@ impl AxShell {
                                             }
                                             WorkspacePage::Settings => unreachable!(),
                                         };
-                                        let selected = self.workspace_tab_selected(tab);
                                         let target_page = page;
                                         let target_group_id = group_id.clone();
                                         let close_sftp_group_id = group_id.clone();
@@ -136,7 +152,8 @@ impl AxShell {
 
                                         Tab::new()
                                             .min_w(px(if is_terminal_tab { 96. } else { 88. }))
-                                            .prefix(div().w(px(5.)).h(px(32.)).bg(dot_color))
+                                            .max_w(px(WORKSPACE_TAB_MAX_WIDTH))
+                                            .prefix(div().w(px(5.)).h(px(32.)).bg(indicator_color))
                                             .child(
                                                 div()
                                                     .min_w(px(0.))

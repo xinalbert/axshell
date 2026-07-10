@@ -8,6 +8,7 @@ pub(super) fn settings_workspace_page(
     shell: &AxShell,
 ) -> SettingPage {
     let lock_layout = shell.config.lock_layout();
+    let color_inactive_tabs = shell.config.color_inactive_tabs();
 
     SettingPage::new(t!("settings_workspace").to_string())
         .icon(IconName::LayoutDashboard)
@@ -33,6 +34,26 @@ pub(super) fn settings_workspace_page(
                         }),
                     )
                     .description(t!("lock_layout_hint").to_string()),
+                )
+                .item(
+                    SettingItem::new(
+                        t!("color_inactive_tabs").to_string(),
+                        SettingField::render({
+                            let view = view.clone();
+                            move |_, window, _cx| {
+                                Switch::new("color-inactive-tabs")
+                                    .small()
+                                    .checked(color_inactive_tabs)
+                                    .on_click(window.listener_for(&view, |this, checked, _, cx| {
+                                        this.config.set_color_inactive_tabs(*checked);
+                                        let _ = this.config.save();
+                                        cx.notify();
+                                    }))
+                                    .into_any_element()
+                            }
+                        }),
+                    )
+                    .description(t!("color_inactive_tabs_hint").to_string()),
                 )
                 .item(
                     SettingItem::new(

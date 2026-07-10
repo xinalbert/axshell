@@ -74,6 +74,8 @@ pub struct ConfigFile {
     pub deep_sleep_after_minutes: u32,
     #[serde(default)]
     pub lock_layout: bool,
+    #[serde(default)]
+    pub color_inactive_tabs: bool,
     #[serde(default = "default_monitoring_position")]
     pub monitoring_position: String,
     #[serde(default = "default_show_monitoring_dashboard")]
@@ -437,6 +439,7 @@ impl Default for ConfigFile {
             sftp_transfer_close_behavior: default_sftp_transfer_close_behavior(),
             deep_sleep_after_minutes: default_deep_sleep_after_minutes(),
             lock_layout: false,
+            color_inactive_tabs: false,
             monitoring_position: default_monitoring_position(),
             show_monitoring_dashboard: default_show_monitoring_dashboard(),
             sidebar_collapsed: false,
@@ -1204,6 +1207,14 @@ impl ConfigStore {
         self.cache.lock_layout = val;
     }
 
+    pub fn color_inactive_tabs(&self) -> bool {
+        self.cache.color_inactive_tabs
+    }
+
+    pub fn set_color_inactive_tabs(&mut self, val: bool) {
+        self.cache.color_inactive_tabs = val;
+    }
+
     pub fn sidebar_collapsed(&self) -> bool {
         self.cache.sidebar_collapsed
     }
@@ -1609,5 +1620,30 @@ mod deep_sleep_settings_tests {
             normalize_deep_sleep_after_minutes(2),
             default_deep_sleep_after_minutes()
         );
+    }
+}
+
+#[cfg(test)]
+mod tab_color_settings_tests {
+    use super::ConfigFile;
+
+    #[test]
+    fn inactive_tab_colors_default_to_disabled_for_existing_configs() {
+        let config: ConfigFile = serde_json::from_str("{}").expect("config should deserialize");
+
+        assert!(!config.color_inactive_tabs);
+    }
+
+    #[test]
+    fn inactive_tab_colors_round_trip_when_enabled() {
+        let config = ConfigFile {
+            color_inactive_tabs: true,
+            ..ConfigFile::default()
+        };
+        let raw = serde_json::to_string(&config).expect("config should serialize");
+        let restored: ConfigFile =
+            serde_json::from_str(&raw).expect("config should deserialize after serialization");
+
+        assert!(restored.color_inactive_tabs);
     }
 }

@@ -24,7 +24,9 @@ use rust_i18n::t;
 use crate::{
     AxShell, PaneLayout,
     app::actions::sftp::is_editable_text_file,
-    app::constants::{COLLAPSED_SIDEBAR_WIDTH, SIDEBAR_WIDTH, TERMINAL_KEY_CONTEXT},
+    app::constants::{
+        COLLAPSED_SIDEBAR_WIDTH, SIDEBAR_WIDTH, TERMINAL_KEY_CONTEXT, WORKSPACE_TAB_MAX_WIDTH,
+    },
     app::{
         LocalFileEntry, SftpContextMenuTarget, SftpSortColumn, SftpTransferTab, SortDirection,
         WorkspacePage,
