@@ -131,9 +131,12 @@ Available controls include:
 
 - Show or hide the monitoring dashboard
 - Place monitoring at the bottom or in the sidebar
+- Deep-sleep delay after the window loses focus: Off, 1, 5, 15, or 30 minutes, with 5 minutes as the default
 - Lock workspace layout
 - Right-click copy and paste
 - Terminal keyword highlighting
+
+When the window loses focus, monitoring, theme polling, and cursor blinking stop immediately while terminals, SSH commands, and SFTP transfers continue. Deep sleep retains only low-frequency backend event handling; refocusing restores the focused page's rendering and monitoring immediately. Deep sleep does not disconnect SSH or local terminals.
 
 ### Configuration Sync
 
