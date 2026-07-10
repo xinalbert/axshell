@@ -6,10 +6,12 @@ use gpui_component_assets::Assets;
 mod app;
 mod backend;
 mod config;
+mod events;
+mod monitoring;
+mod platform;
 mod session;
 mod sftp;
 mod sync;
-mod system;
 mod terminal;
 
 rust_i18n::i18n!("locales", fallback = "en");

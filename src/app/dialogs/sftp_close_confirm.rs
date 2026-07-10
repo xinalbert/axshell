@@ -21,8 +21,7 @@ impl AxShell {
                 transfer.tab_id == group_id
                     && matches!(
                         transfer.state,
-                        crate::terminal::TransferState::Running
-                            | crate::terminal::TransferState::Paused
+                        crate::sftp::TransferState::Running | crate::sftp::TransferState::Paused
                     )
             })
             .count();

@@ -13,7 +13,9 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use uuid::Uuid;
 use walkdir::WalkDir;
 
-use crate::terminal::{BackendEvent, BackendEventSender, TransferState};
+use crate::events::{BackendEvent, BackendEventSender};
+
+use super::model::TransferState;
 
 pub(super) struct TransferStateFlag(pub(super) Arc<AtomicU8>);
 

@@ -7,7 +7,7 @@ use serde_json::{Map as JsonMap, Value as JsonValue};
 
 use crate::{
     AxShell,
-    session::config::{ConfigStore, CustomThemeModeConfig},
+    config::{ConfigStore, CustomThemeModeConfig},
 };
 
 pub(crate) const EMBEDDED_THEME_JSONS: &[&str] = &[

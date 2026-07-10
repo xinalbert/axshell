@@ -4,7 +4,6 @@ mod about;
 mod appearance;
 mod custom;
 mod font_page;
-mod fonts;
 mod help;
 mod keybindings;
 mod language;

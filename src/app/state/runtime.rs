@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use tokio::runtime::Runtime;
 
-use crate::terminal::{BackendEvent, BackendEventSender};
+use crate::events::{BackendEvent, BackendEventSender};
 
 pub(crate) struct RuntimeState {
     pub(crate) runtime: Runtime,

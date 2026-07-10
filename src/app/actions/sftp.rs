@@ -11,7 +11,6 @@ use crate::{
     AxShell, SftpContextMenuState,
     app::{LocalFileEntry, SftpContextMenuTarget, WorkspacePage},
     sftp::{RemoteEntry, SftpHandle},
-    terminal,
 };
 
 pub(crate) fn is_editable_text_file(filename: &str) -> bool {
@@ -154,14 +153,14 @@ impl AxShell {
         Ok(entries)
     }
 
-    pub(crate) fn active_sftp(&self) -> Option<&terminal::SftpUiState> {
+    pub(crate) fn active_sftp(&self) -> Option<&crate::app::SftpUiState> {
         self.active_group
             .as_ref()
             .and_then(|id| self.tab_groups.iter().find(|g| &g.id == id))
             .and_then(|g| g.sftp.as_ref())
     }
 
-    pub(crate) fn active_sftp_mut(&mut self) -> Option<&mut terminal::SftpUiState> {
+    pub(crate) fn active_sftp_mut(&mut self) -> Option<&mut crate::app::SftpUiState> {
         let active_id = self.active_group.clone()?;
         self.tab_groups
             .iter_mut()
@@ -178,7 +177,7 @@ impl AxShell {
         })
     }
 
-    fn session_for_sftp_group(&self, group_id: &str) -> Option<crate::session::config::Session> {
+    fn session_for_sftp_group(&self, group_id: &str) -> Option<crate::session::Session> {
         let group = self
             .tab_groups
             .iter()
@@ -291,8 +290,7 @@ impl AxShell {
             transfer.tab_id == group_id
                 && matches!(
                     transfer.state,
-                    crate::terminal::TransferState::Running
-                        | crate::terminal::TransferState::Paused
+                    crate::sftp::TransferState::Running | crate::sftp::TransferState::Paused
                 )
         })
     }
@@ -310,8 +308,8 @@ impl AxShell {
                     transfer.tab_id == group_id
                         && matches!(
                             transfer.state,
-                            crate::terminal::TransferState::Running
-                                | crate::terminal::TransferState::Paused
+                            crate::sftp::TransferState::Running
+                                | crate::sftp::TransferState::Paused
                         )
                 })
                 .map(|transfer| transfer.info.id.clone())
@@ -326,11 +324,11 @@ impl AxShell {
                     if transfer.tab_id == group_id
                         && matches!(
                             transfer.state,
-                            crate::terminal::TransferState::Running
-                                | crate::terminal::TransferState::Paused
+                            crate::sftp::TransferState::Running
+                                | crate::sftp::TransferState::Paused
                         )
                     {
-                        transfer.state = crate::terminal::TransferState::Interrupted(
+                        transfer.state = crate::sftp::TransferState::Interrupted(
                             "SFTP connection closed".to_string(),
                         );
                     }
@@ -402,30 +400,30 @@ impl AxShell {
     }
 
     fn transfer_belongs_to_sftp_tab(
-        transfer: &crate::terminal::Transfer,
+        transfer: &crate::sftp::Transfer,
         tab: crate::app::SftpTransferTab,
     ) -> bool {
         match tab {
             crate::app::SftpTransferTab::Active => matches!(
                 transfer.state,
-                crate::terminal::TransferState::Running | crate::terminal::TransferState::Paused
+                crate::sftp::TransferState::Running | crate::sftp::TransferState::Paused
             ),
             crate::app::SftpTransferTab::Failed => matches!(
                 transfer.state,
-                crate::terminal::TransferState::Failed(_)
-                    | crate::terminal::TransferState::Interrupted(_)
-                    | crate::terminal::TransferState::Zombie(_)
+                crate::sftp::TransferState::Failed(_)
+                    | crate::sftp::TransferState::Interrupted(_)
+                    | crate::sftp::TransferState::Zombie(_)
             ),
             crate::app::SftpTransferTab::Completed => {
-                matches!(transfer.state, crate::terminal::TransferState::Completed)
+                matches!(transfer.state, crate::sftp::TransferState::Completed)
             }
         }
     }
 
     fn remove_local_download_output_for_transfer(
-        transfer: &crate::terminal::Transfer,
+        transfer: &crate::sftp::Transfer,
     ) -> Option<Result<(), String>> {
-        if !matches!(transfer.info.kind, crate::terminal::TransferType::Download) {
+        if !matches!(transfer.info.kind, crate::sftp::TransferType::Download) {
             return None;
         }
         if transfer.info.target.trim().is_empty() || transfer.info.name.trim().is_empty() {
@@ -454,7 +452,7 @@ impl AxShell {
             .transfers
             .iter()
             .filter(|transfer| Self::transfer_belongs_to_sftp_tab(transfer, tab))
-            .filter(|transfer| matches!(transfer.state, crate::terminal::TransferState::Running))
+            .filter(|transfer| matches!(transfer.state, crate::sftp::TransferState::Running))
             .map(|transfer| (transfer.tab_id.clone(), transfer.info.id.clone()))
             .collect::<Vec<_>>();
 
@@ -476,7 +474,7 @@ impl AxShell {
             .transfers
             .iter()
             .filter(|transfer| Self::transfer_belongs_to_sftp_tab(transfer, tab))
-            .filter(|transfer| matches!(transfer.state, crate::terminal::TransferState::Paused))
+            .filter(|transfer| matches!(transfer.state, crate::sftp::TransferState::Paused))
             .map(|transfer| (transfer.tab_id.clone(), transfer.info.id.clone()))
             .collect::<Vec<_>>();
 
@@ -509,7 +507,7 @@ impl AxShell {
         for transfer in &transfers {
             if matches!(
                 transfer.state,
-                crate::terminal::TransferState::Running | crate::terminal::TransferState::Paused
+                crate::sftp::TransferState::Running | crate::sftp::TransferState::Paused
             ) && let Some(handle) = self.ensure_sftp_handle_for_group(&transfer.tab_id)
             {
                 self.mark_sftp_activity_for_group(&transfer.tab_id);

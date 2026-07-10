@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use gpui::SharedString;
 
-use crate::system::{SystemSampler, SystemSnapshot};
+use crate::monitoring::{SystemSampler, SystemSnapshot};
 
 pub(crate) struct MonitoringState {
     pub(crate) status: Option<SharedString>,

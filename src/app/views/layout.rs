@@ -43,7 +43,7 @@ impl Render for AxShell {
         let show_bottom_monitoring = self.config.show_monitoring_dashboard()
             && self.config.monitoring_position() == "Bottom";
         let show_platform_menu_bar = cfg!(any(target_os = "windows", target_os = "linux"))
-            && self.active_title_bar_style == crate::session::config::TitleBarStyle::Native;
+            && self.active_title_bar_style == crate::config::TitleBarStyle::Native;
         let sftp_context_remote_ready = self.active_sftp().is_some();
 
         let body_panel = v_flex()
@@ -80,8 +80,7 @@ impl Render for AxShell {
                             .relative()
                             .overflow_hidden()
                             .when(
-                                self.active_title_bar_style
-                                    == crate::session::config::TitleBarStyle::Native,
+                                self.active_title_bar_style == crate::config::TitleBarStyle::Native,
                                 |this| {
                                     this.child(
                                         div()
@@ -116,8 +115,7 @@ impl Render for AxShell {
                     .relative()
                     .overflow_hidden()
                     .when(
-                        self.active_title_bar_style
-                            == crate::session::config::TitleBarStyle::Native,
+                        self.active_title_bar_style == crate::config::TitleBarStyle::Native,
                         |this| {
                             this.child(
                                 div()
@@ -248,7 +246,7 @@ impl Render for AxShell {
                     cx.propagate();
                 }
             }))
-            .when(self.active_title_bar_style == crate::session::config::TitleBarStyle::Integrated, |this| {
+            .when(self.active_title_bar_style == crate::config::TitleBarStyle::Integrated, |this| {
                 this.child(
                     div()
                         .id("title-bar")

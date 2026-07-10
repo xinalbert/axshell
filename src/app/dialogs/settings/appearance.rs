@@ -197,10 +197,10 @@ pub(super) fn settings_appearance_page(
                             Button::new("title-bar-style-dropdown")
                                 .small()
                                 .label(match title_bar_style {
-                                    crate::session::config::TitleBarStyle::Native => {
+                                    crate::config::TitleBarStyle::Native => {
                                         t!("title_bar_native").to_string()
                                     }
-                                    crate::session::config::TitleBarStyle::Integrated => {
+                                    crate::config::TitleBarStyle::Integrated => {
                                         t!("title_bar_integrated").to_string()
                                     }
                                 })
@@ -211,13 +211,13 @@ pub(super) fn settings_appearance_page(
                                             PopupMenuItem::new(t!("title_bar_native").to_string())
                                                 .checked(
                                                     title_bar_style
-                                                        == crate::session::config::TitleBarStyle::Native,
+                                                        == crate::config::TitleBarStyle::Native,
                                                 )
                                                 .on_click(window.listener_for(
                                                     &view,
                                                     |this, _, _, cx| {
                                                         this.config.set_title_bar_style(
-                                                            crate::session::config::TitleBarStyle::Native,
+                                                            crate::config::TitleBarStyle::Native,
                                                         );
                                                         let _ = this.config.save();
                                                         cx.notify();
@@ -231,13 +231,13 @@ pub(super) fn settings_appearance_page(
                                                 )
                                                 .checked(
                                                     title_bar_style
-                                                        == crate::session::config::TitleBarStyle::Integrated,
+                                                        == crate::config::TitleBarStyle::Integrated,
                                                 )
                                                 .on_click(window.listener_for(
                                                     &view,
                                                     |this, _, _, cx| {
                                                         this.config.set_title_bar_style(
-                                                            crate::session::config::TitleBarStyle::Integrated,
+                                                            crate::config::TitleBarStyle::Integrated,
                                                         );
                                                         let _ = this.config.save();
                                                         cx.notify();

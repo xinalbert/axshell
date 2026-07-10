@@ -6,7 +6,7 @@ use gpui_component::input::{InputEvent, InputState};
 use crate::{
     AxShell,
     app::state::lifecycle::WindowLifecycleState,
-    terminal::{BACKEND_EVENT_QUEUE_CAPACITY, BackendEvent},
+    events::{BACKEND_EVENT_QUEUE_CAPACITY, BackendEvent},
 };
 
 const ACTIVE_PUMP_INTERVAL: Duration = Duration::from_millis(16);
@@ -59,8 +59,8 @@ impl AxShell {
                         let selecting = this.active_terminal_has_selection();
                         let is_blinking = matches!(
                             this.appearance.cursor_style,
-                            crate::session::config::CursorStyle::Blink
-                                | crate::session::config::CursorStyle::BeamBlink
+                            crate::config::CursorStyle::Blink
+                                | crate::config::CursorStyle::BeamBlink
                         );
                         let blink_due = this.lifecycle.is_foreground()
                             && !selecting
@@ -129,7 +129,7 @@ impl AxShell {
         }
 
         if self.lifecycle.is_foreground() {
-            self.monitoring.last_sample = now - crate::system::SystemSampler::interval();
+            self.monitoring.last_sample = now - crate::monitoring::SystemSampler::interval();
             self.appearance.last_theme_sync = now - Duration::from_secs(1);
             self.sync_theme_if_due(cx);
             self.schedule_terminal_refresh();
@@ -468,13 +468,13 @@ impl AxShell {
                     let tab_title = self.transfer_source_title(&tab_id);
                     self.transfers.insert(
                         0,
-                        crate::terminal::Transfer {
+                        crate::sftp::Transfer {
                             tab_id,
                             tab_title,
                             info,
                             transferred: 0,
                             total: None,
-                            state: crate::terminal::TransferState::Running,
+                            state: crate::sftp::TransferState::Running,
                         },
                     );
                     if self.transfers.len() > 100 {
@@ -631,7 +631,7 @@ impl AxShell {
         if !self.lifecycle.is_foreground() || !self.is_monitoring_visible() {
             return false;
         }
-        if self.monitoring.last_sample.elapsed() >= crate::system::SystemSampler::interval() {
+        if self.monitoring.last_sample.elapsed() >= crate::monitoring::SystemSampler::interval() {
             self.monitoring.last_sample = std::time::Instant::now();
             if let Some(ref tab_id) = self.monitoring.system_tab_id.clone()
                 && self.tabs.iter().any(|t| {

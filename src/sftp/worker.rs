@@ -8,8 +8,8 @@ use tokio::{
 };
 
 use crate::{
-    session::config::Session,
-    terminal::{BackendEvent, BackendEventSender},
+    events::{BackendEvent, BackendEventSender},
+    session::Session,
 };
 
 use self::runtime::run_sftp;

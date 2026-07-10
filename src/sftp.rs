@@ -10,7 +10,7 @@ mod transfer;
 mod worker;
 
 pub use self::{
-    model::{PreviewData, RemoteEntry},
+    model::{PreviewData, RemoteEntry, Transfer, TransferInfo, TransferState, TransferType},
     path::format_mtime,
     worker::spawn_sftp,
 };

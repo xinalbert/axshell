@@ -14,7 +14,7 @@ use crate::{
             ssh_client_config,
         },
     },
-    session::config::{AuthMethod, Session, SshConnectionMode, ordered_ssh_connection_modes},
+    session::{AuthMethod, Session, SshConnectionMode, ordered_ssh_connection_modes},
 };
 
 pub(super) async fn connect_and_authenticate(

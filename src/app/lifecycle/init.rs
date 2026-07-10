@@ -9,13 +9,15 @@ use crate::{
     AxShell, PaneLayout,
     app::{
         LocalFileBrowserState, constants,
+        search::SearchState,
         state::{
             appearance::AppearanceState, lifecycle::LifecycleState, monitoring::MonitoringState,
-            runtime::RuntimeState, search::SearchState,
+            runtime::RuntimeState,
         },
     },
-    session::config::{AuthMethod, ConfigStore},
-    system::SystemSampler,
+    config::ConfigStore,
+    monitoring::SystemSampler,
+    session::AuthMethod,
 };
 
 impl AxShell {
@@ -118,7 +120,7 @@ impl AxShell {
         });
         let xquartz_app_path_input = cx.new(|cx| {
             InputState::new(window, cx)
-                .placeholder(crate::session::config::default_local_x_server_app_path())
+                .placeholder(crate::platform::x_server::default_app_path())
                 .default_value(config.local_x_server_app_path())
         });
         let sync_endpoint_input = cx.new(|cx| {
@@ -270,7 +272,7 @@ impl AxShell {
         _subscriptions
             .push(cx.observe_window_activation(window, Self::on_window_activation_changed));
 
-        let (events_tx, events_rx) = crate::terminal::backend_event_channel();
+        let (events_tx, events_rx) = crate::events::backend_event_channel();
         let workspace_panels = cx.new(|_| crate::app::resizable::ResizableState::default());
         let body_panels = cx.new(|_| crate::app::resizable::ResizableState::default());
         let sftp_transfer_panels = cx.new(|_| crate::app::resizable::ResizableState::default());
@@ -440,11 +442,10 @@ impl AxShell {
                 for t in &mut transfers {
                     if matches!(
                         t.state,
-                        crate::terminal::TransferState::Running
-                            | crate::terminal::TransferState::Paused
+                        crate::sftp::TransferState::Running | crate::sftp::TransferState::Paused
                     ) {
                         t.state =
-                            crate::terminal::TransferState::Zombie(t!("zombie_reason").to_string());
+                            crate::sftp::TransferState::Zombie(t!("zombie_reason").to_string());
                     }
                 }
                 transfers

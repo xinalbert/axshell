@@ -10,7 +10,7 @@ use crate::{
     app::WorkspacePage,
     app::constants::{DEFAULT_COLS, DEFAULT_ROWS},
     backend::{local, ssh},
-    session::config::{AuthMethod, Session},
+    session::{AuthMethod, Session},
     terminal::{BackendCommand, RenderSnapshot, TabKind, TerminalTab},
 };
 
@@ -369,7 +369,7 @@ impl AxShell {
     }
 
     pub(crate) fn reset_xquartz_app_path(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let default_path = crate::session::config::default_local_x_server_app_path();
+        let default_path = crate::platform::x_server::default_app_path();
         Self::set_input_value(
             &self.xquartz_app_path_input,
             default_path.clone(),
@@ -536,7 +536,7 @@ impl AxShell {
 
     pub(crate) fn change_cursor_style(
         &mut self,
-        style: crate::session::config::CursorStyle,
+        style: crate::config::CursorStyle,
         cx: &mut Context<Self>,
     ) {
         self.appearance.cursor_style = style;
@@ -619,7 +619,7 @@ impl AxShell {
             id: group_id.clone(),
             title: session.name.clone(),
             pane_root: PaneLayout::Single(id.clone()),
-            sftp: Some(crate::terminal::SftpUiState {
+            sftp: Some(crate::app::SftpUiState {
                 current_path: "/".into(),
                 status: rust_i18n::t!("sftp_connecting").to_string(),
                 entries: Vec::new(),

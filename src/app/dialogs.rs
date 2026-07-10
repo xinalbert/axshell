@@ -19,7 +19,7 @@ use gpui_component::{
 };
 use rust_i18n::t;
 
-use crate::{AxShell, session::config::AuthMethod, system::format_bytes};
+use crate::{AxShell, monitoring::format_bytes, session::AuthMethod};
 
 mod delete_confirm;
 mod selector;
@@ -27,6 +27,14 @@ mod settings;
 mod sftp_close_confirm;
 mod ssh;
 mod transfers;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DialogKind {
+    SessionSelector,
+    Transfers,
+    NewSsh,
+    SftpCloseConfirm,
+}
 
 fn escape_markdown_text(text: impl AsRef<str>) -> String {
     let text = text.as_ref();

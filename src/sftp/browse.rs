@@ -7,7 +7,7 @@ use russh_sftp::{
 };
 use rust_i18n::t;
 
-use crate::terminal::{BackendEvent, BackendEventSender};
+use crate::events::{BackendEvent, BackendEventSender};
 
 use super::{
     auth::SftpClientHandler,

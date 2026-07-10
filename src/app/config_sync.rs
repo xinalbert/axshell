@@ -4,8 +4,8 @@ use rust_i18n::t;
 
 use crate::{
     AxShell,
+    events::BackendEvent,
     sync::{self, SyncBackendCredentials, SyncCredentials, SyncPayload, SyncResult},
-    terminal::BackendEvent,
 };
 
 impl AxShell {

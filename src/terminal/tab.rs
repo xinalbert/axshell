@@ -1,5 +1,5 @@
-use crate::session::config::Session;
-use crate::sftp::{PreviewData, RemoteEntry};
+use crate::events::{BackendEvent, BackendEventSender};
+use crate::session::Session;
 use alacritty_terminal::{
     grid::{Dimensions, Scroll},
     index::{Column, Line, Point, Side},
@@ -12,10 +12,16 @@ use std::hash::{Hash, Hasher};
 use std::ops::Range;
 
 use super::{
-    backend::{BackendCommand, BackendEvent, BackendEventSender, BackendTx, TabKind},
+    backend::{BackendCommand, BackendTx},
     cwd::extract_shell_working_directory,
     listener::{TerminalListener, TerminalSize, new_term},
 };
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TabKind {
+    Local,
+    Ssh,
+}
 
 pub struct TerminalTab {
     pub id: String,
@@ -111,20 +117,6 @@ pub struct ViewportSelection {
     pub end_row: usize,
     pub end_col: usize,
     pub is_block: bool,
-}
-
-#[derive(Clone, Default)]
-pub struct SftpUiState {
-    pub current_path: String,
-    pub status: String,
-    pub entries: Vec<RemoteEntry>,
-    pub has_more_entries: bool,
-    pub loading_more_entries: bool,
-    pub reached_entries_limit: bool,
-    pub selected_path: Option<String>,
-    pub preview: Option<PreviewData>,
-    pub selected_entries: std::collections::HashSet<String>,
-    pub home_dir: String,
 }
 
 impl TerminalTab {
@@ -339,7 +331,7 @@ impl TerminalTab {
         }
 
         // Get highlights from cache or recompute, only if keyword_highlight is enabled.
-        let is_enabled = crate::session::config::ConfigStore::load()
+        let is_enabled = crate::config::ConfigStore::load()
             .map(|c| c.keyword_highlight())
             .unwrap_or(false);
 

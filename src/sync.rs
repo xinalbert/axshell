@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
-use crate::session::config::Session;
+use crate::session::Session;
 
 const SYNC_FILE_NAME: &str = "ax_shell-sync.json";
 const FORMAT_VERSION: u32 = 1;

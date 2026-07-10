@@ -5,11 +5,12 @@ use russh::{Disconnect, client};
 use tokio::time::sleep;
 
 use crate::{
-    backend::auth::{load_session_private_key, private_keys_with_algs},
-    session::config::{
-        AuthMethod, ProxyStream, Session, SshConnectionMode, ordered_ssh_connection_modes,
+    backend::{
+        auth::{load_session_private_key, private_keys_with_algs},
+        proxy::{self, ProxyStream},
     },
-    terminal::{BackendEvent, BackendEventSender},
+    events::{BackendEvent, BackendEventSender},
+    session::{AuthMethod, Session, SshConnectionMode, ordered_ssh_connection_modes},
 };
 
 use super::{ClientHandler, X11ForwardingState, legacy};
@@ -26,18 +27,17 @@ pub(super) async fn connect_and_authenticate(
         addr,
         session.user
     );
-    let status_text =
-        if let Some((ptype, phost, pport)) = crate::session::config::active_proxy(session) {
-            let pport_val = pport.unwrap_or_else(|| if ptype == "http" { 8080 } else { 1080 });
-            format!(
-                "connecting to {addr} via {} proxy {}:{}",
-                ptype.to_uppercase(),
-                phost,
-                pport_val
-            )
-        } else {
-            format!("opening tcp connection to {addr}")
-        };
+    let status_text = if let Some((ptype, phost, pport)) = proxy::active(session) {
+        let pport_val = pport.unwrap_or_else(|| if ptype == "http" { 8080 } else { 1080 });
+        format!(
+            "connecting to {addr} via {} proxy {}:{}",
+            ptype.to_uppercase(),
+            phost,
+            pport_val
+        )
+    } else {
+        format!("opening tcp connection to {addr}")
+    };
     let _ = events
         .send(BackendEvent::Status {
             tab_id: tab_id.to_string(),
@@ -283,8 +283,8 @@ pub(crate) async fn connect_transport_with_retries(
     mode: SshConnectionMode,
     events: Option<&BackendEventSender>,
 ) -> Result<Box<dyn ProxyStream>> {
-    let config = crate::session::config::ConfigStore::load()
-        .unwrap_or_else(|_| crate::session::config::ConfigStore::in_memory());
+    let config = crate::config::ConfigStore::load()
+        .unwrap_or_else(|_| crate::config::ConfigStore::in_memory());
     let retry_delays = config
         .ssh_connect_retry_delays_ms()
         .into_iter()
@@ -293,7 +293,7 @@ pub(crate) async fn connect_transport_with_retries(
     let mut attempt = 0usize;
 
     loop {
-        match crate::session::config::connect_proxy(session).await {
+        match proxy::connect(session).await {
             Ok(stream) => return Ok(stream),
             Err(err) => {
                 let Some(delay) = retry_delays.get(attempt).copied() else {

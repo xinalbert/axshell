@@ -31,8 +31,8 @@ use crate::{
         LocalFileEntry, SftpContextMenuTarget, SftpSortColumn, SftpTransferTab, SortDirection,
         WorkspacePage,
     },
+    monitoring::format_bytes,
     sftp::format_mtime,
-    system::format_bytes,
     terminal::{self, TabKind, TerminalTab},
 };
 

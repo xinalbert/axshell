@@ -6,7 +6,7 @@ use std::sync::Once;
 
 use crate::AxShell;
 use crate::app::constants::ISSUES_URL;
-use crate::session::config::ConfigStore;
+use crate::config::ConfigStore;
 
 const INSTANCE_KIND_ENV: &str = "AX_SHELL_INSTANCE_KIND";
 const INSTANCE_APP_ID_ENV: &str = "AX_SHELL_APP_ID";
@@ -464,7 +464,7 @@ pub(crate) fn launch_local_x_server_app(path: &str) -> Result<String> {
         .arg(app_path)
         .spawn()
         .with_context(|| format!("launch local X server at {}", app_path.display()))?;
-    Ok(crate::session::config::default_local_x_display())
+    Ok(crate::platform::x_server::default_display())
 }
 
 #[cfg(target_os = "windows")]
@@ -480,9 +480,9 @@ pub(crate) fn launch_local_x_server_app(path: &str) -> Result<String> {
             app_path.display()
         ));
     }
-    let display = crate::session::config::resolve_local_x_display(path, true);
+    let display = crate::platform::x_server::resolve_display(path, true);
     let mut command = std::process::Command::new(app_path);
-    for arg in crate::session::config::default_local_x_server_launch_args(path, &display) {
+    for arg in crate::platform::x_server::launch_args(path, &display) {
         command.arg(arg);
     }
     command
@@ -495,7 +495,7 @@ pub(crate) fn launch_local_x_server_app(path: &str) -> Result<String> {
 pub(crate) fn launch_local_x_server_app(path: &str) -> Result<String> {
     let path = path.trim();
     if path.is_empty() {
-        return Ok(crate::session::config::default_local_x_display());
+        return Ok(crate::platform::x_server::default_display());
     }
     let app_path = std::path::Path::new(path);
     if !app_path.exists() {
@@ -507,14 +507,14 @@ pub(crate) fn launch_local_x_server_app(path: &str) -> Result<String> {
     std::process::Command::new(app_path)
         .spawn()
         .with_context(|| format!("launch local X server at {}", app_path.display()))?;
-    Ok(crate::session::config::default_local_x_display())
+    Ok(crate::platform::x_server::default_display())
 }
 
 pub(crate) fn open_main_window(cx: &mut App) {
     let config = ConfigStore::load().unwrap_or_else(|_| ConfigStore::in_memory());
     let title_bar_style = config.effective_title_bar_style();
 
-    let _ = crate::session::config::ENV_PROXY.get_or_init(|| {
+    let _ = crate::backend::proxy::ENV_PROXY.get_or_init(|| {
         read_proxy_from_env().map(|(proxy_type, host, port, user, password)| {
             tracing::info!(
                 "[proxy] Loaded proxy configuration from environment: type={}, host={}, port={:?}, user={}",
@@ -523,7 +523,7 @@ pub(crate) fn open_main_window(cx: &mut App) {
                 port,
                 user
             );
-            crate::session::config::EnvProxy {
+            crate::backend::proxy::EnvProxy {
                 proxy_type,
                 host,
                 port,
@@ -536,7 +536,7 @@ pub(crate) fn open_main_window(cx: &mut App) {
     let mut window_options = WindowOptions::default();
     window_options.app_id = current_window_app_id();
 
-    if title_bar_style == crate::session::config::TitleBarStyle::Integrated {
+    if title_bar_style == crate::config::TitleBarStyle::Integrated {
         window_options.titlebar = Some(gpui::TitlebarOptions {
             title: None,
             appears_transparent: true,
@@ -560,7 +560,7 @@ pub(crate) fn open_main_window(cx: &mut App) {
 
     if let Some(bounds) = config.window_bounds() {
         window_options.window_bounds = Some(match bounds {
-            crate::session::config::SavedWindowBounds::Fullscreen {
+            crate::config::SavedWindowBounds::Fullscreen {
                 x,
                 y,
                 width,
@@ -569,7 +569,7 @@ pub(crate) fn open_main_window(cx: &mut App) {
                 point(px(*x), px(*y)),
                 size(px(*width), px(*height)),
             )),
-            crate::session::config::SavedWindowBounds::Maximized {
+            crate::config::SavedWindowBounds::Maximized {
                 x,
                 y,
                 width,
@@ -578,7 +578,7 @@ pub(crate) fn open_main_window(cx: &mut App) {
                 point(px(*x), px(*y)),
                 size(px(*width), px(*height)),
             )),
-            crate::session::config::SavedWindowBounds::Windowed {
+            crate::config::SavedWindowBounds::Windowed {
                 x,
                 y,
                 width,

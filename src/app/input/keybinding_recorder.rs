@@ -9,7 +9,7 @@ use gpui_component::{
 };
 use rust_i18n::t;
 
-use crate::{AxShell, session::config::ConfigStore};
+use crate::{AxShell, config::ConfigStore};
 
 gpui::actions!(
     ax_shell_workspace,

@@ -28,8 +28,8 @@ impl AxShell {
                         let can_clear = view.read(cx).transfers.iter().any(|t| {
                             !matches!(
                                 t.state,
-                                crate::terminal::TransferState::Running
-                                    | crate::terminal::TransferState::Paused
+                                crate::sftp::TransferState::Running
+                                    | crate::sftp::TransferState::Paused
                             )
                         });
 
@@ -44,8 +44,8 @@ impl AxShell {
                                         this.transfers.retain(|t| {
                                             matches!(
                                                 t.state,
-                                                crate::terminal::TransferState::Running
-                                                    | crate::terminal::TransferState::Paused
+                                                crate::sftp::TransferState::Running
+                                                    | crate::sftp::TransferState::Paused
                                             )
                                         });
                                         this.config.set_transfers(this.transfers.clone());
@@ -100,8 +100,8 @@ impl AxShell {
 
                         let mut transfers = view.read(cx).transfers.clone();
                         transfers.sort_by_key(|t| match t.state {
-                            crate::terminal::TransferState::Running
-                            | crate::terminal::TransferState::Paused => 0,
+                            crate::sftp::TransferState::Running
+                            | crate::sftp::TransferState::Paused => 0,
                             _ => 1,
                         });
 
@@ -120,16 +120,16 @@ impl AxShell {
                         }
                         let list = v_flex().gap_2().children(transfers.into_iter().map(|t| {
                             let (icon, _color) = match t.info.kind {
-                                crate::terminal::TransferType::Upload => {
+                                crate::sftp::TransferType::Upload => {
                                     (IconName::ArrowUp, cx.theme().primary)
                                 }
-                                crate::terminal::TransferType::Download => {
+                                crate::sftp::TransferType::Download => {
                                     (IconName::ArrowDown, cx.theme().success)
                                 }
                             };
 
                             let (status_text, actions) = match t.state {
-                                crate::terminal::TransferState::Running => {
+                                crate::sftp::TransferState::Running => {
                                     let percent = t
                                         .total
                                         .map(|tot| {
@@ -146,10 +146,10 @@ impl AxShell {
                                         )
                                     } else {
                                         match t.info.kind {
-                                            crate::terminal::TransferType::Upload => {
+                                            crate::sftp::TransferType::Upload => {
                                                 format!("{}...", t!("uploading"))
                                             }
-                                            crate::terminal::TransferType::Download => {
+                                            crate::sftp::TransferType::Download => {
                                                 format!("{}...", t!("downloading"))
                                             }
                                         }
@@ -188,7 +188,7 @@ impl AxShell {
                                     }));
                                     (txt, h_flex().gap_1().child(btn_pause).child(btn_cancel))
                                 }
-                                crate::terminal::TransferState::Paused => {
+                                crate::sftp::TransferState::Paused => {
                                     let txt = t!("paused").to_string();
                                     let btn_resume = Button::new(SharedString::from(format!(
                                         "resume-{}",
@@ -224,7 +224,7 @@ impl AxShell {
                                     }));
                                     (txt, h_flex().gap_1().child(btn_resume).child(btn_cancel))
                                 }
-                                crate::terminal::TransferState::Interrupted(ref reason) => {
+                                crate::sftp::TransferState::Interrupted(ref reason) => {
                                     let txt = format!("{}: {}", t!("interrupted"), reason);
                                     let btn_remove = Button::new(SharedString::from(format!(
                                         "remove-{}",
@@ -241,13 +241,10 @@ impl AxShell {
                                     }));
                                     (txt, h_flex().gap_1().child(btn_remove))
                                 }
-                                crate::terminal::TransferState::Completed => {
+                                crate::sftp::TransferState::Completed => {
                                     let txt = t!("completed").to_string();
                                     let mut actions = h_flex().gap_1();
-                                    if matches!(
-                                        t.info.kind,
-                                        crate::terminal::TransferType::Download
-                                    ) {
+                                    if matches!(t.info.kind, crate::sftp::TransferType::Download) {
                                         let btn_folder = Button::new(SharedString::from(format!(
                                             "folder-{}",
                                             t.info.id
@@ -281,7 +278,7 @@ impl AxShell {
                                     actions = actions.child(btn_remove);
                                     (txt, actions)
                                 }
-                                crate::terminal::TransferState::Failed(ref err) => {
+                                crate::sftp::TransferState::Failed(ref err) => {
                                     let txt = format!("{}: {}", t!("failed"), err);
                                     let btn_remove = Button::new(SharedString::from(format!(
                                         "remove-{}",
@@ -298,7 +295,7 @@ impl AxShell {
                                     }));
                                     (txt, h_flex().gap_1().child(btn_remove))
                                 }
-                                crate::terminal::TransferState::Zombie(ref reason) => {
+                                crate::sftp::TransferState::Zombie(ref reason) => {
                                     let txt = format!("{}: {}", t!("zombie"), reason);
                                     let btn_remove = Button::new(SharedString::from(format!(
                                         "remove-{}",
@@ -318,7 +315,7 @@ impl AxShell {
                             };
 
                             let percent = match t.state {
-                                crate::terminal::TransferState::Completed => 100.0,
+                                crate::sftp::TransferState::Completed => 100.0,
                                 _ => t
                                     .total
                                     .map(|tot| t.transferred as f64 / tot as f64 * 100.0)
@@ -402,8 +399,8 @@ impl AxShell {
                                 .when(
                                     matches!(
                                         t.state,
-                                        crate::terminal::TransferState::Running
-                                            | crate::terminal::TransferState::Paused
+                                        crate::sftp::TransferState::Running
+                                            | crate::sftp::TransferState::Paused
                                     ),
                                     |this| {
                                         this.child(

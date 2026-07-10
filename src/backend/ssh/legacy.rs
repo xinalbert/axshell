@@ -7,7 +7,7 @@ use russh::{
     keys::ssh_key::Algorithm,
 };
 
-use crate::session::config::SshConnectionMode;
+use crate::session::SshConnectionMode;
 
 pub(crate) fn ssh_client_config(mode: SshConnectionMode) -> client::Config {
     let mut config = client::Config {

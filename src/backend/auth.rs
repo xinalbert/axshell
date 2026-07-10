@@ -6,7 +6,7 @@ use russh::keys::{
     HashAlg, PrivateKey, decode_secret_key, key::PrivateKeyWithHashAlg, load_secret_key,
 };
 
-use crate::session::config::Session;
+use crate::session::Session;
 
 pub(crate) fn load_session_private_key(session: &Session) -> Result<PrivateKey> {
     let inline_key = normalize_inline_private_key(&session.private_key_inline);

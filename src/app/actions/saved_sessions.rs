@@ -2,7 +2,7 @@ use gpui::{Context, Focusable as _, KeyDownEvent, Window};
 use gpui_component::WindowExt as _;
 use rust_i18n::t;
 
-use crate::{AxShell, SelectorEntry, session::config::Session};
+use crate::{AxShell, SelectorEntry, session::Session};
 
 use super::session::{mask_session_host, mask_session_part, normalize_session_group_name};
 

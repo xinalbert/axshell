@@ -4,7 +4,7 @@ use gpui_component::setting::SettingPage;
 
 pub(super) fn settings_keybindings_page(
     view: &gpui::Entity<AxShell>,
-    config: &crate::session::config::ConfigStore,
+    config: &crate::config::ConfigStore,
     recording_action: Option<&str>,
     keybind_error: Option<&(String, String)>,
 ) -> SettingPage {

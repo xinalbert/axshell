@@ -12,8 +12,8 @@ use tokio::{
 };
 
 use crate::{
-    session::config::Session,
-    terminal::{BackendEvent, BackendEventSender},
+    events::{BackendEvent, BackendEventSender},
+    session::Session,
 };
 
 use super::{SftpCommand, SftpWorkPin, SftpWorkTracker};
@@ -246,12 +246,12 @@ pub(super) async fn run_sftp(
                 let flag = TransferStateFlag::new();
                 active_transfers.insert(id.clone(), TransferStateFlag(flag.0.clone()));
 
-                let info = crate::terminal::TransferInfo {
+                let info = crate::sftp::TransferInfo {
                     id: id.clone(),
                     name: base_name(&remote).to_string(),
                     source: remote.clone(),
                     target: local_dir.clone(),
-                    kind: crate::terminal::TransferType::Download,
+                    kind: crate::sftp::TransferType::Download,
                     total_bytes: None,
                 };
                 let _ = events
@@ -350,12 +350,12 @@ pub(super) async fn run_sftp(
                     }
                 };
 
-                let info = crate::terminal::TransferInfo {
+                let info = crate::sftp::TransferInfo {
                     id: id.clone(),
                     name,
                     source: "local".to_string(),
                     target: remote_dir.clone(),
-                    kind: crate::terminal::TransferType::Upload,
+                    kind: crate::sftp::TransferType::Upload,
                     total_bytes: None,
                 };
                 let _ = events
@@ -418,8 +418,8 @@ pub(super) async fn run_sftp(
             }
             SftpCommand::EditFile { remote_path, pin } => {
                 let id = uuid::Uuid::new_v4().to_string();
-                let config = crate::session::config::ConfigStore::load()
-                    .unwrap_or_else(|_| crate::session::config::ConfigStore::in_memory());
+                let config = crate::config::ConfigStore::load()
+                    .unwrap_or_else(|_| crate::config::ConfigStore::in_memory());
                 let tmp_dir = config.tmp_dir().unwrap_or_else(|| PathBuf::from("/tmp"));
                 let base = base_name(&remote_path);
                 let local_path = tmp_dir.join(format!("{}-{}", id, base));

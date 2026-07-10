@@ -6,10 +6,34 @@ use rust_i18n::t;
 
 use crate::{
     AxShell,
-    app::{ConnectionProgress, WorkspacePage, WorkspaceTabDescriptor},
-    session::config::ConfigStore,
+    app::{ConnectionProgress, PaneLayout, SftpUiState},
+    config::ConfigStore,
     terminal::{BackendCommand, TabKind},
 };
+
+#[derive(Clone)]
+pub(crate) struct TabGroup {
+    pub(crate) id: String,
+    pub(crate) title: String,
+    pub(crate) pane_root: PaneLayout,
+    pub(crate) sftp: Option<SftpUiState>,
+    pub(crate) sftp_page_open: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum WorkspacePage {
+    #[default]
+    Terminal,
+    Sftp,
+    Settings,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct WorkspaceTabDescriptor {
+    pub(crate) group_id: Option<String>,
+    pub(crate) group_index: Option<usize>,
+    pub(crate) page: WorkspacePage,
+}
 
 fn workspace_tab_selected_for(
     entry: &WorkspaceTabDescriptor,
@@ -620,14 +644,12 @@ impl AxShell {
             tracing::info!("[ui] saving layout state...");
             let mut config = ConfigStore::load().unwrap_or_else(|_| ConfigStore::in_memory());
             let saved_bounds = match current_bounds {
-                gpui::WindowBounds::Fullscreen(b) => {
-                    crate::session::config::SavedWindowBounds::Fullscreen {
-                        x: b.origin.x.into(),
-                        y: b.origin.y.into(),
-                        width: b.size.width.into(),
-                        height: b.size.height.into(),
-                    }
-                }
+                gpui::WindowBounds::Fullscreen(b) => crate::config::SavedWindowBounds::Fullscreen {
+                    x: b.origin.x.into(),
+                    y: b.origin.y.into(),
+                    width: b.size.width.into(),
+                    height: b.size.height.into(),
+                },
                 gpui::WindowBounds::Maximized(b) => {
                     let mut restore_bounds = (
                         b.origin.x.into(),
@@ -637,7 +659,7 @@ impl AxShell {
                     );
                     if let Some(existing_bounds) = config.window_bounds() {
                         match existing_bounds {
-                            crate::session::config::SavedWindowBounds::Windowed {
+                            crate::config::SavedWindowBounds::Windowed {
                                 x,
                                 y,
                                 width,
@@ -645,7 +667,7 @@ impl AxShell {
                             } => {
                                 restore_bounds = (*x, *y, *width, *height);
                             }
-                            crate::session::config::SavedWindowBounds::Maximized {
+                            crate::config::SavedWindowBounds::Maximized {
                                 x,
                                 y,
                                 width,
@@ -656,21 +678,19 @@ impl AxShell {
                             _ => {}
                         }
                     }
-                    crate::session::config::SavedWindowBounds::Maximized {
+                    crate::config::SavedWindowBounds::Maximized {
                         x: restore_bounds.0,
                         y: restore_bounds.1,
                         width: restore_bounds.2,
                         height: restore_bounds.3,
                     }
                 }
-                gpui::WindowBounds::Windowed(b) => {
-                    crate::session::config::SavedWindowBounds::Windowed {
-                        x: b.origin.x.into(),
-                        y: b.origin.y.into(),
-                        width: b.size.width.into(),
-                        height: b.size.height.into(),
-                    }
-                }
+                gpui::WindowBounds::Windowed(b) => crate::config::SavedWindowBounds::Windowed {
+                    x: b.origin.x.into(),
+                    y: b.origin.y.into(),
+                    width: b.size.width.into(),
+                    height: b.size.height.into(),
+                },
             };
             let workspace_sizes: Vec<f32> = self
                 .workspace_panels

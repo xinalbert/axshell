@@ -4,7 +4,9 @@ use alacritty_terminal::{
     term::{Config, Term},
 };
 
-use super::backend::{BackendCommand, BackendEvent, BackendEventSender, BackendTx};
+use crate::events::{BackendEvent, BackendEventSender};
+
+use super::backend::{BackendCommand, BackendTx};
 
 #[derive(Clone)]
 pub(super) struct TerminalListener {

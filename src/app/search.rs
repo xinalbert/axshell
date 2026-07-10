@@ -1,18 +1,29 @@
 use std::collections::HashMap;
 
 use gpui::{
-    Context, Focusable as _, Hsla, InteractiveElement as _, IntoElement, MouseButton,
-    ParentElement as _, Styled as _, Window, div, prelude::FluentBuilder as _, px, rems,
+    Bounds, Context, Entity, Focusable as _, Hsla, InteractiveElement as _, IntoElement,
+    MouseButton, ParentElement as _, Pixels, Styled as _, Window, div, prelude::FluentBuilder as _,
+    px, rems,
 };
 use gpui_component::{
     ActiveTheme as _, Disableable as _, ElementExt as _, IconName, Sizable as _,
     button::{Button, ButtonVariants as _},
     h_flex,
-    input::Input,
+    input::{Input, InputState},
 };
 use rust_i18n::t;
 
 use crate::AxShell;
+
+pub(crate) struct SearchState {
+    pub(crate) input: Entity<InputState>,
+    pub(crate) active: bool,
+    pub(crate) query: String,
+    pub(crate) matches: Vec<(i32, i32)>,
+    pub(crate) current: usize,
+    pub(crate) target_tab: Option<String>,
+    pub(crate) bar_bounds: Option<Bounds<Pixels>>,
+}
 
 impl AxShell {
     pub(crate) fn toggle_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {

@@ -27,11 +27,11 @@ impl AxShell {
         let visible_count = transfers.len();
         let visible_running_count = transfers
             .iter()
-            .filter(|transfer| matches!(transfer.state, crate::terminal::TransferState::Running))
+            .filter(|transfer| matches!(transfer.state, crate::sftp::TransferState::Running))
             .count();
         let visible_paused_count = transfers
             .iter()
-            .filter(|transfer| matches!(transfer.state, crate::terminal::TransferState::Paused))
+            .filter(|transfer| matches!(transfer.state, crate::sftp::TransferState::Paused))
             .count();
         let rows = transfers
             .into_iter()
@@ -194,19 +194,19 @@ impl AxShell {
 
     fn render_sftp_transfer_row(
         &self,
-        transfer: crate::terminal::Transfer,
+        transfer: crate::sftp::Transfer,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let icon = match transfer.info.kind {
-            crate::terminal::TransferType::Upload => IconName::ArrowUp,
-            crate::terminal::TransferType::Download => IconName::ArrowDown,
+            crate::sftp::TransferType::Upload => IconName::ArrowUp,
+            crate::sftp::TransferType::Download => IconName::ArrowDown,
         };
         let status_text = sftp_transfer_status_text(&transfer);
         let transfer_id = transfer.info.id.clone();
         let mut actions = h_flex().flex_none().items_center().gap_1();
 
         match &transfer.state {
-            crate::terminal::TransferState::Running => {
+            crate::sftp::TransferState::Running => {
                 let pause_id = transfer.info.id.clone();
                 let cancel_id = transfer.info.id.clone();
                 let pause_group_id = transfer.tab_id.clone();
@@ -241,7 +241,7 @@ impl AxShell {
                             })),
                     );
             }
-            crate::terminal::TransferState::Paused => {
+            crate::sftp::TransferState::Paused => {
                 let resume_id = transfer.info.id.clone();
                 let cancel_id = transfer.info.id.clone();
                 let resume_group_id = transfer.tab_id.clone();
@@ -276,8 +276,8 @@ impl AxShell {
                             })),
                     );
             }
-            crate::terminal::TransferState::Completed => {
-                if matches!(transfer.info.kind, crate::terminal::TransferType::Download) {
+            crate::sftp::TransferState::Completed => {
+                if matches!(transfer.info.kind, crate::sftp::TransferType::Download) {
                     let target = transfer.info.target.clone();
                     actions = actions.child(
                         Button::new(ElementId::Name(
@@ -302,9 +302,9 @@ impl AxShell {
                         })),
                 );
             }
-            crate::terminal::TransferState::Failed(_)
-            | crate::terminal::TransferState::Interrupted(_)
-            | crate::terminal::TransferState::Zombie(_) => {
+            crate::sftp::TransferState::Failed(_)
+            | crate::sftp::TransferState::Interrupted(_)
+            | crate::sftp::TransferState::Zombie(_) => {
                 let remove_id = transfer.info.id.clone();
                 actions = actions.child(
                     Button::new(ElementId::Name(format!("sftp-remove-{remove_id}").into()))
@@ -378,27 +378,27 @@ impl AxShell {
     }
 }
 
-fn transfer_belongs_to_tab(transfer: &crate::terminal::Transfer, tab: SftpTransferTab) -> bool {
+fn transfer_belongs_to_tab(transfer: &crate::sftp::Transfer, tab: SftpTransferTab) -> bool {
     match tab {
         SftpTransferTab::Active => matches!(
             transfer.state,
-            crate::terminal::TransferState::Running | crate::terminal::TransferState::Paused
+            crate::sftp::TransferState::Running | crate::sftp::TransferState::Paused
         ),
         SftpTransferTab::Failed => matches!(
             transfer.state,
-            crate::terminal::TransferState::Failed(_)
-                | crate::terminal::TransferState::Interrupted(_)
-                | crate::terminal::TransferState::Zombie(_)
+            crate::sftp::TransferState::Failed(_)
+                | crate::sftp::TransferState::Interrupted(_)
+                | crate::sftp::TransferState::Zombie(_)
         ),
         SftpTransferTab::Completed => {
-            matches!(transfer.state, crate::terminal::TransferState::Completed)
+            matches!(transfer.state, crate::sftp::TransferState::Completed)
         }
     }
 }
 
-fn sftp_transfer_percent(transfer: &crate::terminal::Transfer) -> f32 {
+fn sftp_transfer_percent(transfer: &crate::sftp::Transfer) -> f32 {
     match transfer.state {
-        crate::terminal::TransferState::Completed => 100.0,
+        crate::sftp::TransferState::Completed => 100.0,
         _ => transfer
             .total
             .filter(|total| *total > 0)
@@ -408,9 +408,9 @@ fn sftp_transfer_percent(transfer: &crate::terminal::Transfer) -> f32 {
     }
 }
 
-fn sftp_transfer_status_text(transfer: &crate::terminal::Transfer) -> String {
+fn sftp_transfer_status_text(transfer: &crate::sftp::Transfer) -> String {
     match &transfer.state {
-        crate::terminal::TransferState::Running => {
+        crate::sftp::TransferState::Running => {
             if let Some(total) = transfer.total.filter(|total| *total > 0) {
                 format!(
                     "{:.1}% ({}/{})",
@@ -420,19 +420,19 @@ fn sftp_transfer_status_text(transfer: &crate::terminal::Transfer) -> String {
                 )
             } else {
                 match transfer.info.kind {
-                    crate::terminal::TransferType::Upload => format!("{}...", t!("uploading")),
-                    crate::terminal::TransferType::Download => {
+                    crate::sftp::TransferType::Upload => format!("{}...", t!("uploading")),
+                    crate::sftp::TransferType::Download => {
                         format!("{}...", t!("downloading"))
                     }
                 }
             }
         }
-        crate::terminal::TransferState::Paused => t!("paused").to_string(),
-        crate::terminal::TransferState::Completed => t!("completed").to_string(),
-        crate::terminal::TransferState::Failed(err) => format!("{}: {err}", t!("failed")),
-        crate::terminal::TransferState::Interrupted(reason) => {
+        crate::sftp::TransferState::Paused => t!("paused").to_string(),
+        crate::sftp::TransferState::Completed => t!("completed").to_string(),
+        crate::sftp::TransferState::Failed(err) => format!("{}: {err}", t!("failed")),
+        crate::sftp::TransferState::Interrupted(reason) => {
             format!("{}: {reason}", t!("interrupted"))
         }
-        crate::terminal::TransferState::Zombie(reason) => format!("{}: {reason}", t!("zombie")),
+        crate::sftp::TransferState::Zombie(reason) => format!("{}: {reason}", t!("zombie")),
     }
 }

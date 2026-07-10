@@ -11,8 +11,9 @@ use std::{
 use anyhow::{Context, Result};
 use portable_pty::{ChildKiller, CommandBuilder, PtySize, native_pty_system};
 
-use crate::terminal::{
-    BackendCommand, BackendEvent, BackendEventSender, BackendShutdown, BackendTx,
+use crate::{
+    events::{BackendEvent, BackendEventSender},
+    terminal::{BackendCommand, BackendShutdown, BackendTx},
 };
 
 const LOCAL_CHILD_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(250);

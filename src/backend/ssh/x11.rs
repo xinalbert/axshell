@@ -14,7 +14,7 @@ use tokio::{
     time::{Duration, sleep},
 };
 
-use crate::session::config::ConfigStore;
+use crate::config::ConfigStore;
 
 const X11_AUTH_PROTOCOL: &str = "MIT-MAGIC-COOKIE-1";
 const X11_REMOTE_DISPLAY: &str = "localhost:10.0";
@@ -43,7 +43,7 @@ impl X11ForwardingState {
 
         let mut fake_cookie = [0u8; 16];
         rand::rngs::OsRng.fill_bytes(&mut fake_cookie);
-        let local_display = crate::session::config::resolve_local_x_display(
+        let local_display = crate::platform::x_server::resolve_display(
             config.local_x_server_app_path(),
             config.x11_launch_local_x_server(),
         );

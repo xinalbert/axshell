@@ -3,7 +3,7 @@ use std::time::Instant;
 use gpui::SharedString;
 use gpui_component::ThemeMode;
 
-use crate::{app::TerminalFontMetrics, session::config::CursorStyle};
+use crate::{app::TerminalFontMetrics, config::CursorStyle};
 
 pub(crate) struct AppearanceState {
     pub(crate) follow_system_theme: bool,

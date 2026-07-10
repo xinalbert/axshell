@@ -1,30 +1,22 @@
 pub(crate) mod actions;
+mod config_sync;
+pub(crate) mod constants;
 pub mod dialogs;
+mod input;
+mod lifecycle;
+mod pane;
 pub mod resizable;
+mod search;
+mod session_ui;
+mod sftp;
 mod state;
-pub mod views;
-
-#[path = "app/input/app_menu.rs"]
-pub mod app_menu;
-#[path = "app/syncing/config_sync.rs"]
-pub mod config_sync;
-#[path = "app/core/constants.rs"]
-pub mod constants;
-#[path = "app/lifecycle/event_loop.rs"]
-mod event_loop;
-#[path = "app/lifecycle/init.rs"]
-mod init;
-#[path = "app/input/keybinding_recorder.rs"]
-pub mod keybinding_recorder;
-#[path = "app/terminal/search.rs"]
-pub mod search;
-#[path = "app/lifecycle/startup.rs"]
-pub mod startup;
+mod terminal;
 pub mod theme;
-#[path = "app/core/types.rs"]
-mod types;
-#[path = "app/workspace/workspace.rs"]
+pub mod views;
 mod workspace;
+
+pub(crate) use input::{app_menu, keybinding_recorder};
+pub(crate) use lifecycle::startup;
 
 use std::{
     collections::{HashMap, HashSet},
@@ -36,20 +28,28 @@ use gpui::{Bounds, Entity, FocusHandle, Pixels, SharedString, UniformListScrollH
 use gpui_component::{input::InputState, menu::AppMenuBar};
 
 use crate::{
-    session::config::{AuthMethod, ConfigStore},
+    config::ConfigStore,
+    session::AuthMethod,
     terminal::{TerminalComposition, TerminalFrozenSelection, TerminalTab},
 };
 use state::{
     appearance::AppearanceState, lifecycle::LifecycleState, monitoring::MonitoringState,
-    runtime::RuntimeState, search::SearchState,
+    runtime::RuntimeState,
 };
 
-pub(crate) use types::{
-    ConnectionProgress, DialogKind, HoverTargetKind, HoveredUrl, LocalFileBrowserState,
-    LocalFileEntry, PaneLayout, SelectorEntry, SftpContextMenuState, SftpContextMenuTarget,
-    SftpSortColumn, SftpTransferTab, SortDirection, TabGroup, TerminalFontMetrics,
-    TerminalScrollbarHandle, WorkspacePage, WorkspaceTabDescriptor,
+use search::SearchState;
+
+pub(crate) use dialogs::DialogKind;
+pub(crate) use pane::PaneLayout;
+pub(crate) use session_ui::{ConnectionProgress, SelectorEntry};
+pub(crate) use sftp::{
+    LocalFileBrowserState, LocalFileEntry, SftpContextMenuState, SftpContextMenuTarget,
+    SftpSortColumn, SftpTransferTab, SftpUiState, SortDirection,
 };
+pub(crate) use terminal::{
+    HoverTargetKind, HoveredUrl, TerminalFontMetrics, TerminalScrollbarHandle,
+};
+pub(crate) use workspace::{TabGroup, WorkspacePage};
 
 pub(crate) struct AxShell {
     pub(crate) focus_handle: FocusHandle,
@@ -132,7 +132,7 @@ pub(crate) struct AxShell {
     pub(crate) local_sftp_sort_direction: SortDirection,
     pub(crate) sftp_transfer_tab: SftpTransferTab,
     pub(crate) sftp_transfer_scroll_handle: gpui::ScrollHandle,
-    pub(crate) transfers: Vec<crate::terminal::Transfer>,
+    pub(crate) transfers: Vec<crate::sftp::Transfer>,
     pub(crate) show_transfers_dialog: bool,
     pub(crate) pane_root: PaneLayout,
     pub(crate) focused_pane_path: Vec<usize>,
@@ -148,7 +148,7 @@ pub(crate) struct AxShell {
     pub(crate) status: SharedString,
     pub(crate) config: ConfigStore,
     pub(crate) app_menu_bar: Option<Entity<AppMenuBar>>,
-    pub(crate) active_title_bar_style: crate::session::config::TitleBarStyle,
+    pub(crate) active_title_bar_style: crate::config::TitleBarStyle,
     pub(crate) recording_action: Option<String>,
     pub(crate) active_dialog: Option<DialogKind>,
     pub(crate) renaming_saved_group: Option<String>,

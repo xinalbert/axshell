@@ -17,8 +17,10 @@ use tokio::{
 };
 
 use crate::{
-    session::config::{ConfigStore, Session},
-    terminal::{BackendCommand, BackendEvent, BackendEventSender, BackendShutdown, BackendTx},
+    config::ConfigStore,
+    events::{BackendEvent, BackendEventSender},
+    session::Session,
+    terminal::{BackendCommand, BackendShutdown, BackendTx},
 };
 
 pub(crate) mod connection;

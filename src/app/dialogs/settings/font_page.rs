@@ -3,7 +3,19 @@ use super::*;
 use gpui::IntoElement;
 use gpui_component::setting::{SettingField, SettingGroup, SettingItem, SettingPage};
 
-use super::fonts::terminal_font_names;
+fn terminal_font_names(window: &mut Window, cx: &mut gpui::App, font_size: f32) -> Vec<String> {
+    let mut names = cx.text_system().all_font_names();
+    names.retain(|name| {
+        crate::terminal::element::terminal_font_is_monospace(
+            window,
+            name.clone().into(),
+            px(font_size),
+        )
+    });
+    names.sort_unstable();
+    names.dedup();
+    names
+}
 
 pub(super) fn settings_fonts_page(view: &gpui::Entity<AxShell>, shell: &AxShell) -> SettingPage {
     let ui_font_size = shell.appearance.ui_font_size;
@@ -262,7 +274,7 @@ pub(super) fn settings_fonts_page(view: &gpui::Entity<AxShell>, shell: &AxShell)
                     SettingField::render({
                         let view = view.clone();
                         move |_, _window, _cx| {
-                            use crate::session::config::CursorStyle;
+                            use crate::config::CursorStyle;
 
                             Button::new("cursor-style-dropdown")
                                 .small()
@@ -278,7 +290,7 @@ pub(super) fn settings_fonts_page(view: &gpui::Entity<AxShell>, shell: &AxShell)
                                 .dropdown_menu_with_anchor(Anchor::BottomRight, {
                                     let view = view.clone();
                                     move |mut menu, window, _cx| {
-                                        use crate::session::config::CursorStyle;
+                                        use crate::config::CursorStyle;
 
                                         menu = menu.min_w(160.).max_h(px(320.)).scrollable(true);
                                         for style in [

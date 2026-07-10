@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use russh::ChannelMsg;
 
-use crate::system::{SystemSnapshot, remote_snapshot_from_kv};
+use crate::monitoring::{SystemSnapshot, remote_snapshot_from_kv};
 
 use super::ClientHandler;
 

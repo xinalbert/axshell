@@ -4,8 +4,7 @@ impl AxShell {
     pub(super) fn render_tab_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let workspace_tabs = self.workspace_tabs();
         let selected = self.active_workspace_tab_index(&workspace_tabs);
-        let is_integrated =
-            self.active_title_bar_style == crate::session::config::TitleBarStyle::Integrated;
+        let is_integrated = self.active_title_bar_style == crate::config::TitleBarStyle::Integrated;
         let color_inactive_tabs = self.config.color_inactive_tabs();
 
         h_flex()

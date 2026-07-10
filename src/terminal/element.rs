@@ -581,7 +581,7 @@ impl TerminalElement {
     }
 
     fn cursor_layout(&self, cx: &App) -> Option<CursorLayout> {
-        use crate::session::config::CursorStyle;
+        use crate::config::CursorStyle;
         let cursor_style = self.view.read(cx).appearance.cursor_style;
         let show_cursor = match cursor_style {
             CursorStyle::Blink | CursorStyle::BeamBlink => {
