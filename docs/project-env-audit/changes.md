@@ -1250,3 +1250,23 @@
 - 计划状态变更：无
 - 验证结果：`rustfmt --edition 2024`、`cargo check`、`cargo test --quiet`（70 项）、`git diff --check` 和 tracking docs validator 均通过；保留既有 `block v0.1.6` future-incompat warning。
 - 对 plan 的更新：运行环境和依赖策略保持不变；真实 Windows/Linux GUI 仍需验证长行末尾、滚动条拖动和侧栏状态。
+
+## 2026-07-10 初始化 terminal tab UI 状态回收环境预检
+
+- 时间：2026-07-10 14:56 +0800
+- 触发原因：关闭 terminal tab 后的 UI 状态残留需要修复，避免 tab ID 缓存增长和已关闭 pane 的鼠标命中。
+- 执行内容：复查 `Cargo.toml`、CI、`src/app/actions/session.rs`、`src/app/actions/terminal.rs`、`src/app.rs` 和现有环境记录；确认本轮只需复用 `AxShell` 的状态字段与统一关闭入口，无需新增依赖或联网。
+- 影响文件：`src/app/actions/session.rs`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/changes/2026/07.md`
+- 计划状态变更：无
+- 验证结果：本机 `rustc 1.96.1`、`cargo 1.96.1` 可用；默认验证命令为 `rustfmt`、`cargo check`、`cargo test --quiet`、`git diff --check` 和 tracking docs validator；GUI 手工验证待实现后执行。
+- 对 plan 的更新：允许实施“按 tab ID 清除 scrollbar/bounds/hover/IME/frozen selection/progress；整组关闭逐一回收；仅关闭 active tab 时复位全局选择状态”。
+
+## 2026-07-10 完成 terminal tab UI 状态回收环境验证
+
+- 时间：2026-07-10 15:01 +0800
+- 触发原因：关闭 terminal tab 后的 UI 状态回收完成，需要记录本机验证与 GUI 验证边界。
+- 执行内容：在统一关闭入口按 tab ID 删除 scrollbar/bounds 缓存和关联短期状态；整组关闭逐一回收，避免关闭分支遗漏；保留现有 backend `Close`、pane 选中和 SFTP worker 语义。
+- 影响文件：`src/app/actions/session.rs`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`
+- 计划状态变更：无
+- 验证结果：`rustfmt --edition 2024 src/app/actions/session.rs`、`cargo check`、`cargo test --quiet`（70 项）、`git diff --check` 和 tracking docs validator 均通过；保留既有 `block v0.1.6` future-incompat warning。
+- 对 plan 的更新：环境与依赖策略不变；GUI 仍需验证关闭连接中、hover、IME 预编辑或选择中的 tab。
