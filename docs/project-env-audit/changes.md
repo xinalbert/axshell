@@ -1047,3 +1047,35 @@
 - 执行内容：删除旧的 `settings/general.rs`；新增 Appearance、Fonts、Terminal、Workspace、Monitoring 和 Language focused pages；更新 Settings 左侧页面顺序和中英文页面标题；刷新项目地图中的 settings 子页面索引
 - 验证结果：`rustfmt --edition 2024` 覆盖本轮修改 Rust 文件并通过；`cargo check` 通过；`cargo test --quiet` 通过，46 个测试全部通过；`git diff --check` 通过；tracking docs validator 通过；仍保留既有 `block v0.1.6` future-incompat warning
 - 风险/待办：GUI 设置页手工点击验证未执行；`sync.rs` 与 `proxy.rs` 仍可在后续继续做局部拆分
+
+## 2026-07-10 刷新环境记录到 SFTP 页面快捷键关闭页面
+
+- 目的：在修改 SFTP 页面快捷键 toggle 行为前，确认当前项目环境、SFTP 页面生命周期入口和验证边界
+- 改动范围：`src/app/workspace/workspace.rs`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/changes/2026/07.md`
+- 执行内容：复查 `AGENTS.md`、环境记录、项目地图、`ToggleSftpZoom` 绑定和 `AxShell::toggle_active_sftp_page()`；确认当前已在 SFTP 页面时只切回终端，未关闭 `sftp_page_open`；本轮不新增依赖、不联网、不使用多 agent
+- 验证结果：待执行 `rustfmt`、`cargo check`、`cargo test --quiet`、`git diff --check` 和 tracking docs validator；真实 GUI 快捷键体验仍需人工确认
+- 风险/待办：菜单文案仍为 Open SFTP Page，本轮只修改行为；如需文案改为 Toggle/Close 需另行处理
+
+## 2026-07-10 完成 SFTP 页面快捷键关闭页面环境验证
+
+- 目的：在修正 SFTP 页面快捷键 toggle 行为后，把编译测试结果和剩余 GUI 验证边界回写到环境记忆
+- 改动范围：`src/app/workspace/workspace.rs`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/changes/2026/07.md`
+- 执行内容：将 `AxShell::toggle_active_sftp_page()` 的当前 SFTP 页面分支改为复用 `close_sftp_page()`，因此再次触发 `ToggleSftpZoom` 会关闭当前 group 的 SFTP 页面并返回终端焦点；未改快捷键配置、菜单文案或 SFTP 后端
+- 验证结果：`rustfmt --edition 2024 src/app/workspace/workspace.rs` 通过；`cargo check` 通过；`cargo test --quiet` 通过，50 个测试全部通过；`git diff --check` 通过；tracking docs validator 通过；仍保留既有 `block v0.1.6` future-incompat warning
+- 风险/待办：GUI 手工快捷键验证未执行；菜单文案仍显示 Open SFTP Page，后续如需要可单独改为 Toggle/Close 文案
+
+## 2026-07-10 刷新环境记录到终端历史滚动背景色块残留修复
+
+- 目的：在修复终端滚动历史时 ANSI 背景色块残留问题前，确认当前项目环境、终端渲染入口和验证边界
+- 改动范围：`src/terminal/element.rs`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/changes/2026/07.md`
+- 执行内容：复查 `src/terminal.rs`、`src/terminal/element.rs` 和 `src/app/actions/terminal.rs`；确认终端 snapshot 会随 `display_offset` 更新，但元素 paint 开始时没有显式清理整个终端 bounds，只叠加绘制显式 ANSI 背景色块和文字；本轮不新增依赖、不联网、不使用多 agent
+- 验证结果：待执行 `rustfmt`、`cargo check`、`cargo test --quiet`、`git diff --check` 和 tracking docs validator；真实 ANSI 背景色滚动体验仍需人工确认
+- 风险/待办：GUI 手工复现需要运行会输出背景色的命令或程序；本轮只处理绘制残留，不改变终端 buffer 语义
+
+## 2026-07-10 完成终端历史滚动背景色块残留环境验证
+
+- 目的：在修复终端绘制层旧 ANSI 背景色块残留后，把编译测试结果和剩余 GUI 验证边界回写到环境记忆
+- 改动范围：`src/terminal/element.rs`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/changes/2026/07.md`
+- 执行内容：在 `TerminalElement::paint()` 中为每帧先填充当前终端元素 bounds 的主题背景，再叠加本帧 ANSI 背景矩形、文字、下划线、custom block、IME composition 和光标，避免旧帧色块在滚动历史时残留
+- 验证结果：`rustfmt --edition 2024 src/terminal/element.rs` 通过；`cargo check` 通过；`cargo test --quiet` 通过，50 个测试全部通过；`git diff --check` 通过；tracking docs validator 通过；仍保留既有 `block v0.1.6` future-incompat warning
+- 风险/待办：GUI 手工历史滚动复现验证未执行；若后续仍出现残留，需要进一步检查 GPUI 层元素失效或 terminal scrollbar repaint 时序
