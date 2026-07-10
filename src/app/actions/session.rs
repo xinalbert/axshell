@@ -814,6 +814,50 @@ impl AxShell {
         cx.notify();
     }
 
+    /// Discard UI state that is meaningful only while a terminal tab exists.
+    fn clear_tab_ui_state(&mut self, tab_id: &str) {
+        self.terminal_scrollbars.remove(tab_id);
+        self.terminal_bounds.remove(tab_id);
+
+        if self
+            .hovered_url
+            .as_ref()
+            .is_some_and(|hovered| hovered.tab_id == tab_id)
+        {
+            self.hovered_url = None;
+        }
+        if self
+            .terminal_composition
+            .as_ref()
+            .is_some_and(|composition| composition.tab_id == tab_id)
+        {
+            self.terminal_composition = None;
+        }
+        if self
+            .terminal_frozen_selection
+            .as_ref()
+            .is_some_and(|selection| selection.tab_id == tab_id)
+        {
+            self.terminal_frozen_selection = None;
+        }
+        if self
+            .connection_progress
+            .as_ref()
+            .is_some_and(|progress| progress.tab_id == tab_id)
+        {
+            self.connection_progress = None;
+        }
+        if self.search.target_tab.as_deref() == Some(tab_id) {
+            self.search.query.clear();
+            self.search.matches.clear();
+            self.search.current = 0;
+            self.search.target_tab = None;
+        }
+        if self.active_tab.as_deref() == Some(tab_id) {
+            self.terminal_selecting = false;
+        }
+    }
+
     pub(crate) fn handle_tab_close(&mut self, id: String) {
         let group_ix = self
             .tab_groups
@@ -825,6 +869,7 @@ impl AxShell {
                 "[handle_tab_close] no group found for tab '{}', closing individually",
                 id
             );
+            self.clear_tab_ui_state(&id);
             if let Some(ix) = self.tabs.iter().position(|tab| tab.id == id) {
                 self.tabs[ix].send_backend(BackendCommand::Close);
                 self.tabs.remove(ix);
@@ -884,6 +929,7 @@ impl AxShell {
                 .map(|s| s.to_string())
                 .collect();
             for tab_id in &tab_ids {
+                self.clear_tab_ui_state(tab_id);
                 if let Some(ix) = self.tabs.iter().position(|tab| tab.id == *tab_id) {
                     self.tabs[ix].send_backend(BackendCommand::Close);
                     self.tabs.retain(|t| t.id != *tab_id);
@@ -894,6 +940,7 @@ impl AxShell {
             self.pane_root.remove_tab(&id);
         } else {
             // Just remove this tab from the group
+            self.clear_tab_ui_state(&id);
             if let Some(ix) = self.tabs.iter().position(|tab| tab.id == id) {
                 self.tabs[ix].send_backend(BackendCommand::Close);
                 self.tabs.retain(|t| t.id != id);
