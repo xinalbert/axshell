@@ -179,8 +179,12 @@ impl AxShell {
 
     pub(crate) fn toggle_active_sftp_page(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.workspace_page == WorkspacePage::Sftp {
-            self.set_workspace_page(WorkspacePage::Terminal, cx);
-            self.focus_handle.focus(window, cx);
+            if let Some(active_group_id) = self.active_group.clone() {
+                self.close_sftp_page(active_group_id, window, cx);
+            } else {
+                self.set_workspace_page(WorkspacePage::Terminal, cx);
+                self.focus_handle.focus(window, cx);
+            }
             return;
         }
 
