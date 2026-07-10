@@ -1124,3 +1124,129 @@
 - 执行内容：在 `TerminalElement::paint()` 中为每帧先填充当前终端元素 bounds 的主题背景，再叠加本帧 ANSI 背景矩形、文字、下划线、custom block、IME composition 和光标，避免旧帧色块在滚动历史时残留
 - 验证结果：`rustfmt --edition 2024 src/terminal/element.rs` 通过；`cargo check` 通过；`cargo test --quiet` 通过，50 个测试全部通过；`git diff --check` 通过；tracking docs validator 通过；仍保留既有 `block v0.1.6` future-incompat warning
 - 风险/待办：GUI 手工历史滚动复现验证未执行；若后续仍出现残留，需要进一步检查 GPUI 层元素失效或 terminal scrollbar repaint 时序
+## 2026-07-10 刷新环境记录到 SFTP 生命周期回收
+
+- 触发原因：用户确认资源回收改造按阶段逐项实施，第一阶段处理 SFTP worker、传输 task 与远程编辑 watcher 的关闭所有权
+- 执行内容：复查 `Cargo.toml`、`.github/workflows/ci.yml`、`src/sftp.rs`、`src/app/actions/sftp.rs`、`src/app/actions/session.rs` 和现有环境记录；确认可复用现有 `tokio` 的 `JoinHandle`、`JoinSet` 与 timeout，无需新增依赖或联网
+- 影响文件：`src/sftp.rs`，`src/app/actions/sftp.rs`，`src/app/actions/session.rs`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/project-map.md`，`docs/project-implementation-tracker/changes/2026/07.md`
+- 计划状态变更：无
+- 验证结果：`rustc 1.96.1` 与 `cargo 1.96.1` 可用；确认默认验证命令为 `rustfmt`、`cargo check`、`cargo test --quiet`、`git diff --check` 与 tracking docs validator；真实 SFTP 生命周期压测待实现后执行
+- 对 plan 的更新：允许实施“主 worker 有界关闭，关闭时由 `JoinSet` 取消并回收传输、远程编辑 watcher 和自动上传子 task”
+
+## 2026-07-10 完成 SFTP 生命周期回收环境验证
+
+- 触发原因：SFTP worker 回收和传输中关闭确认已实现，需要记录实际验证结果与运行时手工边界
+- 执行内容：新增 worker 共享关闭所有权与 `JoinSet` 子任务收口；统一 group 释放入口；增加传输中关闭确认、记忆偏好和 Terminal 设置页恢复入口；补充配置归一化和 worker 子任务取消测试
+- 影响文件：`src/sftp.rs`，`src/config/store.rs`，`src/app.rs`，`src/app/lifecycle/init.rs`，`src/app/actions/sftp.rs`，`src/app/actions/session.rs`，`src/app/workspace/workspace.rs`，`src/app/core/types.rs`，`src/app/dialogs.rs`，`src/app/dialogs/sftp_close_confirm.rs`，`src/app/dialogs/settings/terminal.rs`，`locales/en.yml`，`locales/zh-CN.yml`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`
+- 计划状态变更：无
+- 验证结果：`rustfmt --edition 2024`、`cargo check`、`cargo test --quiet`（57 个通过）和 `git diff --check` 均通过；tracking docs validator 待复验；仍保留既有 `block v0.1.6` future-incompat warning
+- 对 plan 的更新：真实 SSH/SFTP 服务与 GUI 手工验证需确认关闭弹窗、三种记忆选项、后台传输保护和取消后 watcher/连接停止
+
+## 2026-07-10 刷新环境记录到 SFTP 二次快捷键确认
+
+- 触发原因：用户要求传输中关闭 SFTP 时仍始终显示确认，并让再次按打开 SFTP 的快捷键确认上次记住的选择
+- 执行内容：复查 SFTP 关闭弹窗、`ToggleSftpZoom` / `ClosePane` action 路由、Terminal 设置页和 `ConfigStore`；确认当前持久化字段直接绕过确认，需改为仅保存二次 `ToggleSftpZoom` 的默认动作
+- 影响文件：`src/app.rs`，`src/app/lifecycle/init.rs`，`src/app/views/layout.rs`，`src/app/workspace/workspace.rs`，`src/app/dialogs/sftp_close_confirm.rs`，`src/app/dialogs/settings/terminal.rs`，`src/config/store.rs`，`locales/en.yml`，`locales/zh-CN.yml`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/changes/2026/07.md`
+- 计划状态变更：无
+- 验证结果：`rustc 1.96.1` 与 `cargo 1.96.1` 可用；确认本轮验证命令为 `rustfmt`、`cargo check`、`cargo test --quiet`、`git diff --check` 与 tracking docs validator；GUI 交互验证待实现后执行
+- 对 plan 的更新：允许实施“首次关闭永远打开确认；仅确认框打开时，第二次 `ToggleSftpZoom` 根据记住动作确认；无默认动作时保持弹窗等待用户点击”
+
+## 2026-07-10 完成 SFTP 二次快捷键确认环境验证
+
+- 目的：将传输中关闭 SFTP 的已记住动作改为二次快捷键确认，同时保留首次确认弹窗。
+- 改动范围：`src/app.rs`，`src/app/lifecycle/init.rs`，`src/app/workspace/workspace.rs`，`src/app/dialogs/sftp_close_confirm.rs`，`src/app/dialogs/settings/terminal.rs`，`src/config/store.rs`，`locales/`，`docs/project-env-audit/`，`docs/project-implementation-tracker/`。
+- 执行内容：确认弹窗保存发起关闭的 group；有活跃传输时首次关闭始终打开弹窗；再次按 `ToggleSftpZoom` 仅在匹配弹窗打开时使用已保存动作；`ask` 表示不绑定二次快捷键动作；Terminal 设置页提供该默认动作设置。
+- 验证结果：`rustfmt --edition 2024` 覆盖本轮 Rust 修改通过；`cargo check` 通过；`cargo test --quiet` 通过，57 个测试通过；`git diff --check` 通过；tracking docs validator 通过。保留 `block v0.1.6` 的既有 future-incompat warning。
+- 风险/待办：尚未在真实 SFTP 传输和 GUI 中手工验证首次弹窗、二次快捷键、`ask` 状态和 `ClosePane` 边界。
+
+## 2026-07-10 初始化深度休眠第一阶段环境预检
+
+- 时间：2026-07-10 12:38 +0800
+- 触发原因：用户要求把休眠防线写入项目文档，并开始按阶段实现。
+- 执行内容：复查 `Cargo.toml`、环境记录、事件泵、监控、配置入口和当前 GPUI checkout；确认可复用 `Context::observe_window_activation`、现有单一事件泵和 `ConfigStore`，无需新增依赖或联网。
+- 影响文件：`src/app.rs`，`src/app/state/`，`src/app/lifecycle/init.rs`，`src/app/lifecycle/event_loop.rs`，`src/app/dialogs/settings/monitoring.rs`，`src/config/store.rs`，`docs/resource-lifecycle.md`，`docs/resource-lifecycle.en.md`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`
+- 计划状态变更：无
+- 验证结果：本机 `rustc 1.96.1`、`cargo 1.96.1` 可用；已确认默认验证命令为 `rustfmt`、`cargo check`、`cargo test --quiet`、`git diff --check` 和 tracking docs validator；代码验证待实施后执行。
+- 对 plan 的更新：允许实现“失焦立即停监控/主题/光标，保留低频 backend drain；失焦 5 分钟深睡，可配置关闭/1/5/15/30 分钟”，不在本阶段断开 SSH/PTY/SFTP。
+
+## 2026-07-10 完成深度休眠第一阶段环境验证
+
+- 时间：2026-07-10 12:52 +0800
+- 触发原因：第一阶段深睡实现需要回写实际编译、测试与运行时手工边界。
+- 执行内容：使用 GPUI `observe_window_activation` 驱动窗口生命周期；新增持久化的深睡阈值归一化、后台事件泵节流、监控/远程 probe/主题/光标降载和 SFTP idle sweep 节流；新增 Monitoring 设置入口及中英文资源生命周期、用户指南说明。
+- 影响文件：`src/app.rs`，`src/app/state/`，`src/app/lifecycle/init.rs`，`src/app/lifecycle/event_loop.rs`，`src/app/workspace/workspace.rs`，`src/app/dialogs/settings/monitoring.rs`，`src/config/store.rs`，`locales/en.yml`，`locales/zh-CN.yml`，`docs/resource-lifecycle.md`，`docs/resource-lifecycle.en.md`，`docs/user-guide.md`，`docs/user-guide.en.md`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`
+- 计划状态变更：无
+- 验证结果：`rustfmt --edition 2024`、`cargo check`、定向 lifecycle/config 测试、`cargo test --quiet`（63 个通过）、`git diff --check` 和 tracking docs validator 均通过；保留既有 `block v0.1.6` future-incompat warning。
+- 对 plan 的更新：GUI 失焦/恢复与真实 SSH 高输出仍需手工验证；后续 SFTP 深睡回收先实现 pin/refcount，不能以本阶段的“无活跃传输”替代远程编辑保护。
+
+## 2026-07-10 初始化 SFTP pin/refcount 环境预检
+
+- 时间：2026-07-10 13:04 +0800
+- 触发原因：用户确认继续实现 SFTP pin/refcount 和深睡按需回收。
+- 执行内容：复查 `Cargo.toml`、现有环境记录、`src/sftp.rs`、SFTP UI action、删除确认入口和事件泵；确认项目已有 `Arc`、`Mutex`、`JoinSet`、tokio channel 和 worker 有界关闭，无需新增依赖或联网。
+- 影响文件：`src/sftp.rs`，`src/app/actions/sftp.rs`，`src/app/lifecycle/event_loop.rs`，`src/app/dialogs/delete_confirm.rs`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`
+- 计划状态变更：无
+- 验证结果：本机 `rustc 1.96.1`、`cargo 1.96.1` 可用；默认验证命令为 `rustfmt`、`cargo check`、`cargo test --quiet`、`git diff --check` 和 tracking docs validator；代码验证待实施后执行。
+- 对 plan 的更新：允许在 worker 内实施“入队 pin、child task pin、watcher pin 和 UI 查询 pin 数”；自动回收只在 pin 为零时执行。
+
+## 2026-07-10 完成 SFTP pin/refcount 环境验证
+
+- 时间：2026-07-10 13:15 +0800
+- 触发原因：SFTP worker pin/refcount 与深睡回收实现完成，需要记录实际验证和手工边界。
+- 执行内容：在 SFTP worker 中实现 RAII work pin，收口 UI command 发送；将 pin 覆盖 queued command、短操作、传输、自动上传和远程编辑 watcher；普通 idle 与深睡回收统一以 pin 为准，并保持用户显式关闭、取消和重连的强制关闭语义。
+- 影响文件：`src/sftp.rs`，`src/app/actions/sftp.rs`，`src/app/lifecycle/event_loop.rs`，`src/app/dialogs/delete_confirm.rs`，`docs/resource-lifecycle.md`，`docs/resource-lifecycle.en.md`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`
+- 计划状态变更：无
+- 验证结果：`rustfmt --edition 2024`、`cargo check`、pin/reclaim 定向测试、`cargo test --quiet`（66 个通过）、`git diff --check` 和 tracking docs validator 均通过；保留既有 `block v0.1.6` future-incompat warning。
+- 对 plan 的更新：真实 SFTP 传输、远程编辑和深睡回收仍需 GUI 手工验证；下一阶段转向 SSH/local PTY/backend query 的取消所有权与有界 shutdown。
+## 2026-07-10 刷新环境记录到 terminal backend shutdown
+
+- 触发原因：SFTP worker pin/refcount 与深睡回收已完成，本轮切换到 SSH/local PTY 后台执行资源的关闭与回收。
+- 执行内容：复查 `src/terminal.rs`、`src/backend/ssh.rs`、`src/backend/local.rs`、`src/app/actions/session.rs`、`src/app/workspace/workspace.rs`、`src/app/lifecycle/event_loop.rs`、`src/app/lifecycle/startup.rs` 和 `portable_pty` 的 `ChildKiller` 接口；确认可使用已有 Tokio runtime、`JoinSet` 和 `ChildKiller` 实现有界关闭，不需要新依赖。
+- 影响文件：`src/terminal.rs`，`src/backend/ssh.rs`，`src/backend/local.rs`，`src/app/actions/session.rs`，`src/app/workspace/workspace.rs`，`src/app/lifecycle/event_loop.rs`，`src/app/lifecycle/startup.rs`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`
+- 计划状态变更：无
+- 验证结果：确认本轮验证命令为 `rustfmt --edition 2024` 覆盖变更 Rust 文件、`cargo check`、`cargo test --quiet`、`git diff --check` 和 tracking docs validator；完整 GUI 验证仍需要 SSH 主机及本地 shell。
+- 对 plan 的更新：允许实施“SSH 主任务 timeout/abort、SSH child task JoinSet、本地 PTY child kill + 后台 join、tab/retry/window shutdown 统一入口”。
+## 2026-07-10 完成 terminal backend shutdown 环境验证
+
+- 触发原因：SSH/local PTY 后台资源的统一关闭实现、回归测试和 tracking 收口均已完成。
+- 执行内容：实现 `BackendShutdown` 控制器；SSH 使用有界 graceful close、超时 abort 和 `JoinSet` 子任务回收；local PTY 使用 `ChildKiller` 与后台 reader/writer join；窗口关闭、Quit、tab close/retry 和自然关闭事件接入同一控制器，并抑制主动关闭实例的旧事件。
+- 影响文件：`src/terminal.rs`，`src/backend/ssh.rs`，`src/backend/local.rs`，`src/app/actions/session.rs`，`src/app/lifecycle/event_loop.rs`，`src/app/lifecycle/startup.rs`，`src/app/input/app_menu.rs`，`docs/resource-lifecycle.md`，`docs/resource-lifecycle.en.md`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`
+- 计划状态变更：无
+- 验证结果：`rustfmt --edition 2024`、`cargo check`、`cargo test --quiet`（69 项通过）、`git diff --check` 和 tracking docs validator 均通过；保留既有 `block v0.1.6` future-incompat warning。
+- 对 plan 的更新：本轮环境结论为“可在 UI 不阻塞的前提下有界回收 terminal backend”；真实 SSH 连接、失联 timeout、local shell 派生进程和 OS 强制退出仍需实机验证。
+## 2026-07-10 刷新环境记录到 workspace tab 可见性
+
+- 触发原因：用户报告顶部标签栏溢出后，快捷键或 pane focus 切换到隐藏标签不会自动显示当前标签。
+- 执行内容：复查 GPUI `ScrollHandle`、`TabBar::track_scroll`、`src/app/workspace/workspace.rs`、`src/app/actions/pane.rs`、`src/app/actions/session.rs` 和 `src/app/views/tab_bar.rs`；确认无需新增依赖，正确实现需要从 `workspace_tabs` 的渲染序列取 index，而不能使用 `self.tabs` 的内部 terminal tab index。
+- 影响文件：`src/app/workspace/workspace.rs`，`src/app/actions/pane.rs`，`src/app/actions/session.rs`，`src/app/views/tab_bar.rs`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`
+- 计划状态变更：无
+- 验证结果：确认本轮验证命令为 `rustfmt --edition 2024` 覆盖变更 Rust 文件、`cargo check`、`cargo test --quiet`、`git diff --check` 和 tracking docs validator；GUI 手工验证需要足够多的工作区标签。
+- 对 plan 的更新：允许实施“统一当前 workspace tab 可见性 helper；接入 workspace 切换、pane focus、tab 创建和关闭后自动选中；为 SFTP 插入导致的索引偏移添加单元测试”。
+
+## 2026-07-10 完成 workspace tab 可见性环境验证
+
+- 触发原因：顶部标签溢出后的自动可见性修复已完成，需要记录实际验证结果和 GUI 验证边界。
+- 执行内容：确认 GPUI `ScrollHandle::scroll_to_item()` 按 child 渲染序列最小滚动；修正内部 terminal tab 索引与顶部 workspace tab 顺序不一致的问题，并覆盖页面/组切换、新建会话、tab 激活和关闭后的自动选中路径。
+- 影响文件：`src/app/workspace/workspace.rs`，`src/app/actions/session.rs`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/changes/2026/07.md`
+- 计划状态变更：无
+- 验证结果：`rustfmt --edition 2024`、定向单元测试、`cargo check`、`cargo test --quiet`（70 项）、`git diff --check` 均通过；保留既有 `block v0.1.6` future-incompat warning。GUI 手工验证未执行。
+- 对 plan 的更新：运行环境和工具链无变化；后续仅需在桌面端验证多标签溢出时的实际视觉行为。
+
+## 2026-07-10 刷新环境记录到终端滚动槽与平台菜单布局
+
+- 触发原因：用户反馈终端滚动条遮挡内容，并要求 Windows/Linux 应用菜单独占顶部。
+- 执行内容：复查 `src/app/views/terminal_panel.rs`、`src/app/views/layout.rs`、terminal scrollbar handle 和 GPUI Component `Scrollbar`；确认 16px scrollbar 轨道当前绝对覆盖 terminal pane，且平台菜单位于随 sidebar 宽度变化的 workspace 主列。
+- 影响文件：`src/app/views/terminal_panel.rs`，`src/app/views/layout.rs`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`
+- 计划状态变更：无
+- 验证结果：本机 Rust 工具链可用；确认仍以 `rustfmt`、`cargo check`、`cargo test --quiet`、`git diff --check` 和 tracking docs validator 作为验证命令；GUI 手工验证需要 Windows/Linux 桌面会话。
+- 对 plan 的更新：允许实施“固定 16px scrollbar gutter 和全宽菜单根行”，不改终端缓冲区、滚动状态或菜单动作。
+
+## 2026-07-10 完成终端滚动槽与平台菜单布局环境验证
+
+- 时间：2026-07-10 14:37 +0800
+- 触发原因：终端滚动槽与平台菜单布局实现完成，需要记录实际本机验证结果。
+- 执行内容：terminal pane 的内容和滚动轨道改为独立弹性列与固定 16px gutter；平台菜单提升为 Windows/Linux 根布局的独立全宽行，避免受侧栏布局影响。
+- 影响文件：`src/app/views.rs`，`src/app/views/terminal_panel.rs`，`src/app/views/layout.rs`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`
+- 计划状态变更：无
+- 验证结果：`rustfmt --edition 2024`、`cargo check`、`cargo test --quiet`（70 项）、`git diff --check` 和 tracking docs validator 均通过；保留既有 `block v0.1.6` future-incompat warning。
+- 对 plan 的更新：运行环境和依赖策略保持不变；真实 Windows/Linux GUI 仍需验证长行末尾、滚动条拖动和侧栏状态。
