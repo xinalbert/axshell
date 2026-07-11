@@ -1,3 +1,76 @@
+## 2026-07-11 Settings 交互与主题实时预览修正预检
+
+- 日期：2026-07-11 20:42 +0800
+- 变化摘要：本轮从 SFTP hover 修正切换到 Settings 页面交互修正，范围包括设置页主要下拉 hover 反馈、SSH/保存会话入口聚焦和 custom theme 输入实时预览。
+- 受影响文件：`src/app/dialogs/settings.rs`，`src/app/dialogs/settings/appearance.rs`，`src/app/dialogs/settings/custom.rs`，`src/app/dialogs/settings/shell.rs`，`src/app/theme.rs`，`src/app/lifecycle/event_loop.rs`，`src/app/actions/session.rs`，`src/app/actions/saved_sessions.rs`，`src/app/dialogs/selector.rs`，`src/app/views/sidebar.rs`，跟踪文档。
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo；计划验证为相关 `rustfmt`、`cargo check`、`cargo test --quiet`、`git diff --check` 和 tracking docs validator。
+- 验证结果：确认可在仓库内 UI/action 层修正；不新增依赖、不修改 `Cargo.toml` / `Cargo.lock`、不修改外部 cargo 缓存源码、不需要联网、不使用多 agent。
+
+## 2026-07-11 刷新环境记录到主题 preset 色调修正
+
+- 日期：2026-07-11 19:35 +0800
+- 变化摘要：运行时、依赖、工具链和测试入口不变；本轮只调整内置主题资产、默认 theme profile 和已保存默认 profile 的归一化迁移。
+- 受影响文件：`assets/themes/tokyonight.json`，`assets/themes/matrix.json`，`src/config/model.rs`，`src/config/store.rs`，`src/app/theme.rs`，跟踪文档。
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo；计划验证为相关 `rustfmt`、theme/profile 定向测试、`cargo check`、`cargo test --quiet`、`git diff --check` 和 tracking docs validator。
+- 验证结果：本机工具链满足仓库约束；现有 `ThemeSet` schema 和配置归一化入口足以完成调整，无需新增依赖、联网或多 agent。
+
+## 2026-07-11 完成主题 preset 色调修正环境验证
+
+- 日期：2026-07-11 19:50 +0800
+- 变化摘要：Tokyo Night / Storm / Moon 和 Matrix 补充 light companion；默认 preset 改为实际对应色调；旧重复内置 profile 会迁移到 replacement；运行时、依赖、manifest/lock 与 CI 配置不变。
+- 受影响文件：`assets/themes/tokyonight.json`，`assets/themes/matrix.json`，`src/config/model.rs`，`src/config/store.rs`，`src/app/theme.rs`，跟踪文档。
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo；没有新增运行或测试依赖。
+- 验证结果：相关 `rustfmt` 通过；theme/profile 定向测试 12 项通过；`cargo check` 通过；`cargo test --quiet` 110 项全部通过；`git diff --check` 和 tracking docs validator 通过。保留既有 `block v0.1.6` future-incompat warning；GUI 主题 preset 仍需手工确认。
+
+## 2026-07-11 刷新环境记录到 Settings 布局归属整理
+
+- 日期：2026-07-11 17:56 +0800
+- 变化摘要：运行时、依赖、工具链和测试入口不变；本轮只调整 Settings 页面侧栏组织、页面内容归属和双语名称。
+- 受影响文件：`src/app/dialogs/settings.rs`，`src/app/dialogs/settings/appearance.rs`，`src/app/dialogs/settings/font_page.rs`，`src/app/dialogs/settings/custom.rs`，`src/app/dialogs/settings/terminal.rs`，`src/app/dialogs/settings/workspace.rs`，`src/app/dialogs/settings/proxy.rs`，`src/app/dialogs/settings/general.rs`，`locales/en.yml`，`locales/zh-CN.yml`，跟踪文档。
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo；计划验证为相关 `rustfmt`、`cargo check`、`cargo test --quiet`、`git diff --check` 和 tracking docs validator。
+- 验证结果：本机工具链满足仓库约束；现有 GPUI settings 组件和配置 getter/setter 足以完成调整，无需新增依赖、联网或多 agent。
+
+## 2026-07-11 完成 Settings 布局归属整理环境验证
+
+- 日期：2026-07-11 18:25 +0800
+- 变化摘要：Settings 侧栏和页面归属已调整为 General、Appearance & Theme、Theme Editor、Terminal、Workspace Layout、Monitor & Resources、Connections、Settings Sync、Shortcuts、Help、About；运行时、依赖、manifest/lock 与 CI 配置不变。
+- 受影响文件：`src/app/dialogs/settings.rs`，`src/app/dialogs/settings/general.rs`，`src/app/dialogs/settings/appearance.rs`，`src/app/dialogs/settings/font_page.rs`，`src/app/dialogs/settings/custom.rs`，`src/app/dialogs/settings/terminal.rs`，`src/app/dialogs/settings/workspace.rs`，`src/app/dialogs/settings/proxy.rs`，`locales/en.yml`，`locales/zh-CN.yml`，跟踪文档。
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo；没有新增运行或测试依赖。
+- 验证结果：相关 `rustfmt` 通过；`cargo check` 通过；`cargo test --quiet` 106 项全部通过；`git diff --check` 和 tracking docs validator 通过。保留既有 `block v0.1.6` future-incompat warning；GUI 设置页仍需手工确认。
+
+## 2026-07-11 主题套装化与设置页简化预检
+
+- 日期：2026-07-11 17:10 +0800
+- 变化摘要：运行时、依赖、工具链和 CI 入口不变；本轮把主题设置主概念收敛为“主题套装 + 模式”，扩展内置 profile 预设，并把亮/暗变体从 Appearance 主路径移到 Custom 高级编辑语义。
+- 受影响文件：`src/config/model.rs`，`src/config/store.rs`，`src/app/dialogs/settings/appearance.rs`，`src/app/dialogs/settings/custom.rs`，`locales/en.yml`，`locales/zh-CN.yml`，跟踪文档。
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo；计划运行相关 `rustfmt`、主题/profile 定向测试、`cargo check`、`cargo test --quiet`、`git diff --check` 和 tracking docs validator。
+- 验证结果：确认可复用现有 `ThemeProfileConfig`、GPUI component `ThemeRegistry` 和内置主题 JSON；不新增依赖、不联网、不使用多 agent。
+
+## 2026-07-11 完成主题套装化与设置页简化环境验证
+
+- 日期：2026-07-11 17:19 +0800
+- 变化摘要：默认主题套装扩展到 13 个，Appearance 页主路径简化为 Theme Mode + Theme，Custom 页表达为基于当前预设修改并保留高级亮/暗变体；运行时、依赖、manifest/lock 与 CI 配置不变。
+- 受影响文件：`src/config/model.rs`，`src/config/store.rs`，`src/app/theme.rs`，`src/app/dialogs/settings/appearance.rs`，`src/app/dialogs/settings/custom.rs`，`locales/en.yml`，`locales/zh-CN.yml`，跟踪文档。
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo；没有新增运行或测试依赖。
+- 验证结果：相关 `rustfmt` 通过；theme/profile 定向测试 4 项通过；`cargo check` 通过；`cargo test --quiet` 105 项全部通过；`git diff --check` 和 tracking docs validator 通过。GUI 主题套装选择和 Custom 页编辑体验仍需手工确认。
+
+## 2026-07-11 修正 Custom 主题继承值环境记录
+
+- 日期：2026-07-11 17:31 +0800
+- 变化摘要：Custom 页不再同时显示 `Light Theme` / `Dark Theme` 两段，只显示当前模式的一组覆盖字段；字段 placeholder 和说明里的继承值改为从当前基础主题动态解析。运行时、依赖、manifest/lock 与 CI 配置不变。
+- 受影响文件：`src/app/theme.rs`，`src/app/dialogs/settings/custom.rs`，`src/app/lifecycle/init.rs`，`locales/en.yml`，`locales/zh-CN.yml`，跟踪文档。
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo；没有新增运行或测试依赖。
+- 验证结果：相关 `rustfmt` 通过；theme/profile 与 import theme 定向测试共 8 项通过；`cargo check` 通过；`cargo test --quiet` 106 项全部通过；`git diff --check` 和 tracking docs validator 通过。
+
+## 2026-07-11 设置页主题 profile 与自定义保存路径预检
+
+- 触发原因：用户要求按相关 skills 分步实施设置页主题改造，包括多套配置、自定义基于已有主题修改、自定义保存和指定保存位置。
+- 执行内容：复查 `Cargo.toml`、`Cargo.lock`、`src/config/model.rs`、`src/config/store.rs`、`src/app/theme.rs`、`src/app/dialogs/settings/appearance.rs`、`src/app/dialogs/settings/custom.rs`、`src/app/lifecycle/init.rs`、`src/app/actions/session.rs`、`locales/en.yml` 和 `locales/zh-CN.yml`；确认主题引擎已支持 `ThemeSet` 多主题和用户 `themes/` 目录，当前限制主要来自 AxShell 配置模型与设置页 light/dark 双槽 UI。
+- 影响文件：`src/config/model.rs`，`src/config/store.rs`，`src/app/theme.rs`，`src/app/dialogs/settings/appearance.rs`，`src/app/dialogs/settings/custom.rs`，`src/app/lifecycle/init.rs`，`src/app.rs`，`locales/en.yml`，`locales/zh-CN.yml`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/project-map.md`，`docs/project-implementation-tracker/changes/2026/07.md`
+- 计划状态变更：无
+- 验证结果：确认本轮不新增依赖、不修改 `Cargo.toml` / `Cargo.lock`、不需要联网、不使用多 agent；本机 `rustc 1.96.1` / `cargo 1.96.1` 可用。
+- 对 plan 的更新：允许继续实施“兼容旧 light/dark 字段的 `theme_profiles` 配置；外观页 profile 选择；自定义页基于当前 profile 编辑并保存到默认或指定路径”。
+
 ## 2026-07-11 Windows Ctrl 点击跳转修复预检
 
 - 触发原因：用户反馈 Windows 下终端 URL/SFTP Ctrl+点击跳转不工作，实际按 Windows 键才触发。
@@ -5,6 +78,24 @@
 - 影响文件：`src/app/actions/terminal.rs`，`src/app/actions/session.rs`，`src/app/terminal.rs`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/changes/2026/07.md`
 - 计划状态变更：无
 - 验证结果：确认本轮不新增依赖、不修改 `Cargo.toml` / `Cargo.lock`、不需要联网、不使用多 agent；验证命令收敛为 Rust 格式化、相关单元测试、`cargo check`、`git diff --check` 和 tracking docs validator。
+- 对 plan 的更新：无
+
+## 2026-07-11 release tag About 版本显示修复预检
+
+- 触发原因：用户反馈 GitHub 发布版本的 About 页面没有跟随 tag 更新，仍显示仓库 `Cargo.toml` 中的 `2026.7.6`。
+- 执行内容：复查 `Cargo.toml`、`Cargo.lock`、`build.rs`、`.github/workflows/release.yml`、`scripts/release_version.py`、`src/app/constants.rs` 和 `src/app/dialogs/settings/about.rs`；确认 About 页面只读 `env!("CARGO_PKG_VERSION")`，release workflow 虽然解析了 tag 并导出 `RELEASE_PUBLIC_VERSION`，但二进制 UI 没有显式优先使用该值。
+- 影响文件：`build.rs`，`src/app/constants.rs`，`.github/workflows/release.yml`，`scripts/release_version.py`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/project-map.md`，`docs/project-implementation-tracker/changes/2026/07.md`
+- 计划状态变更：无
+- 验证结果：确认本轮不新增依赖、不修改 `Cargo.toml` / `Cargo.lock`、不需要联网、不使用多 agent；本机 `rustc 1.96.1` / `cargo 1.96.1` 可用；`python3 scripts/release_version.py env --tag v2026.7.11-1` 可派生 `RELEASE_PUBLIC_VERSION=2026.07.11.1`。
+- 对 plan 的更新：允许继续实施“build script 读取 `RELEASE_PUBLIC_VERSION` 并注入 `AXSHELL_PUBLIC_VERSION`；About helper 优先读取注入值，普通构建回退 Cargo 包版本”。
+
+## 2026-07-11 完成 release tag About 版本显示环境验证
+
+- 触发原因：构建期 release public version 注入和 About 版本 helper 修复已完成，需要回写环境记录。
+- 执行内容：在 `build.rs` 中监听 `RELEASE_PUBLIC_VERSION` 并注入 `AXSHELL_PUBLIC_VERSION`；在 `src/app/constants.rs` 中让 About 版本优先读取注入值，普通构建回退 Cargo 包版本；执行本机格式化、聚焦测试、编译检查、完整测试、空白检查和 tracking docs validator。
+- 影响文件：`build.rs`，`src/app/constants.rs`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/changes/2026/07.md`
+- 计划状态变更：无
+- 验证结果：`rustfmt --edition 2024 build.rs src/app/constants.rs` 通过；带 `RELEASE_PUBLIC_VERSION=2026.07.11.1` 的定向测试 1 项通过；普通环境 constants 测试 4 项通过；`cargo check` 通过；`cargo test --quiet` 98 项全部通过；`git diff --check` 通过；tracking docs validator 通过；真实 GitHub Actions tag release About 页面仍需后续实跑确认。
 - 对 plan 的更新：无
 
 ## 2026-07-11 完成 Windows Ctrl 点击跳转环境验证
@@ -1483,6 +1574,22 @@
 - 更新后的命令或环境：继续使用 Rust 2024 / Cargo；没有新增运行或测试依赖。
 - 验证结果：相关 `rustfmt` 通过；`cargo check` 通过；`cargo test --quiet` 94 项全部通过；`git diff --check` 和 tracking docs validator 通过。保留既有 `block v0.1.6` future-incompat warning，真实 GUI 快捷键录制与触发仍需手工确认。
 
+## 2026-07-11 刷新环境记录到主题 JSON 导入
+
+- 日期：2026-07-11 16:20 +0800
+- 变化摘要：运行时、依赖、工具链和 CI 入口不变；本轮在主题 profile 与自定义保存位置基础上补齐 JSON 导入能力。
+- 受影响文件：`src/config/store.rs`，`src/app/theme.rs`，`src/app/dialogs/settings/custom.rs`，`locales/en.yml`，`locales/zh-CN.yml`，跟踪文档。
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo；计划运行相关 `rustfmt`、主题/profile 定向测试、`cargo check`、`cargo test --quiet`、`git diff --check` 和 tracking docs validator。
+- 验证结果：确认可复用现有 `rfd`、`serde_json`、GPUI component `ThemeSet` 与用户 themes 目录机制；不新增依赖、不联网、不使用多 agent。
+
+## 2026-07-11 完成主题 JSON 导入环境验证
+
+- 日期：2026-07-11 16:57 +0800
+- 变化摘要：主题 JSON 导入、用户 themes 目录持久化、导入 profile 激活和 Custom 设置页导入入口已完成；运行时、依赖、manifest/lock 与 CI 配置不变。
+- 受影响文件：`src/config/store.rs`，`src/app/theme.rs`，`src/app/dialogs/settings/custom.rs`，`locales/en.yml`，`locales/zh-CN.yml`，跟踪文档。
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo；没有新增运行或测试依赖。
+- 验证结果：相关 `rustfmt` 通过；theme/profile 定向测试 7 项通过；`cargo check` 通过；`cargo test --quiet` 105 项全部通过；`git diff --check` 和 tracking docs validator 通过。GUI 文件选择和真实主题渲染仍需手工确认。
+
 ## 2026-07-11 完成全应用日志覆盖环境验证
 
 - 日期：2026-07-11 08:40 +0800
@@ -1561,3 +1668,115 @@
 - 受影响文件：`src/config/model.rs`，`src/config/store.rs`，`src/app.rs`，`src/app/lifecycle/init.rs`，`src/app/dialogs.rs`，`src/app/dialogs/settings_close_confirm.rs`，`src/app/dialogs/settings/shell.rs`，`src/app/dialogs/settings/workspace.rs`，`src/app/workspace.rs`，`src/app/views/tab_bar.rs`，`locales/en.yml`，`locales/zh-CN.yml`，跟踪文档。
 - 更新后的命令或环境：继续使用 Rust 2024 / Cargo；没有新增运行或测试依赖。
 - 验证结果：相关 `rustfmt` 通过；配置定向测试 2 项通过；`cargo check` 通过；`cargo test --quiet` 85 项全部通过；`git diff --check` 和 tracking docs validator 通过。保留既有 `block v0.1.6` future-incompat warning。
+
+## 2026-07-11 刷新环境记录到 SFTP / 菜单 hover 响应修正
+
+- 日期：2026-07-11 20:08 +0800
+- 变化摘要：运行时、依赖和工具链不变；本轮修正 SFTP 文件列表和自绘右键菜单 hover 反馈，避免快速移动鼠标时背景色显得滞后。
+- 受影响文件：`src/app/views/sftp_panel.rs`，`src/app/views/layout.rs`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/changes/2026/07.md`
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo；计划验证为相关 `rustfmt`、`cargo check`、`cargo test --quiet`、`git diff --check` 和 tracking docs validator。
+- 验证结果：本机 `rustc 1.96.1`、`cargo 1.96.1` 可用；gpui-component popup menu 只读复核，不修改外部依赖源码；无需新增依赖、联网或多 agent。
+
+## 2026-07-11 刷新环境记录到状态驱动 SFTP hover
+
+- 日期：2026-07-11 20:22 +0800
+- 变化摘要：运行时、依赖和工具链不变；SFTP 文件行 hover 从 GPUI 行级 `.hover()` 切换为 `hovered_path` 状态驱动，避免虚拟列表行 hover 与新状态互相覆盖。
+- 受影响文件：`src/app/sftp.rs`，`src/app/actions/sftp.rs`，`src/app/actions/session.rs`，`src/app/lifecycle/init.rs`，`src/app/lifecycle/event_loop.rs`，`src/app/views/sftp_panel.rs`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/changes/2026/07.md`
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo；已执行相关 `rustfmt` 和 `cargo check`，计划继续执行完整测试、空白检查和 tracking docs validator。
+- 验证结果：`cargo check` 通过并仅保留既有 `block v0.1.6` future-incompat warning；无需新增依赖、联网或多 agent。
+
+## 2026-07-11 刷新环境记录到全局 hover 审计与 helper 抽取
+
+- 日期：2026-07-11 20:28 +0800
+- 变化摘要：运行时、依赖和工具链不变；按用户要求完成联网检索和全局 `.hover()` 审计，新增 `FastHoverState` 作为虚拟列表快速 hover helper。
+- 受影响文件：`src/app.rs`，`src/app/hover.rs`，`src/app/sftp.rs`，`src/app/actions/sftp.rs`，`src/app/actions/session.rs`，`src/app/lifecycle/init.rs`，`src/app/lifecycle/event_loop.rs`，`src/app/views/sftp_panel.rs`，跟踪文档。
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo；不新增运行或测试依赖；计划继续执行完整测试、空白检查和 tracking docs validator。
+- 验证结果：`rg` 全局扫描已完成；联网来源记录已写入 `docs/project-implementation-tracker/research.md`；`cargo check` 待 helper 抽取后最终复跑。
+
+## 2026-07-11 完成 SFTP / 菜单 hover 响应修正环境验证
+
+- 日期：2026-07-11 20:30 +0800
+- 变化摘要：SFTP 文件行快速 hover helper、状态驱动 hover、SFTP 自绘菜单 hover 统一和全局 hover 审计均已完成；运行时、依赖、manifest/lock 与 CI 配置不变。
+- 受影响文件：`src/app.rs`，`src/app/hover.rs`，`src/app/sftp.rs`，`src/app/actions/sftp.rs`，`src/app/actions/session.rs`，`src/app/lifecycle/init.rs`，`src/app/lifecycle/event_loop.rs`，`src/app/views/sftp_panel.rs`，`src/app/views/layout.rs`，跟踪文档。
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo；没有新增运行或测试依赖。
+- 验证结果：相关 `rustfmt` 通过；`cargo check` 通过；`cargo test --quiet` 112 项全部通过；`git diff --check` 和 tracking docs validator 通过。保留既有 `block v0.1.6` future-incompat warning；真实 GUI hover 手感仍需手工确认。
+
+## 2026-07-11 完成 Settings 交互与主题实时预览环境验证
+
+- 日期：2026-07-11 21:34 +0800
+- 变化摘要：Settings 下拉菜单、Theme/Appearance 页字体候选构建、Settings 重开状态、SSH/会话入口焦点和 custom theme 实时预览均已完成；运行时、依赖、manifest/lock 与 CI 配置不变。
+- 受影响文件：`src/app.rs`，`src/app/actions/session.rs`，`src/app/actions/saved_sessions.rs`，`src/app/dialogs/selector.rs`，`src/app/dialogs/settings.rs`，`src/app/dialogs/settings/`，`src/app/lifecycle/event_loop.rs`，`src/app/lifecycle/init.rs`，`src/app/theme.rs`，`src/app/views/sidebar.rs`，`src/app/views/helpers.rs`，`src/app/workspace.rs`，跟踪文档。
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo；没有新增运行或测试依赖。
+- 验证结果：相关 `rustfmt` 通过；`cargo check` 通过；`cargo test --quiet` 110 项全部通过；`git diff --check` 和 tracking docs validator 通过。保留既有 `block v0.1.6` future-incompat warning；真实 GUI Settings hover 手感、SSH 焦点和 custom theme 预览仍需手工确认。
+
+## 2026-07-11 刷新环境记录到 Settings 快速菜单文本回归
+
+- 日期：2026-07-11 21:48 +0800
+- 变化摘要：运行时、依赖、工具链和 CI 入口不变；本轮修复 Settings 快速下拉菜单标签因 flex 内容测量而统一显示为 `...` 的回归。
+- 受影响文件：`src/app/dialogs/settings/fast_menu.rs`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/changes/2026/07.md`。
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo；验证命令为相关 `rustfmt`、`cargo check`、`git diff --check` 和 tracking docs validator。
+- 验证结果：现有 GPUI `Popover` 和本地 fast menu helper 足以完成修复；不新增依赖、不联网、不使用多 agent。
+
+## 2026-07-11 验证 Settings 快速菜单文本布局实现
+
+- 日期：2026-07-11 21:51 +0800
+- 变化摘要：菜单容器和菜单行获得稳定的 `min_width` 实际宽度，普通标签不再在布局测量时收缩为 `...`；超长标签仍由既有 ellipsis 截断。
+- 受影响文件：`src/app/dialogs/settings/fast_menu.rs`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/changes/2026/07.md`。
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo；已执行相关 `rustfmt`、`cargo check` 和 `cargo test --quiet`，待执行 `git diff --check` 和 tracking docs validator。
+- 验证结果：`cargo check` 通过并仅保留既有 `block v0.1.6` future-incompat warning；完整单测 110 项通过；不新增依赖、联网或多 agent。
+
+## 2026-07-11 完成 Settings 快速菜单文本回归环境验证
+
+- 日期：2026-07-11 21:53 +0800
+- 变化摘要：Settings 快速菜单文本布局回归已自动化收口；运行时、依赖、配置 schema、manifest/lock 和 CI 配置不变。
+- 受影响文件：`src/app/dialogs/settings/fast_menu.rs`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/changes/2026/07.md`。
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo；无新增运行或测试依赖。
+- 验证结果：相关 `rustfmt`、`cargo check`、`cargo test --quiet`（110 项）、`git diff --check` 和 tracking docs validator 全部通过；真实 GUI 文本显示仍需手工确认。
+
+## 2026-07-11 刷新环境记录到 Custom Theme 连续实时预览
+
+- 日期：2026-07-11 23:01 +0800
+- 变化摘要：运行时、依赖、工具链和 CI 入口不变；本轮修复 Custom Theme 连续修改时，外部 ThemeRegistry 因同名主题不覆盖而导致预览停留在首次结果的问题。
+- 受影响文件：`src/app/theme.rs`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/changes/2026/07.md`。
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo；计划执行相关 `rustfmt`、`cargo check`、`cargo test --quiet`、`git diff --check` 和 tracking docs validator。
+- 验证结果：现有 Theme 和 ThemeConfig API 足以直接应用每次生成的配置对；不新增依赖、不联网、不使用多 agent。
+
+## 2026-07-11 验证 Custom Theme 连续实时预览实现
+
+- 日期：2026-07-11 23:05 +0800
+- 变化摘要：Custom Theme 实时预览改为直接安装每次新构造的 light/dark config，并复用普通主题的 Theme 应用逻辑；不再依赖同名 registry 条目的覆盖。
+- 受影响文件：`src/app/theme.rs`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/changes/2026/07.md`。
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo；已执行相关 `rustfmt`、`cargo check`、`cargo test --quiet`，待执行 `git diff --check` 和 tracking docs validator。
+- 验证结果：完整单测 110 项通过；`cargo check` 仅保留既有 `block v0.1.6` future-incompat warning；不新增依赖、联网或多 agent。
+
+## 2026-07-11 完成 Custom Theme 连续实时预览环境验证
+
+- 日期：2026-07-11 23:07 +0800
+- 变化摘要：Custom Theme 连续实时预览已自动化收口；运行时、依赖、配置 schema、manifest/lock 和 CI 配置不变。
+- 受影响文件：`src/app/theme.rs`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/changes/2026/07.md`。
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo；无新增运行或测试依赖。
+- 验证结果：相关 `rustfmt`、`cargo check`、`cargo test --quiet`（110 项）、`git diff --check` 和 tracking docs validator 全部通过；真实 GUI 连续编辑预览仍需手工确认。
+
+## 2026-07-11 刷新环境记录到普通 Theme profile 直接应用
+
+- 日期：2026-07-11 23:12 +0800
+- 变化摘要：运行时、依赖、工具链和 CI 入口不变；本轮修复 Appearance 页普通 Theme profile 已写入配置但窗口主题未可靠应用的问题。
+- 受影响文件：`src/app/theme.rs`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/changes/2026/07.md`。
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo；计划执行相关 `rustfmt`、`cargo check`、`cargo test --quiet`、`git diff --check` 和 tracking docs validator。
+- 验证结果：脱敏配置字段确认 Matrix profile 已持久化；内置 profile JSON 有实际不同色调；不新增依赖、不联网、不使用多 agent。
+
+## 2026-07-11 验证普通 Theme profile 直接应用实现
+
+- 日期：2026-07-11 23:16 +0800
+- 变化摘要：普通 profile 直接从 registry 解析并安装明确的 light/dark 配置对，Custom profile 保留动态构造；已生成新 debug 二进制用于关闭旧进程后的 GUI 验证。
+- 受影响文件：`src/app/theme.rs`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/changes/2026/07.md`。
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo；已执行相关 `rustfmt`、`cargo check`、`cargo test --quiet` 和 `cargo build`，待执行 `git diff --check` 和 tracking docs validator。
+- 验证结果：完整单测 110 项通过；`cargo check` / `cargo build` 仅保留既有 `block v0.1.6` future-incompat warning；不新增依赖、联网或多 agent。
+
+## 2026-07-11 完成普通 Theme profile 直接应用环境验证
+
+- 日期：2026-07-11 23:18 +0800
+- 变化摘要：普通 Theme profile 直接应用已自动化收口；运行时、依赖、配置 schema、manifest/lock 和 CI 配置不变。
+- 受影响文件：`src/app/theme.rs`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/changes/2026/07.md`。
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo；无新增运行或测试依赖。
+- 验证结果：相关 `rustfmt`、`cargo check`、`cargo test --quiet`（110 项）、`cargo build`、`git diff --check` 和 tracking docs validator 全部通过；真实 GUI 连续 profile 切换仍需手工确认。

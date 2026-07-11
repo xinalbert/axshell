@@ -1,5 +1,15 @@
 # 外部检索记录
 
+## 2026-07-11 GPUI hover 响应路径
+
+- 时间：2026-07-11 20:28 +0800
+- 检索问题：GPUI 中 `.hover()`、`on_hover`、`on_mouse_move` 和虚拟列表/菜单 hover 的适用边界是什么，是否应为高频列表抽出状态驱动的快速 hover helper
+- 检索原因：用户明确要求联网检索；实现路径需要区分普通稳定元素的样式 hover 和虚拟列表行的显式鼠标跟随状态
+- 来源列表：Zed GPUI source `window.rs` <https://github.com/zed-industries/zed/blob/main/crates/gpui/src/window.rs>；longbridge gpui-component `ListItem` source <https://github.com/longbridge/gpui-component/blob/main/crates/ui/src/list/list_item.rs>；longbridge gpui-component `MenuItemElement` source <https://github.com/longbridge/gpui-component/blob/main/crates/ui/src/menu/menu_item.rs>
+- 关键结论：普通稳定元素继续使用 `.hover()` 更简单；虚拟列表行如果需要“跟手”的背景反馈，应使用稳定元素 id，并通过 `on_mouse_move` / `on_hover` 更新应用状态，再由渲染背景读取该状态，避免和行级 `.hover()` 两套机制互相覆盖。
+- 对实施计划的影响：新增 `src/app/hover.rs` 的 `FastHoverState`；SFTP 远端/本地文件行移除旧 `.hover()`，改为状态驱动 hover；表头、侧边栏、selector、splitter、搜索按钮和普通菜单保留 `.hover()`。
+- 未解决问题：真实 GUI 鼠标快速扫过时的手感仍需手工确认；若后续出现新的虚拟列表，应复用 `FastHoverState` 而不是直接复制 SFTP 逻辑。
+
 ## 2026-07-10 终端系统文本导航快捷键
 
 - 时间：2026-07-10 07:54 +0800

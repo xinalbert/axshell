@@ -8,7 +8,7 @@
 ## 索引范围
 
 - 根目录：`<repo-root>`
-- 覆盖：`AGENTS.md`，`src/app/`，`src/session/`，`src/sftp/`，`src/terminal/`，`src/sync/`，`locales/`，`docs/`，`Cargo.toml`，`Cargo.lock`，`.github/workflows/`，`scripts/`，`assets/*.desktop`
+- 覆盖：`AGENTS.md`，`src/app/`，`src/session/`，`src/sftp/`，`src/terminal/`，`src/sync/`，`locales/`，`docs/`，`Cargo.toml`，`Cargo.lock`，`build.rs`，`.github/workflows/`，`scripts/`，`assets/*.desktop`
 - 排除：`.git/`，`target/`，`assets/` 批量图标/字体资源，构建产物与外部依赖缓存
 
 ## 目录地图
@@ -16,19 +16,19 @@
 | Path | Purpose | Open When | Notes |
 | --- | --- | --- | --- |
 | `AGENTS.md` | Codex 仓库级持久指令 | 改 agent 默认约束、Rust 模块布局规则、验证/提交/tag 习惯或长期项目工作约定时 | Codex 默认读取 `AGENTS.md`；`.agent` 不是默认加载文件名，除非客户端配置了 fallback |
-| `src/app.rs` | 应用壳入口，声明 app 子模块、`AxShell` 状态结构和 type re-export | 新增/调整应用级状态字段、输入实体、scroll handle、runtime/event channel、模块出口或跨模块共享类型时 | 现代 Rust 具名入口；不再使用 `src/app.rs` |
-| `src/app/` | 应用壳、功能状态、动作、视图、对话框、输入和生命周期实现 | 调整 AxShell 状态、工作区、SFTP UI、terminal UI、搜索、同步、菜单、启动或事件泵时 | `input.rs` / `lifecycle.rs` 是真实父模块入口；单文件功能直接位于 `app/` |
+| `src/app.rs` | 应用壳入口，声明 app 子模块、`AxShell` 状态结构和 type re-export | 新增/调整应用级状态字段、输入实体、scroll handle、runtime/event channel、Settings generation、模块出口或跨模块共享类型时 | 现代 Rust 具名入口；不再使用 `src/app.rs` |
+| `src/app/` | 应用壳、功能状态、动作、视图、对话框、输入和生命周期实现 | 调整 AxShell 状态、工作区、SFTP UI、terminal UI、搜索、同步、菜单、启动、Settings 快速菜单或事件泵时 | `input.rs` / `lifecycle.rs` 是真实父模块入口；单文件功能直接位于 `app/` |
 | `src/events.rs` | backend、SFTP、监控和同步共用的有界应用事件总线 | 改事件载荷、发送端类型、队列容量或 app event loop 接线时 | 256 条 Tokio channel；不属于 terminal 领域 |
 | `src/diagnostics.rs` | 跨模块日志脱敏与诊断 helper | 改主机、用户、路径、错误链已知敏感值脱敏或统一诊断字段时 | 不得记录密码、私钥内容、token 或终端输入输出 |
 | `src/monitoring.rs` | 本地系统采样、远端采样模型和格式化 | 改 CPU/MEM/NET/DISK 采样、远端 key/value 解析或字节格式化时 | 原 `src/system.rs`；内容限定为监控领域 |
 | `src/app/sftp.rs` | app 层每个连接组的 SFTP 页面状态 | 改当前远端路径、分页状态、选择集、预览或 home dir 状态时 | 与 `src/sftp/` 协议/传输实现分离 |
 | `src/app/actions.rs` | 应用动作层入口 | 改 actions 模块导出时 | 子模块在 `src/app/actions/`；由原 `session/mod.rs`、`session/pane.rs`、`session/saved_sessions.rs`、`sftp/ops.rs`、`terminal/input.rs` 迁入 |
 | `src/app/actions/` | 应用动作层实现，集中承载直接操作 `AxShell` 的会话、pane、SFTP UI、本地文件浏览和终端输入动作 | 改 `open_local`、`connect_ssh`、pane split/focus、saved session 分组/重命名、SFTP UI 操作、terminal key/mouse/IME/scroll 行为时 | 入口为 `src/app/actions.rs` |
-| `src/app/theme.rs` | app 视觉系统、主题注册、custom theme 和字体加载 | 改内置主题资源、用户主题加载、custom theme 保存/应用、Maple Mono 内置字体加载或 ThemeRegistry 接线时 | 直接暴露为 `crate::app::theme`，资源 include 路径按当前文件使用 `../../assets/...` |
+| `src/app/theme.rs` | app 视觉系统、主题注册、theme profile、custom theme 导入/保存和字体加载 | 改内置主题资源、用户主题加载、theme profile 应用、custom theme 导入/保存/应用/保存路径、Maple Mono 内置字体加载或 ThemeRegistry 接线时 | 直接暴露为 `crate::app::theme`，资源 include 路径按当前文件使用 `../../assets/...` |
 | `src/app/input/` | 原生菜单和快捷键录制/绑定 | 改 App menu、Quit shutdown、workspace keybindings、设置页按键录制、冲突检测或 keybinding 展示时 | 父模块入口为 `src/app/input.rs` |
 | `src/app/lifecycle/` | 启动、窗口打开、日志/crash hook、`AxShell::new` 和事件泵 | 改启动顺序、日志目录、主窗口 options、runtime event pump、输入事件或初始化状态时 | 父模块入口为 `src/app/lifecycle.rs`；`startup` 由 app 兼容导出给 main |
 | `src/app/state/` | `AxShell` 子状态聚合 | 改 appearance、monitoring、runtime/event channel 或窗口生命周期状态时 | search 状态已并入 `src/app/search.rs` |
-| `src/config/` | 配置文件模型、默认值、规范化规则和 `ConfigStore` | 改配置 schema/serde 默认、窗口/光标/主题模型、旧目录迁移、sync 默认对象名或 custom theme draft 时 | `model.rs` 承载 `ConfigFile` 和值类型，`store.rs` 只做持久化、迁移和访问器 |
+| `src/config/` | 配置文件模型、默认值、规范化规则和 `ConfigStore` | 改配置 schema/serde 默认、窗口/光标/theme profile、旧目录迁移、sync 默认对象名或 custom theme draft/save path 时 | `model.rs` 承载 `ConfigFile` 和值类型，`store.rs` 只做持久化、迁移、归一化和访问器 |
 | `src/platform/` | 平台相关本地集成 | 改本地 X Server 路径发现、DISPLAY 选择或 Windows 启动参数时 | 入口为 `src/platform.rs`；当前子模块为 `x_server.rs` |
 | `src/session.rs` | SSH 会话领域模型 | 改 `Session`、`AuthMethod`、`SshConnectionMode` 或连接模式优先级时 | 类型直接由 `crate::session` 导出；无兼容 config 子模块 |
 | `src/backend.rs` | backend 领域入口 | 改 backend 模块导出时 | 子模块为 `auth`、`local`、`proxy`、`ssh` |
@@ -41,6 +41,7 @@
 | `locales/` | 中英文界面文案 | 新增 custom theme 分组、提示、保存说明、日志入口和错误消息时 | 需要同步 `en.yml` 和 `zh-CN.yml` |
 | `.github/workflows/` | CI / Release 构建和打包元数据 | 改二进制名、artifact 名、macOS bundle Info.plist 或发布路径时 | `release.yml` 手工组装 `.app`，需要与 Cargo 包名一致 |
 | `scripts/` | 本地开发/打包脚本与发布辅助脚本 | 改 macOS `.app` 名称、bundle id、图标文件名、签名逻辑、tag/version 映射或发布前 manifest 同步时 | `package-macos-app.sh` 会运行 `cargo build --release` 并组装 bundle；本轮将新增共享版本脚本 |
+| `assets/themes/` | 内置 GPUI 主题 JSON 资源 | 改内置主题变体、默认 preset 可引用的 theme 名称、light/dark companion 或主题色调时 | `src/app/theme.rs` 通过 `include_str!("../../assets/themes/*.json")` 注册；新增/改名主题需同步 `src/config/model.rs` 默认 profile 和配置归一化测试 |
 | `assets/*.desktop` | Linux desktop entry | 改应用显示名、Exec、Icon、StartupWMClass 或 Debian metadata 时 | 当前 desktop 文件为 `assets/ax_shell.desktop` |
 | `assets/icons/terminal_icon_all_formats/` | 应用图标资源目录 | 改 `build.rs` Windows icon、macOS bundle icon、Linux desktop/deb icon、非 macOS runtime window icon 或 release 打包图标路径时 | 批量图标不逐项索引；`terminal_icon_256.png` 是 `startup.rs` 非 macOS runtime window icon 的编译期资源 |
 | `README.md` / `README.zh.md` | 英文默认项目入口与中文入口 | 改项目定位、快速开始、文档入口、贡献或支持信息时 | 保持简短并在顶部互链；详细功能放入 `docs/` |
@@ -55,8 +56,8 @@
 | `AGENTS.md` | Codex agents 默认读取的项目约束文件 | Rust module layout，verification，release tags，git hygiene | 新增模块、拆分文件、准备 release tag、提交或判断项目级 agent 行为时 |
 | `docs/resource-lifecycle.md` | 中文资源生命周期与深度休眠设计 | 状态机、阶段路线、资源策略、验证边界 | 实现或评审后台降载、SFTP pin、backend shutdown 与系统睡眠恢复时 |
 | `docs/resource-lifecycle.en.md` | English resource lifecycle and deep-sleep design | State machine, phases, resource policy, verification | Keep English documentation aligned with the Chinese lifecycle design |
-| `src/config/model.rs` | 配置文件与值模型、默认值和规范化规则 | `ConfigFile`，`SavedWindowBounds`，`TitleBarStyle`，`CursorStyle`，`CustomThemeConfig` | 改配置 serde、默认值、输入规范化、Settings 二次快捷键动作、窗口/标题栏/光标或 custom theme 模型时 |
-| `src/config/store.rs` | 本地配置路径、迁移、getter/setter 和 `ConfigStore` | `ConfigStore::load/save`，`config_root_dir_path`，config path helpers | 改配置目录、旧目录迁移、Settings 二次快捷键动作、sync 默认对象名、custom theme draft 或 registry file 路径时 |
+| `src/config/model.rs` | 配置文件与值模型、默认值和规范化规则 | `ConfigFile`，`ThemeProfileConfig`，`CustomThemeConfig`，`SavedWindowBounds`，`TitleBarStyle`，`CursorStyle` | 改配置 serde、默认值、theme profile、Settings 二次快捷键动作、窗口/标题栏/光标或 custom theme 模型时 |
+| `src/config/store.rs` | 本地配置路径、迁移、getter/setter 和 `ConfigStore` | `ConfigStore::load/save`，`normalize_theme_profiles`，`theme profile` helpers，config path helpers | 改配置目录、旧目录迁移、Settings 二次快捷键动作、sync 默认对象名、theme profile、custom theme draft 或 registry file 路径时 |
 | `src/backend/proxy.rs` | SSH/SFTP transport proxy | `ProxyStream`，`ENV_PROXY`，`connect`，`active` | 改 SOCKS5/HTTP/direct 连接、环境代理或 session/global proxy 优先级时 |
 | `src/platform/x_server.rs` | 本地 X Server 平台 helper | `default_app_path`，`default_display`，`resolve_display`，`launch_args` | 改 macOS XQuartz、Windows VcXsrv/Xming、DISPLAY 或空闲 display 选择时 |
 | `src/app/state/` | `AxShell` 子状态模块 | `AppearanceState`，`LifecycleState`，`MonitoringState`，`RuntimeState` | 改应用外观、窗口生命周期、系统监控或 Tokio backend event channel 状态分组时 |
@@ -65,16 +66,16 @@
 | `src/app/actions/saved_sessions.rs` | session selector 和 saved group action | `selector_entries`，`on_selector_key_down`，`saved_session_groups`，`commit_saved_group_rename` | 改选择器键盘行为、saved session 分组、组名展示或重命名时 |
 | `src/app/actions/sftp.rs` | UI 侧 SFTP 与本地文件浏览 action | `ensure_sftp_handle_for_group`，`release_sftp_handle_for_group`，`load_more_sftp_entries`，`sweep_idle_sftp_connections` | 改按需建连、分页加载操作、pin-aware group worker 回收、深睡断连、远端目录点击或传输入口时 |
 | `src/app/actions/terminal.rs` | terminal 键盘、鼠标、滚动和 IME action | `on_terminal_key_down`，`terminal_grid_point_and_side`，`on_terminal_scroll`，IME helpers | 鼠标命中、选择、滚动行高、快捷键、粘贴或 IME 候选框位置与终端网格不一致时 |
-| `src/app/theme.rs` | 主题注册、当前主题应用和 custom theme 逻辑 | `load_embedded_themes`，`load_user_themes`，`apply_theme_preferences`，`save_custom_appearance` | app 视觉系统入口；通过 `crate::app::theme` 暴露 |
+| `src/app/theme.rs` | 主题注册、当前主题应用、theme profile 和 custom theme 逻辑 | `load_embedded_themes`，`load_user_themes`，`apply_theme_preferences`，`apply_theme_profile`，`save_custom_appearance` | app 视觉系统入口；通过 `crate::app::theme` 暴露 |
 | `src/app/lifecycle/startup.rs` | 启动辅助、日志 writer/轮转、crash hook 和窗口打开 | `init_logging`，`runtime_log_dir`，`crash_report_dir`，`open_main_window`，window close callback | 日志 writer 必须报告初始化/写入失败并保留进程期 guard；窗口关闭先发起 backend shutdown，再保存布局 |
 | `assets/icons/terminal_icon_all_formats/terminal_icon_256.png` | 非 macOS runtime 窗口图标和 Linux/Debian 256px 图标资源 | PNG 资源文件 | 改 `include_bytes!`、Debian asset 或 Linux release icon 路径时确认存在性 |
 | `src/app/input/app_menu.rs` | GPUI 原生应用菜单注册 | `install`，`app_menus`，`Quit` | `Quit` 会先关闭全部 backend；原 `src/app/app_menu.rs` 迁入；通过 `crate::app::app_menu` 兼容导出 |
-| `src/app.rs` | 全局 UI 状态结构和 app 子模块出口 | `AxShell` fields，type re-exports | 新增/调整应用级状态字段、输入实体、scroll handle、runtime/event channel 或跨模块共享类型时 |
+| `src/app.rs` | 全局 UI 状态结构和 app 子模块出口 | `AxShell` fields，type re-exports | 新增/调整应用级状态字段、输入实体、scroll handle、runtime/event channel 或 Settings generation 时 |
 | `src/app/lifecycle/init.rs` | `AxShell` 初始化和默认状态装配 | `AxShell::new`，`backend_event_channel` | 使用 `src/events.rs` 构造 256 条 Tokio backend event queue；新增输入框、默认配置读取、初始 theme/font/system 状态、订阅或 event pump 启动时 |
 | `src/app/lifecycle/event_loop.rs` | 输入事件、后台事件分发、系统采样和主题同步 | `on_input_event`，`start_event_pump`，`drain_backend_events`，`sample_system_if_due` | 原 `src/app/event_loop.rs` 迁入；单次 drain 上限与 queue 容量一致，改 backend event 处理、SFTP event 更新、connection progress、system monitor sampling 或 follow-system theme 同步时 |
 | `src/app/constants.rs` | app 尺寸、快捷键 context、仓库 URL 和版本展示 | layout constants，`TERMINAL_KEY_CONTEXT`，`public_version_label` | 改 UI 固定尺寸、入口链接或公开版本文案时 |
 | `src/app/pane.rs` | pane tree 数据模型 | `PaneLayout` | 改 split tree、tab 查找、替换、删除或 pane 统计时 |
-| `src/app/workspace.rs` | 工作区页面、tab/group 模型、连接进度、远程采样和布局持久化 | `TabGroup`，`WorkspacePage`，`workspace_tabs`，`set_workspace_page` | 改 terminal/SFTP/settings tab、当前 tab 可见性、页面关闭、连接重试或监控采样时 |
+| `src/app/workspace.rs` | 工作区页面、tab/group 模型、连接进度、远程采样和布局持久化 | `TabGroup`，`WorkspacePage`，`workspace_tabs`，`set_workspace_page`，`open_settings_page` | 改 terminal/SFTP/settings tab、当前 tab 可见性、Settings 重开状态重置、页面关闭、连接重试或监控采样时 |
 | `src/app/sftp.rs` | app 层 SFTP 页面、本地浏览、排序和右键菜单状态 | `SftpUiState`，`LocalFileBrowserState`，`SftpSortColumn`，`SftpContextMenuState` | 改 SFTP UI 状态模型而非协议 worker 时 |
 | `src/app/terminal.rs` | app 层 terminal 字体/滚动条/hover 状态 | `TerminalFontMetrics`，`TerminalScrollbarHandle`，`HoveredUrl` | 改 terminal UI metrics、scrollbar adapter 或 URL/path hover 时 |
 | `src/app/session_ui.rs` | session selector 与连接进度 UI 模型 | `SelectorEntry`，`ConnectionProgress` | 改 session selector 条目或连接进度遮罩状态时 |
@@ -82,17 +83,19 @@
 | `src/app/config_sync.rs` | app 层配置同步动作 | sync credentials，upload/download action，`SyncFinished` | 改 WebDAV/S3 表单取值、同步触发或状态接线时 |
 | `src/app/dialogs/` | 弹窗和设置页渲染目录模块 | `ssh.rs`，`selector.rs`，`transfers.rs`，`delete_confirm.rs`，`sftp_close_confirm.rs`，`settings_close_confirm.rs`，`settings/` | 改 SSH 弹窗、session selector、关闭确认、transfer history、delete confirm、设置页和 About 页面时；入口为 `src/app/dialogs.rs` |
 | `src/app/dialogs.rs` | dialogs 目录模块入口和共享 imports | 子模块声明，`crate::app::dialogs` 路由 | 改 dialogs 模块可见性、共享 imports 或新增 dialog 子文件时 |
-| `src/app/dialogs/settings/` | 设置页子页面目录 | `appearance.rs`，`font_page.rs`，`terminal.rs`，`workspace.rs`，`monitoring.rs`，`language.rs`，`custom.rs`，`shell.rs`，`about.rs`，`help.rs`，`keybindings.rs`，`sync.rs`，`proxy.rs` | 字体枚举 helper 已并入 `font_page.rs`；入口为 `src/app/dialogs/settings.rs` |
-| `src/app/dialogs/settings/appearance.rs` | Settings 外观页 | `settings_appearance_page` | 改主题模式、light/dark theme 或标题栏样式时 |
-| `src/app/dialogs/settings/font_page.rs` | Settings 字体页 | `settings_fonts_page` | 改 UI/terminal 字体大小、字体族或光标样式时 |
-| `src/app/dialogs/settings/terminal.rs` | Settings 终端行为页 | `settings_terminal_page` | 改右键复制粘贴、关键词高亮、SSH 重试或传输中关闭 SFTP 的默认行为时 |
+| `src/app/dialogs/settings/` | 设置页子页面目录 | `general.rs`，`appearance.rs`，`font_page.rs`，`custom.rs`，`fast_menu.rs`，`terminal.rs`，`workspace.rs`，`monitoring.rs`，`sync.rs`，`proxy.rs`，`keybindings.rs`，`shell.rs`，`about.rs`，`help.rs` | 入口为 `src/app/dialogs/settings.rs`；侧栏按 General、Appearance & Theme、Theme Editor、Terminal、Workspace、Monitor & Resources、Connections、Sync、Shortcuts、Help、About 装配；Settings 下拉统一走本地 fast menu |
+| `src/app/dialogs/settings/general.rs` | Settings 通用页 | `settings_general_page` | 改显示语言或 Settings 页面自身行为，例如第二次 Settings 快捷键动作时 |
+| `src/app/dialogs/settings/appearance.rs` | Settings 外观与主题页 | `settings_appearance_page` | 改主题模式、主题套装选择、标题栏样式、字体/光标分组挂载或外观页命名时 |
+| `src/app/dialogs/settings/font_page.rs` | Settings 字体与光标分组 helper | `settings_font_group` | 改 UI/terminal 字体大小、字体族、monospace 过滤、Maple Mono 内置字体展示或光标样式时；该分组挂在 Appearance 页内，字体候选列表需保持 lazy 构建，避免打开 Theme 页时扫描系统字体 |
+| `src/app/dialogs/settings/fast_menu.rs` | Settings 专用轻量下拉菜单 helper | `FastMenuItem`，`fast_settings_menu`，`fast_settings_menu_lazy`，`fast_settings_menu_disabled` | 改 Settings 内下拉 hover 反馈、避免 `PopupMenu` hover selected-state 重绘、延迟构建昂贵菜单候选或新增简单 Settings 菜单时 |
+| `src/app/dialogs/settings/terminal.rs` | Settings 终端行为页 | `settings_terminal_page` | 改右键复制/粘贴或关键词高亮等终端交互设置时 |
 | `src/app/dialogs/sftp_close_confirm.rs` | 活跃 SFTP 传输的页面关闭确认弹窗 | `show_sftp_transfer_close_dialog` | 改首次确认、group 绑定、二次快捷键、保持页面、后台继续、取消断开或记住动作时 |
 | `src/app/dialogs/settings_close_confirm.rs` | Settings 页面关闭确认弹窗 | `show_settings_close_confirm_dialog` | 改确认关闭、保持页面、记住第二次快捷键动作或关闭提示文案时 |
-| `src/app/dialogs/settings/workspace.rs` | Settings 工作区页 | `settings_workspace_page` | 改布局锁定、Settings 二次快捷键动作偏好或 reset layout 入口时 |
+| `src/app/dialogs/settings/workspace.rs` | Settings 工作区布局页 | `settings_workspace_page` | 改布局锁定、非激活标签状态色或 reset layout 入口时 |
 | `src/app/dialogs/settings/monitoring.rs` | Settings 监控页 | `settings_monitoring_page` | 改监控仪表盘显示或监控位置设置时 |
-| `src/app/dialogs/settings/language.rs` | Settings 语言页 | `settings_language_page` | 改显示语言选择和 locale 保存行为时 |
-| `src/app/dialogs/settings/custom.rs` | Custom theme 设置页 | `settings_custom_page` | 改 custom theme name/base theme/override 输入和保存/重置入口时 |
-| `src/app/dialogs/settings/shell.rs` | 设置页外层交互壳 | `settings_page_shell` | 改设置页内 keybinding 录制、关闭确认、Prev/NextTab 捕获或失焦取消录制时 |
+| `src/app/dialogs/settings/custom.rs` | Custom theme 设置页 | `settings_custom_page` | 改 custom theme name、基于预设修改语义、亮/暗高级变体、override 输入、保存路径、浏览目录、导入主题和保存/重置入口时 |
+| `src/app/dialogs/settings/proxy.rs` | Settings 连接与网络页 | `settings_connection_page` | 改 SSH 重试、SFTP 传输关闭策略、全局代理或 X11 转发设置时 |
+| `src/app/dialogs/settings/shell.rs` | 设置页外层交互壳 | `settings_page_shell` | 改设置页内 keybinding 录制、关闭确认、OpenSession/NewSsh/Prev/NextTab 捕获或失焦取消录制时 |
 | `src/app/views/` | 主工作区视图目录模块，按渲染区域拆分 SFTP、监控、侧栏、顶部标签、终端 pane 和整体布局 | `helpers.rs`，`layout.rs`，`monitoring.rs`，`sftp_panel.rs`，`sidebar.rs`，`tab_bar.rs`，`terminal_panel.rs` | 增加固定 Local Terminal 入口、调整 SFTP 双列面板、saved session 分组、侧栏折叠态、顶部标签、监控面板或主布局时 |
 | `src/app/views.rs` | views 目录模块入口和共享 imports | 子模块声明，`crate::app::views` 路由 | 改 views 模块可见性、共享 imports 或新增 views 子文件时 |
 | `src/app/views/layout.rs` | `Render for AxShell` 和顶层菜单/workspace/body 布局 | `render`，platform menu row，workspace page route，resizable panels，overlays | 改 Windows/Linux 全宽菜单、主布局、集成标题栏、workspace/body split、SFTP 页面接线或全局 overlays 时 |
@@ -133,6 +136,7 @@
 | `src/main.rs` | 应用启动初始化顺序 | `main()` | 新增用户 theme 文件初始加载和 watch 入口 |
 | `Cargo.toml` | Cargo 包、依赖、Debian metadata | `[package]`，`[package.metadata.deb]` | 改 crate/package name、二进制名、deb assets 或依赖时 |
 | `Cargo.lock` | 根包与依赖锁文件 | `[[package]] name = "ax_shell"` | 若发布时临时同步 root package version，需要确认 lock 中 root package 条目一起更新 |
+| `build.rs` | Cargo build script | `main`，compile-time env，Windows icon resource | 改构建期环境变量、About/日志版本注入、Windows exe 图标或 resource 编译时 |
 | `.github/workflows/release.yml` | 多平台 release 构建与 GitHub Release 发布 | `build`，`publish`，macOS bundle heredoc | 改 release artifact、bundle display name、binary copy path 或 cask 注释模板时 |
 | `scripts/package-macos-app.sh` | 本地 macOS bundle 打包脚本 | `APP_NAME`，`DISPLAY_NAME`，`BUNDLE_ID`，`Info.plist` | 改 macOS 本地打包输出和显示名时 |
 | `scripts/release_version.py` | 共享发布版本规则脚本 | tag 解析、Cargo semver/public version/bundle version 派生、manifest/lock 同步 | 改 tag 作为唯一版本源的全链路规则时 |
@@ -142,7 +146,7 @@
 
 - `rg -n 'init_logging|runtime_log_dir|crash_report_dir|panic|crash|open_main_window|current_window_title' src/main.rs src/app/lifecycle/startup.rs src/app/dialogs`
 - `rg -n 'AxAshell|ax_ashell|AX_ASHELL|AxShell|ax_shell|AX_SHELL' Cargo.toml Cargo.lock src examples scripts .github assets README.md README.zh.md docs`
-- `rg -n 'GITHUB_REF_NAME|refs/tags|CFBundleShortVersionString|CARGO_PKG_VERSION|version = ' .github/workflows scripts src Cargo.toml Cargo.lock`
+- `rg -n 'GITHUB_REF_NAME|refs/tags|CFBundleShortVersionString|RELEASE_PUBLIC_VERSION|CARGO_PKG_VERSION|version = ' .github/workflows scripts src build.rs Cargo.toml Cargo.lock`
 - `rg -n 'render_sftp_panel|render_monitoring_panel|sidebar\\(|render_collapsed_sidebar|render_tab_bar|render_terminal_panel|render_pane_tree|WorkspacePage' src/app/views src/app`
 - `rg -n 'sidebar\\(|render_collapsed_sidebar|saved_session_groups|open_local' src/app/views src/app/actions`
 - `rg -n 'split_current_pane|focus_adjacent_pane|activate_group|activate_group_page|sync_system_tab_to_active_group' src/app/actions`
@@ -151,6 +155,7 @@
 - `rg -n 'BackendShutdown|shutdown_all_backends|SshBackendShutdown|LocalBackendShutdown|cancel_ssh_child_tasks' src`
 - `rg -n 'load_session_private_key|private_keys_with_algs|key_source_label' src/backend src/sftp`
 - `rg -n 'custom_theme|ThemeRegistry|load_embedded_themes|apply_theme_preferences|save_custom' src/app src/session src/main.rs`
+- `rg -n '\\.hover\\(|\\.on_hover\\(|\\.on_mouse_move\\(|uniform_list\\(' src/app src/terminal`
 - `rg -n 'terminal_font_metrics|terminal_font_is_monospace|terminal_cell_width|terminal_line_height|layout_grid' src/app src/config src/session src/terminal`
 - `rg -n 'observe_window_activation|WindowLifecycleState|deep_sleep_after_minutes|sample_system_if_due|sync_theme_if_due' src/app src/config`
 - `rg -n 'ThemeConfig|ThemeSet|try_parse_color|watch_dir|default_light_theme|default_dark_theme' ~/.cargo/git/checkouts/gpui-component-*`
@@ -162,9 +167,9 @@
 
 ## 刷新规则
 
-- 刷新触发：项目命名、Cargo 包/二进制名、配置目录、同步默认文件名、启动初始化、日志/crash hook、非 macOS runtime 图标资源、release workflow、tag/version 映射规则、manifest/lock 临时同步、macOS/Linux 打包元数据、仓库级 agent 指令、Rust 模块布局约束、SAVED 侧栏入口、custom theme 持久化模型、theme file 注册策略、设置页字段分组、Settings 子页面新增/删除/改名、Settings 关闭确认偏好/dialog、theme list 行为、terminal 亮度语义、终端字体 metrics、窗口激活/后台/深睡状态、workspace page / tab 模型、terminal tab UI 状态回收、terminal backend shutdown controller、SFTP 按需页面/标签关闭/快捷键焦点、SFTP worker/task 关闭所有权、SFTP 分页或受限目录浏览/预览、SFTP 列表排序/传输标签面板、SFTP 目录导航失败恢复、SSH 连接认证/legacy/远程系统探针/X11 relay、settings Custom/shell 拆分、app/backend 根目录收拢、app/actions/state/config/session/sftp/backend/ui/dialogs 模块拆分或用户文档范围发生变化时刷新
-- 最近依据：`AGENTS.md`，`README.md`，`README.zh.md`，`docs/README.md`，`docs/README.zh.md`，`docs/features/`，`docs/images/`，`docs/development.md`，`docs/development.en.md`，`docs/project-env-audit/current.md`
+- 刷新触发：项目命名、Cargo 包/二进制名、构建脚本、配置目录、同步默认文件名、启动初始化、日志/crash hook、非 macOS runtime 图标资源、release workflow、tag/version 映射规则、manifest/lock 临时同步、macOS/Linux 打包元数据、仓库级 agent 指令、Rust 模块布局约束、SAVED 侧栏入口、theme profile 默认套装、theme 设置页主路径、custom theme 持久化模型、custom theme 导入/保存路径、custom theme 实时预览、theme file 注册策略、设置页字段分组、Settings 子页面新增/删除/改名、Settings 快速菜单、Settings 重开 keyed state、Settings 关闭确认偏好/dialog、theme list 行为、terminal 亮度语义、终端字体 metrics、窗口激活/后台/深睡状态、workspace page / tab 模型、terminal tab UI 状态回收、terminal backend shutdown controller、SFTP 按需页面/标签关闭/快捷键焦点、SFTP worker/task 关闭所有权、SFTP 分页或受限目录浏览/预览、SFTP 列表排序/传输标签面板、SFTP 目录导航失败恢复、SSH 连接认证/legacy/远程系统探针/X11 relay、settings Custom/shell 拆分、app/backend 根目录收拢、app/actions/state/config/session/sftp/backend/ui/dialogs 模块拆分或用户文档范围发生变化时刷新
+- 最近依据：`AGENTS.md`，`Cargo.toml`，`Cargo.lock`，`src/app/dialogs/settings/fast_menu.rs`，`src/app/dialogs/settings/font_page.rs`，`src/app/workspace.rs`，`src/app/theme.rs`，`src/app/actions/session.rs`，`docs/project-env-audit/current.md`
 
 ## 最后更新时间
 
-- 2026-07-11 08:33 +0800
+- 2026-07-11 21:15 +0800
