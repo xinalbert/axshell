@@ -19,6 +19,7 @@
 | `src/app.rs` | 应用壳入口，声明 app 子模块、`AxShell` 状态结构和 type re-export | 新增/调整应用级状态字段、输入实体、scroll handle、runtime/event channel、模块出口或跨模块共享类型时 | 现代 Rust 具名入口；不再使用 `src/app.rs` |
 | `src/app/` | 应用壳、功能状态、动作、视图、对话框、输入和生命周期实现 | 调整 AxShell 状态、工作区、SFTP UI、terminal UI、搜索、同步、菜单、启动或事件泵时 | `input.rs` / `lifecycle.rs` 是真实父模块入口；单文件功能直接位于 `app/` |
 | `src/events.rs` | backend、SFTP、监控和同步共用的有界应用事件总线 | 改事件载荷、发送端类型、队列容量或 app event loop 接线时 | 256 条 Tokio channel；不属于 terminal 领域 |
+| `src/diagnostics.rs` | 跨模块日志脱敏与诊断 helper | 改主机、用户、路径、错误链已知敏感值脱敏或统一诊断字段时 | 不得记录密码、私钥内容、token 或终端输入输出 |
 | `src/monitoring.rs` | 本地系统采样、远端采样模型和格式化 | 改 CPU/MEM/NET/DISK 采样、远端 key/value 解析或字节格式化时 | 原 `src/system.rs`；内容限定为监控领域 |
 | `src/app/sftp.rs` | app 层每个连接组的 SFTP 页面状态 | 改当前远端路径、分页状态、选择集、预览或 home dir 状态时 | 与 `src/sftp/` 协议/传输实现分离 |
 | `src/app/actions.rs` | 应用动作层入口 | 改 actions 模块导出时 | 子模块在 `src/app/actions/`；由原 `session/mod.rs`、`session/pane.rs`、`session/saved_sessions.rs`、`sftp/ops.rs`、`terminal/input.rs` 迁入 |
@@ -65,7 +66,7 @@
 | `src/app/actions/sftp.rs` | UI 侧 SFTP 与本地文件浏览 action | `ensure_sftp_handle_for_group`，`release_sftp_handle_for_group`，`load_more_sftp_entries`，`sweep_idle_sftp_connections` | 改按需建连、分页加载操作、pin-aware group worker 回收、深睡断连、远端目录点击或传输入口时 |
 | `src/app/actions/terminal.rs` | terminal 键盘、鼠标、滚动和 IME action | `on_terminal_key_down`，`terminal_grid_point_and_side`，`on_terminal_scroll`，IME helpers | 鼠标命中、选择、滚动行高、快捷键、粘贴或 IME 候选框位置与终端网格不一致时 |
 | `src/app/theme.rs` | 主题注册、当前主题应用和 custom theme 逻辑 | `load_embedded_themes`，`load_user_themes`，`apply_theme_preferences`，`save_custom_appearance` | app 视觉系统入口；通过 `crate::app::theme` 暴露 |
-| `src/app/lifecycle/startup.rs` | 启动辅助、日志初始化和窗口打开 | `init_logging`，`runtime_log_dir`，`crash_report_dir`，`open_main_window`，window close callback | 窗口关闭先发起 backend shutdown，再保存布局；通过 `crate::app::startup` 兼容导出 |
+| `src/app/lifecycle/startup.rs` | 启动辅助、日志 writer/轮转、crash hook 和窗口打开 | `init_logging`，`runtime_log_dir`，`crash_report_dir`，`open_main_window`，window close callback | 日志 writer 必须报告初始化/写入失败并保留进程期 guard；窗口关闭先发起 backend shutdown，再保存布局 |
 | `assets/icons/terminal_icon_all_formats/terminal_icon_256.png` | 非 macOS runtime 窗口图标和 Linux/Debian 256px 图标资源 | PNG 资源文件 | 改 `include_bytes!`、Debian asset 或 Linux release icon 路径时确认存在性 |
 | `src/app/input/app_menu.rs` | GPUI 原生应用菜单注册 | `install`，`app_menus`，`Quit` | `Quit` 会先关闭全部 backend；原 `src/app/app_menu.rs` 迁入；通过 `crate::app::app_menu` 兼容导出 |
 | `src/app.rs` | 全局 UI 状态结构和 app 子模块出口 | `AxShell` fields，type re-exports | 新增/调整应用级状态字段、输入实体、scroll handle、runtime/event channel 或跨模块共享类型时 |
@@ -105,11 +106,11 @@
 | `src/app/views/helpers.rs` | views 内部小 helper | `bind_titlebar_drag`，`collapsed_sidebar_abbrev`，`render_home_page` | 改集成标题栏拖动、折叠侧栏简称或空首页时 |
 | `src/backend/auth.rs` | SSH / SFTP 共用私钥解析和 public key 算法 fallback helper | `load_session_private_key`，`private_keys_with_algs` | 改 inline key、key path、passphrase 或 RSA SHA512/SHA256/none fallback 顺序时 |
 | `src/backend/local.rs` | 本地 PTY 后端 | `LocalBackendShutdown`，`spawn_local_terminal` | 改本地 shell、PTY resize、child kill、reader/writer reaper 或本地 backend event 输出时 |
-| `src/backend/ssh.rs` | SSH 终端运行循环、PTY/shell 生命周期和 channel handler 接线 | `SshBackendShutdown`，`spawn_ssh_terminal`，`run_ssh`，`cancel_ssh_child_tasks`，`ClientHandler` | 改 SSH 命令循环、PTY 请求、shell 生命周期、远程采样/CWD task、关闭语义或 handler 接线时 |
-| `src/backend/ssh/connection.rs` | SSH TCP/proxy 连接、认证和 default/legacy 模式选择 | `connect_and_authenticate`，`connect_with_mode_priority`，`connect_with_mode`，`key_source_label` | 改 SSH 密码/密钥认证、proxy 连接、连接模式 fallback、认证状态上报或 resolved mode 写回事件时 |
+| `src/backend/ssh.rs` | SSH 终端运行循环、PTY/shell 生命周期、结构化诊断和 channel handler 接线 | `SshBackendShutdown`，`spawn_ssh_terminal`，`run_ssh`，`cancel_ssh_child_tasks`，`ClientHandler` | 改 SSH 命令循环、PTY 请求、shell 生命周期、远程采样/CWD task、关闭语义、错误日志或 handler 接线时 |
+| `src/backend/ssh/connection.rs` | SSH TCP/proxy 连接、认证、敏感字段日志和 default/legacy 模式选择 | `connect_and_authenticate`，`connect_with_mode_priority`，`connect_with_mode`，`key_source_label` | 改 SSH 密码/密钥认证、proxy 连接、连接模式 fallback、认证状态上报、日志脱敏或 resolved mode 写回事件时 |
 | `src/backend/ssh/legacy.rs` | SSH legacy 算法配置和协商错误摘要 | `ssh_client_config`，`negotiation_error_details`，`negotiation_error_short_reason` | 改老服务器算法兼容、`No common algorithm` 诊断或默认/legacy 模式配置时 |
 | `src/backend/ssh/system_probe.rs` | SSH 远程系统采样脚本和输出解析入口 | `sample_remote_system_with_handle`，`REMOTE_SYSTEM_PROBE` | 改远程 CPU/MEM/SWAP/NET/DISK 采样命令、Linux/Darwin 兼容或采样 session 错误处理时 |
-| `src/backend/ssh/x11.rs` | SSH X11 forwarding 配置解析、cookie 校验和本地 relay | `X11ForwardingState`，`handle_x11_channel` | 改 X11 DISPLAY 选择、cookie 替换、本地 Unix/TCP 连接或 X11 channel relay 时 |
+| `src/backend/ssh/x11.rs` | SSH X11 forwarding 配置解析、cookie 校验、本地 relay 和脱敏诊断 | `X11ForwardingState`，`handle_x11_channel` | 改 X11 DISPLAY 选择、cookie 替换、本地 Unix/TCP 连接、来源地址脱敏或 X11 channel relay 时 |
 | `src/sftp.rs` | SFTP 模块入口和兼容出口 | module declarations，`RemoteEntry`，`PreviewData`，`SftpHandle`，path re-export | 改 SFTP 模块树或既有 `crate::sftp::*` 路径时 |
 | `src/sftp/auth.rs` | SFTP 连接认证 | `connect_and_authenticate`，`SftpClientHandler` | 改 SFTP SSH 认证主流程或 server key 策略时；private key 解析改 `src/backend/auth.rs` |
 | `src/sftp/model.rs` | SFTP 公共数据与持久化传输模型 | `RemoteEntry`，`PreviewData`，`Transfer`，`TransferState` | 改目录条目、预览载荷、传输序列化或旧 `Cancelled` 兼容时 |
@@ -166,4 +167,4 @@
 
 ## 最后更新时间
 
-- 2026-07-11 07:03 +0800
+- 2026-07-11 08:33 +0800

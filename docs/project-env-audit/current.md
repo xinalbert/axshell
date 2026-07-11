@@ -4,47 +4,47 @@
 
 - 类型：独立项目
 - 根目录：`<repo-root>`
-- 结论：当前为 Rust 2024 / GPUI 桌面应用；本轮维护双语 README，并把用户功能说明拆分到可扩展的 `docs/` 导航与功能页面。
+- 结论：当前为 Rust 2024 / GPUI 桌面应用；本轮根据日志覆盖审查，逐步补齐日志写入可靠性、核心错误路径、结构化字段和敏感信息脱敏。
 
 ## 环境记忆目录
 
 - 目录：`docs/project-env-audit/`
 - current.md：存在
 - changes.md：存在
-- 处理动作：已读取现有记录，并刷新为“README 与用户文档结构维护”任务语境。
+- 处理动作：已读取并刷新为“全软件日志覆盖与诊断可靠性”任务语境。
 
 ## 运行环境
 
-- 主技术栈：Rust 桌面应用，`gpui` / `gpui_component` UI，Markdown 用户与开发文档。
-- 版本约束：仓库声明 `rust-version = 1.88.0`、edition `2024`；本轮不修改 Rust 源码或工具链。
+- 主技术栈：Rust 2024、GPUI、Tokio、`tracing`、`tracing-subscriber`、`tracing-appender`。
+- 版本约束：仓库声明 `rust-version = 1.88.0`、edition `2024`；本机 `rustc 1.96.1`、`cargo 1.96.1`。
 - 包管理器：`cargo`
-- 构建 / 运行入口：`src/main.rs`，`src/app.rs`
-- 本轮文档入口：`README.md`，`README.zh.md`，`docs/README.md`，`docs/README.zh.md`，`docs/user-guide*.md`，`docs/features/`，`docs/images/`。
-- 依赖策略：不新增依赖，不修改 `Cargo.toml` / `Cargo.lock`；内部链接使用仓库相对路径。
+- 构建 / 运行入口：`src/main.rs`，`src/app/lifecycle/startup.rs`
+- 本轮代码入口：`src/main.rs`，`src/diagnostics.rs`，`src/app/lifecycle/startup.rs`，`src/app/lifecycle/event_loop.rs`，`src/app/config_sync.rs`，`src/backend/local.rs`，`src/backend/ssh/connection.rs`，`src/config/store.rs`，`src/sftp/`，相关设置与视图保存调用点。
+- 依赖策略：复用现有 `tracing` 依赖，不修改 `Cargo.toml` / `Cargo.lock`，不新增日志或脱敏依赖。
 
 ## 测试环境
 
-- 测试框架：Markdown 链接检查、`git diff --check`、tracking docs validator。
-- 默认测试命令：Rust 改动时使用 `cargo check`、`cargo test --quiet`；本轮为 Markdown-only，不重复运行 Rust 测试。
-- CI 测试命令：`.github/workflows/ci.yml` 执行多平台 release build，未声明独立文档 job。
-- 当前实施验证命令：检查全部相对 Markdown 链接目标、双语入口互链、文档导航覆盖、`git diff --check` 和 tracking docs validator。
-- 外部依赖：无；无需联网、外部服务或 GUI。
-- 证据文件：`AGENTS.md`，`README.md`，`README.zh.md`，`docs/README*.md`，`docs/user-guide*.md`，`docs/features/`，`docs/development*.md`，`docs/project-implementation-tracker/project-map.md`。
+- 测试框架：Rust 单元测试、`cargo check`、tracking docs validator。
+- 默认测试命令：`cargo check`，`cargo test --quiet`
+- CI 测试命令：`.github/workflows/ci.yml` 执行多平台 release build，未声明独立 test job。
+- 当前实施验证命令：对全部变更 Rust 文件执行 `rustfmt --edition 2024`，运行日志轮转/脱敏定向测试、`cargo check`、`cargo test --quiet`、`git diff --check` 和 tracking docs validator。
+- 外部依赖：无；静态与单元测试不需要真实 SSH/SFTP/WebDAV/S3/X11 服务，真实日志目录和 GUI 诊断流程保留手工验证。
+- 证据文件：`AGENTS.md`，`Cargo.toml`，`Cargo.lock`，`.github/workflows/ci.yml`，`src/app/lifecycle/startup.rs`，`src/events.rs`，`src/app/lifecycle/event_loop.rs`，`src/backend/`，`src/sftp/`，`src/sync.rs`，`src/config/store.rs`。
 
 ## 环境变化检查
 
-- 是否发现变化：是
-- 变化摘要：用户指定新的语言入口约定，默认 `README.md` 使用英文，中文使用 `README.zh.md`；详细用户文档将由单篇指南迁为导航和独立功能页。
-- 受影响文件：根 README、`docs/` 用户文档、环境审计和实施跟踪文档。
-- 是否需要更新 `current.md` / `changes.md`：是；README 入口、文档结构和项目地图均发生变化。
+- 是否发现变化：否
+- 变化摘要：运行时、依赖和工具链不变；当前 103 个 Rust 文件中 22 个包含日志调用，已完成 writer、SFTP/同步/本地 PTY/监控、配置保存和 SSH/SFTP/X11 敏感日志缺口修复。
+- 受影响文件：日志初始化、诊断 helper、backend/SFTP/sync/app event/config 保存调用点和跟踪文档。
+- 是否需要更新 `current.md` / `changes.md`：是；当前任务、验证范围和项目地图均已切换。
 
 ## 开工判定
 
 - 状态：允许开工
-- 原因：现有双语用户指南提供了可追溯内容基础，可在不改变产品行为的前提下拆分；根工作树开工前干净。
-- 开工前动作：已读取 `AGENTS.md`、README maintenance skill、环境记录、实施记录、项目地图、根 README、双语用户指南、开发文档和 release/manifest 证据。
-- 完成后动作：双语入口、功能页、截图说明和项目地图已更新；31 个用户可见 Markdown 文件链接检查、语言配对、空白检查与 tracking docs validator 均通过。
+- 原因：现有依赖已经提供结构化日志、非阻塞 writer 和过滤能力；可以在不改变业务协议、配置 schema 或依赖的前提下补齐覆盖。
+- 开工前动作：已读取 `AGENTS.md`、环境记录、实施记录、项目地图、日志初始化、事件总线、SFTP、同步、本地 PTY、SSH、监控和配置保存路径；已执行基线 `cargo check` 与 `git diff --check`。
+- 完成后动作：已完成全部变更格式化、编译、定向测试、92 项完整测试、空白检查和 tracking validator；真实外部服务、GUI 和日志目录故障注入保留手工验证。
 
 ## 最后确认时间
 
-- 2026-07-11 07:03 +0800
+- 2026-07-11 08:40 +0800

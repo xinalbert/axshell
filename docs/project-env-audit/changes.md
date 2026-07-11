@@ -1410,6 +1410,53 @@
 - 计划状态变更：无
 - 验证结果：31 个用户可见 Markdown 文件相对链接目标全部存在；8 组功能页语言配对完整；活动文档无旧入口引用；`git diff --check` 和 tracking docs validator 通过。
 - 对 plan 的更新：Markdown-only 交付完成；实际截图留待后续按截图规范添加。
+
+## 2026-07-11 刷新环境记录到全应用日志覆盖
+
+- 时间：2026-07-11 07:25 +0800
+- 触发原因：用户要求根据日志覆盖调查，按相关 skills 逐步实现全软件诊断补强。
+- 执行内容：复核 Rust/Cargo/CI 环境、日志初始化与轮转、事件总线、SFTP、同步、本地 PTY、SSH、监控、配置保存和敏感字段；确定六阶段实施与验证边界。
+- 影响文件：`src/main.rs`，`src/diagnostics.rs`，`src/app/lifecycle/startup.rs`，`src/app/lifecycle/event_loop.rs`，`src/app/config_sync.rs`，`src/backend/`，`src/config/store.rs`，`src/sftp/`，相关 app 保存调用点，跟踪文档
+- 计划状态变更：无
+- 验证结果：本机 `rustc 1.96.1` / `cargo 1.96.1` 可用；基线 `cargo check` 和 `git diff --check` 通过；保留既有 `block v0.1.6` future-incompat warning。
+- 对 plan 的更新：允许在不新增依赖、不改 schema/manifest 的前提下实施日志可靠性、覆盖和脱敏。
+
+## 2026-07-11 验证日志 writer 与脱敏基础
+
+- 时间：2026-07-11 07:42 +0800
+- 触发原因：日志基础可靠性和脱敏 helper 实现完成，需要记录阶段环境验证。
+- 执行内容：确认仍复用现有 tracing 依赖；改用无损 non-blocking buffer、小时轮转和 7 天文件保留，新增 diagnostics 模块，不修改 manifest/lock。
+- 影响文件：`src/main.rs`，`src/diagnostics.rs`，`src/app/lifecycle/startup.rs`，`src/app/actions/`，跟踪文档
+- 计划状态变更：无
+- 验证结果：4 项定向测试和 `cargo check` 通过；运行环境和依赖策略不变。
+- 对 plan 的更新：允许继续核心模块日志覆盖，最终统一重跑完整测试。
+
+## 2026-07-11 验证核心错误路径日志覆盖
+
+- 时间：2026-07-11 07:55 +0800
+- 触发原因：SFTP、sync、local backend 和 monitoring 日志补强完成，需要确认现有运行环境与行为测试保持稳定。
+- 执行内容：对核心日志变更执行格式化、编译和模块定向测试；确认未新增依赖或配置字段。
+- 影响文件：`src/diagnostics.rs`，`src/sftp/`，`src/app/config_sync.rs`，`src/app/lifecycle/event_loop.rs`，`src/backend/local.rs`，`src/app/actions/session.rs`，跟踪文档
+- 计划状态变更：无
+- 验证结果：阶段 `cargo check`、14 项 SFTP、1 项 local backend 和 5 项 sync 测试通过；运行环境和依赖策略不变。
+- 对 plan 的更新：允许继续替换配置保存静默错误，最终运行完整回归。
+
+## 2026-07-11 验证配置保存与远端日志脱敏环境
+
+- 日期：2026-07-11 08:33 +0800
+- 变化摘要：配置保存错误统一进入结构化日志；SSH/SFTP/X11 日志和错误链增加敏感值清洗；运行时、依赖、配置 schema、manifest/lock 与 CI 配置不变。
+- 受影响文件：`src/diagnostics.rs`，`src/config/store.rs`，相关 app 保存调用点，`src/backend/ssh.rs`，`src/backend/ssh/`，`src/sftp/`，跟踪文档
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo 和现有 tracing 依赖；无需联网、多 agent 或外部服务即可完成静态与单元测试。
+- 验证结果：全部变更 Rust 文件格式化通过；阶段 `cargo check` 和 `git diff --check` 通过；未修改 `Cargo.toml` / `Cargo.lock`。
+
+## 2026-07-11 完成全应用日志覆盖环境验证
+
+- 日期：2026-07-11 08:40 +0800
+- 变化摘要：日志覆盖实现与自动化回归完成；运行时、依赖、配置 schema、manifest/lock 和 CI 配置保持不变。
+- 受影响文件：本轮日志基础设施、diagnostics、app/backend/SFTP/sync/config 调用点和跟踪文档
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo；最终验证为相关 `rustfmt`、定向测试、`cargo check`、`cargo test --quiet`、`git diff --check` 和 tracking docs validator。
+- 验证结果：92 项完整测试全部通过；空白检查和 tracking validator 通过；自动化环境验证完成，真实外部服务、GUI 与日志目录故障注入保留手工验证。
+
 ## 2026-07-10 刷新环境记录到源码模块边界治理
 
 - 日期：2026-07-10 20:40 +0800

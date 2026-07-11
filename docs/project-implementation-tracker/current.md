@@ -2,14 +2,14 @@
 
 ## 当前目标
 
-- 目标：把根 README 收敛为英文默认入口和中文切换页，在 `docs/` 建立双语导航，并把用户功能说明拆成便于后续补图的独立 Markdown 页面。
-- 交付物：`README.md` / `README.zh.md`、`docs/README.md` / `docs/README.zh.md`、双语功能文档、截图目录约定、精简兼容用户指南、更新后的项目地图和链接验证。
+- 目标：根据日志覆盖审查建立可靠、结构化、可脱敏的全应用诊断路径，使关键失败在 UI 状态之外同时进入持久日志。
+- 交付物：可靠日志 writer 和轮转、诊断脱敏 helper、SFTP/同步/本地 PTY/监控/配置保存日志覆盖、敏感字段收敛、单元测试和完整验证记录。
 
 ## 项目边界
 
 - 根目录：`<repo-root>`
-- 当前范围：`README.md`，`README.en.md`，`README.zh.md`，`docs/README*.md`，`docs/user-guide*.md`，`docs/features/`，`docs/images/`，`docs/development*.md`，跟踪文档。
-- 不在本轮范围内：修改应用功能、Rust 源码、配置 schema、依赖、manifest/lock、发布 workflow 或生成实际产品截图。
+- 当前范围：`src/main.rs`，`src/diagnostics.rs`，`src/app/lifecycle/startup.rs`，`src/app/lifecycle/event_loop.rs`，`src/app/config_sync.rs`，`src/backend/local.rs`，`src/backend/ssh/connection.rs`，`src/config/store.rs`，`src/sftp/`，相关 app 设置/视图保存调用点，跟踪文档。
+- 不在本轮范围内：记录终端输入输出内容、采集密码/密钥/token、引入远程 telemetry、修改业务协议或配置 schema、增加依赖、修改 manifest/lock/release/tag。
 
 ## 当前状态
 
@@ -22,43 +22,54 @@
 
 | Step | Status | Deliverable | Verification | Notes |
 | --- | --- | --- | --- | --- |
-| P1 | completed | README skill、现有双语文档、项目地图和环境预检 | 工作树、现有链接、文档标题和产品证据复核 | 用户指定默认英文 README |
-| P2 | completed | 根 README 双语入口与 `docs/` 双语总导航 | 结构对齐、语言互链、相对链接 | 根 README 只保留概览和快速开始 |
-| P3 | completed | terminal/SSH、workspace、SFTP、settings、sync、proxy/X11、monitoring 等双语功能页 | 功能覆盖和交叉链接检查 | 每页预留截图位置说明 |
-| P4 | completed | 精简兼容用户指南、截图目录说明和项目地图刷新 | 旧入口可继续导航到新页面 | 不保留重复长文 |
-| P5 | completed | Markdown-only 最终验证和实施记录收口 | 链接检查、`git diff --check`、tracking validator | 不运行无关 Rust 测试 |
+| P1 | completed | 日志覆盖审查、环境预检、风险分级和项目地图刷新 | 基线 `cargo check`、`git diff --check`、日志调用统计 | 103 个 Rust 文件中 22 个有日志调用 |
+| P2 | completed | 非静默 writer、稳定时间桶、非丢失缓冲和脱敏 helper | 日志轮转/脱敏单元测试、`cargo check` | 不记录凭据与终端内容 |
+| P3 | completed | SFTP、同步、本地 PTY、监控和 backend 关闭错误日志 | 定向测试、调用点复核、`cargo check` | UI 事件保留，同时增加持久日志 |
+| P4 | completed | 配置保存统一日志入口并替换静默 `save()` | 配置测试、静默保存检索、`cargo check` | 不改变保存时机或 UI 行为 |
+| P5 | completed | SSH/SFTP 现有日志结构化和敏感主机/用户/路径脱敏 | 脱敏测试、敏感日志检索、`cargo check` | 保留诊断上下文但不写完整标识 |
+| P6 | completed | 项目地图、完整回归和文档收口 | `cargo test --quiet`、`git diff --check`、tracking validator | GUI/真实远端服务保留手工验证 |
 
 ## 已完成
 
-- 已读取 README maintenance skill 及参考规范，确认根 README 应保持简短并把详细说明移入 `docs/`。
-- 已确认项目现有语言约定是中文 `README.md`、英文 `README.en.md`，用户要求改为英文 `README.md`、中文 `README.zh.md`。
-- 已确认现有 `docs/user-guide*.md` 聚合了终端、SSH、SFTP、工作区、设置、同步、代理、X11、监控和日志内容，适合按功能拆分。
-- 已确认 `preview.png` 可继续作为根 README 首屏预览；后续功能截图应放入 `docs/images/`，不创建缺失图片链接。
-- 已完成施工前环境预检；无需联网、多 agent、依赖或 Rust 改动。
-- 已将英文内容写入默认 `README.md`，新增中文 `README.zh.md`，并删除旧 `README.en.md` 入口；两个根页面结构对齐并在顶部互链。
-- 已新增 `docs/README.md` 和 `docs/README.zh.md`，集中导航快速入门、功能指南、开发文档、资源生命周期和截图说明。
-- 已新增双语快速入门及 8 组独立功能页，覆盖 terminal/SSH、workspace、SFTP、appearance/settings、sync、proxy/X11、monitoring/lifecycle 和本地数据/故障排查。
-- 已将原单篇 `user-guide` 收敛为兼容索引，并修复中英文开发文档回链。
-- 已新增 `docs/images/` 截图规范和 `docs/images/features/` 实际目录说明；功能页使用 HTML 注释预留图片目标，不产生破损图片。
-- 已更新项目地图中的根 README、docs 导航、功能页和截图目录职责，并把常用定位命令切换到 `README.zh.md`。
-- 已检查 31 个用户可见 Markdown 文件的相对链接目标，全部存在；8 组功能页中英文配对完整，活动文档不再引用删除的 `README.en.md` 或 `user-guide.en.md`。
-- 已完成 `git diff --check` 和 tracking docs validator。
+- 已完成全仓日志调用、writer、轮转、事件错误传播、配置保存和敏感字段审查。
+- 已确认日志基础覆盖启动、崩溃、SSH/X11、部分配置和部分 SFTP，但 SFTP 顶层、同步、本地 PTY、监控不可用和大量设置保存只进入 UI 或被静默忽略。
+- 已确认 `tracing_appender::non_blocking` 默认使用 lossy 缓冲，当前 `LocalMinutelyRoller::write` 又会忽略文件打开失败并返回成功。
+- 已确认 SSH 日志包含完整用户名/主机/私钥路径，SFTP 日志包含完整本地和远程路径，需要先建立统一脱敏 helper。
+- 已完成施工前环境预检；基线 `cargo check` 和 `git diff --check` 通过，工作树干净，不需要联网、多 agent 或新增依赖。
+- 已将 runtime log 改为完整小时桶并保留 168 个小时文件，修复间隔整小时但分钟相同不轮转的问题。
+- 已让日志目录/文件初始化失败回退到 stderr，writer 的 rollover/write/flush 错误不再伪装为成功；non-blocking buffer 改为无损模式。
+- 已让 `WorkerGuard` 由 `main` 持有到应用退出，避免泄漏 guard 和跳过正常 flush。
+- 已新增 `src/diagnostics.rs`，集中提供用户、主机和路径脱敏，并把 saved session 展示复用到该 helper。
+- 已完成 4 项 diagnostics 测试、2 项日志桶/保留测试和阶段 `cargo check`，无新增源码告警。
+- 已为 SFTP worker 顶层失败、目录浏览/分页/reveal/预览、远程编辑 watcher、自动上传、创建目录、批量删除和 transfer 失败增加结构化错误日志。
+- 已为 WebDAV/S3 上传下载增加 backend/operation/session_count 日志，为同步设置和结果持久化失败增加错误日志，不记录 endpoint 或凭据。
+- 已为本地 PTY 启动、读写、flush、resize、wait、进程退出、kill 和线程 panic 增加日志，并为初次/重开失败补齐 action 边界日志。
+- 已为远端监控不可用增加结构化 warning；错误文本统一单行化、路径脱敏并限制为 512 字符。
+- 阶段 `cargo check`、14 项 SFTP 测试、1 项 local backend 测试和 5 项 sync 测试通过，无新增源码告警。
+- 已新增 `ConfigStore::save_logged(operation)`，替换设置、布局、侧栏、监控、代理、SFTP 偏好和会话动作中静默忽略的配置保存错误；静默 `config.save()` 检索无剩余命中。
+- 已将 SSH terminal、connection、X11 和 SFTP auth/worker 日志改为结构化字段；用户名、主机、私钥路径、代理标识和错误链中的已知敏感值均在写日志前清洗。
+- 已补齐 SSH 顶层 terminal、shutdown、write、resize、CWD、环境变量、disconnect、close 和 X11 relay 日志，保持终端输入输出内容不进入日志。
+- 最近一轮 `rustfmt`、`cargo check` 和 `git diff --check` 通过；仅保留既有 `block v0.1.6` future-incompat warning。
+- 已完成 4 项 diagnostics、2 项 logging、8 项 backend、14 项 SFTP、11 项 config、5 项 sync 定向测试；`cargo test --quiet` 92 项全部通过。
+- tracking docs validator 通过；旧式 SSH/SFTP 日志、完整环境代理字段、完整迁移路径和静默配置保存检索无剩余命中；`Cargo.toml` / `Cargo.lock` 未修改。
 
 ## 验证
 
-- 已完成：工作树、README、双语用户/开发文档、项目地图、manifest/release 证据复核；31 个用户可见 Markdown 文件链接检查；功能页语言配对；旧活动链接检索；`git diff --check` 和 tracking docs validator。
-- 未完成：实际功能截图尚未提供，因此仅完成路径和插入位置准备；本轮无 Rust 改动，未运行无关编译测试。
+- 已完成：日志调用分布、writer/轮转、核心错误路径、配置保存、SSH/SFTP/X11 脱敏、格式化、编译、定向测试、92 项完整回归、空白检查和 tracking validator。
+- 未完成：真实 GUI、SSH/SFTP/X11、WebDAV/S3 和日志目录不可写故障注入手工验证。
 
 ## 风险与阻塞
 
-- 剩余风险一：外部网站如果直接链接旧 `README.en.md` 或 `docs/user-guide.en.md`，仓库内无法自动改写；仓库活动文档已全部切换到新入口。
-- 剩余风险二：后续添加截图时需要按 `docs/images/README*.md` 清理敏感信息，并把功能页注释替换为真实图片链接。
+- 风险一：日志覆盖不能演变成记录终端内容、密码、私钥、token 或完整用户路径。
+- 风险二：同一错误在生产者和事件边界重复记录会产生噪声；按“底层失败记录一次，UI 事件只在缺少底层日志时补记”的规则实施。
+- 风险三：把 non-blocking writer 改为无损缓冲可能在极端日志洪峰时施加背压；本应用不记录终端输出，并将高频状态维持在 debug 或不记录。
+- 风险四：结构化日志已覆盖关键失败，但真实 SSH/SFTP/X11、同步服务和日志目录不可写场景仍需要手工触发确认。
 - 无阻塞。
 
 ## 下一步
 
-- 后续可按功能页逐步加入截图；README 与 docs 结构维护已完成。
+- 启动应用确认小时日志文件创建；分别触发本地终端、SSH/SFTP、同步和监控失败，并检查日志字段与脱敏结果；临时让日志目录不可写以确认 stderr fallback。
 
 ## 最后更新时间
 
-- 2026-07-11 07:03 +0800
+- 2026-07-11 08:40 +0800
