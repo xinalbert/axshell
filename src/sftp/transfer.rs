@@ -120,6 +120,25 @@ pub(super) async fn send_transfer_error(
     failed_status: String,
 ) {
     let is_cancelled = err_msg.contains("transfer cancelled");
+    let error = crate::diagnostics::sanitize_error(&err_msg);
+    if is_cancelled {
+        tracing::info!(
+            component = "sftp",
+            operation = "transfer",
+            tab_id,
+            transfer_id = id,
+            "SFTP transfer cancelled"
+        );
+    } else {
+        tracing::error!(
+            component = "sftp",
+            operation = "transfer",
+            tab_id,
+            transfer_id = id,
+            error = %error,
+            "SFTP transfer failed"
+        );
+    }
     let state = if is_cancelled {
         TransferState::Interrupted("User cancelled".to_string())
     } else {
@@ -319,7 +338,13 @@ async fn download_remote_directory_archive(
 
     let extracted_to = archive_download?;
     if let Err(err) = cleanup_result {
-        tracing::warn!("failed to clean remote archive {remote_archive}: {err:#}");
+        tracing::warn!(
+            component = "sftp",
+            operation = "cleanup_remote_archive",
+            remote_path = %crate::diagnostics::mask_path(&remote_archive),
+            error = %crate::diagnostics::sanitize_error(&format!("{err:#}")),
+            "Failed to clean remote archive"
+        );
     }
 
     Ok(extracted_to)

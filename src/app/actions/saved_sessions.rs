@@ -4,7 +4,8 @@ use rust_i18n::t;
 
 use crate::{AxShell, SelectorEntry, session::Session};
 
-use super::session::{mask_session_host, mask_session_part, normalize_session_group_name};
+use super::session::normalize_session_group_name;
+use crate::diagnostics::{mask_host, mask_value};
 
 impl AxShell {
     pub(crate) fn selector_entries(&self) -> Vec<SelectorEntry> {
@@ -194,9 +195,7 @@ impl AxShell {
         }
 
         self.config.replace_sessions(sessions);
-        if let Err(err) = self.config.save() {
-            tracing::warn!("failed to save config: {err:#}");
-        }
+        self.config.save_logged("rename_session_group");
         self.renaming_saved_group = None;
         if self.expanded_saved_groups.remove(&old_group_name) {
             self.expanded_saved_groups.insert(new_group_name);
@@ -206,11 +205,7 @@ impl AxShell {
     }
 
     pub(crate) fn session_detail(&self, session: &Session) -> String {
-        format!(
-            "{}@{}",
-            mask_session_part(&session.user),
-            mask_session_host(&session.host)
-        )
+        format!("{}@{}", mask_value(&session.user), mask_host(&session.host))
     }
 
     pub(crate) fn session_connection_info(&self, session: &Session) -> String {

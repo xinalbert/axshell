@@ -9,11 +9,28 @@ use crate::{
         auth::{load_session_private_key, private_keys_with_algs},
         proxy::{self, ProxyStream},
     },
+    diagnostics::{mask_host, mask_path, mask_value, sanitize_error_with_values},
     events::{BackendEvent, BackendEventSender},
     session::{AuthMethod, Session, SshConnectionMode, ordered_ssh_connection_modes},
 };
 
 use super::{ClientHandler, X11ForwardingState, legacy};
+
+fn sanitize_session_error(message: &str, session: &Session) -> String {
+    sanitize_error_with_values(
+        message,
+        &[
+            &session.user,
+            &session.host,
+            &session.private_key_path,
+            &session.password,
+            &session.passphrase,
+            &session.proxy_host,
+            &session.proxy_user,
+            &session.proxy_password,
+        ],
+    )
+}
 
 pub(super) async fn connect_and_authenticate(
     tab_id: &str,
@@ -22,10 +39,15 @@ pub(super) async fn connect_and_authenticate(
     x11: Option<Arc<X11ForwardingState>>,
 ) -> Result<russh::client::Handle<ClientHandler>> {
     let addr = format!("{}:{}", session.host, session.port);
+    let log_host = mask_host(&session.host);
+    let log_user = mask_value(&session.user);
     tracing::info!(
-        "[ssh] initiating tcp connection to {} (user: {})",
-        addr,
-        session.user
+        component = "ssh",
+        operation = "connect",
+        host = %log_host,
+        port = session.port,
+        user = %log_user,
+        "Initiating SSH connection"
     );
     let status_text = if let Some((ptype, phost, pport)) = proxy::active(session) {
         let pport_val = pport.unwrap_or_else(|| if ptype == "http" { 8080 } else { 1080 });
@@ -48,14 +70,23 @@ pub(super) async fn connect_and_authenticate(
     let (mut handle, connected_mode) =
         connect_with_mode_priority(tab_id, session, &addr, events, x11.clone()).await?;
 
-    tracing::debug!("[ssh] tcp connected to {}", addr);
+    tracing::debug!(
+        component = "ssh",
+        operation = "connect",
+        host = %log_host,
+        port = session.port,
+        "SSH transport connected"
+    );
 
     let authed = match session.auth {
         AuthMethod::Password => {
             tracing::info!(
-                "[ssh] sending password authentication for {}@{}",
-                session.user,
-                addr
+                component = "ssh",
+                operation = "authenticate_password",
+                host = %log_host,
+                port = session.port,
+                user = %log_user,
+                "Sending SSH password authentication"
             );
             let _ = events
                 .send(BackendEvent::Status {
@@ -74,11 +105,15 @@ pub(super) async fn connect_and_authenticate(
         }
         AuthMethod::Key => {
             let source = key_source_label(session);
+            let log_source = key_source_log_label(session);
             tracing::info!(
-                "[ssh] sending key authentication for {}@{} (key source: {})",
-                session.user,
-                addr,
-                source
+                component = "ssh",
+                operation = "authenticate_key",
+                host = %log_host,
+                port = session.port,
+                user = %log_user,
+                key_source = %log_source,
+                "Sending SSH key authentication"
             );
             let _ = events
                 .send(BackendEvent::Status {
@@ -101,11 +136,26 @@ pub(super) async fn connect_and_authenticate(
                         break;
                     }
                     Ok(_) => {
-                        tracing::debug!("[ssh] public key auth failed with algorithm, trying next");
+                        tracing::debug!(
+                            component = "ssh",
+                            operation = "authenticate_key",
+                            host = %log_host,
+                            port = session.port,
+                            user = %log_user,
+                            "SSH public key algorithm was rejected; trying next"
+                        );
                         continue;
                     }
                     Err(e) => {
-                        tracing::debug!("[ssh] public key auth error: {:?}, trying next", e);
+                        tracing::debug!(
+                            component = "ssh",
+                            operation = "authenticate_key",
+                            host = %log_host,
+                            port = session.port,
+                            user = %log_user,
+                            error = %sanitize_session_error(&e.to_string(), session),
+                            "SSH public key algorithm failed; trying next"
+                        );
                         continue;
                     }
                 }
@@ -125,7 +175,14 @@ pub(super) async fn connect_and_authenticate(
     };
 
     if !authed {
-        tracing::warn!("[ssh] authentication failed for {}@{}", session.user, addr);
+        tracing::warn!(
+            component = "ssh",
+            operation = "authenticate",
+            host = %log_host,
+            port = session.port,
+            user = %log_user,
+            "SSH authentication failed"
+        );
         let _ = handle
             .disconnect(Disconnect::ByApplication, "auth failed", "")
             .await;
@@ -148,9 +205,12 @@ pub(super) async fn connect_and_authenticate(
     }
 
     tracing::info!(
-        "[ssh] authentication successful for {}@{}",
-        session.user,
-        addr
+        component = "ssh",
+        operation = "authenticate",
+        host = %log_host,
+        port = session.port,
+        user = %log_user,
+        "SSH authentication succeeded"
     );
 
     let _ = events
@@ -197,8 +257,12 @@ async fn connect_with_mode_priority(
             Ok(handle) => {
                 if mode == SshConnectionMode::Legacy {
                     tracing::warn!(
-                        "[ssh] connected to {} using legacy SSH compatibility mode",
-                        addr
+                        component = "ssh",
+                        operation = "connect",
+                        host = %mask_host(&session.host),
+                        port = session.port,
+                        mode = mode.label(),
+                        "Connected using legacy SSH compatibility mode"
                     );
                     let _ = events
                         .send(BackendEvent::Status {
@@ -221,12 +285,16 @@ async fn connect_with_mode_priority(
             Err(err) => {
                 let details = legacy::negotiation_error_details(&err);
                 let failure = details.clone().unwrap_or_else(|| format!("{err:#}"));
+                let error = sanitize_session_error(&failure, session);
                 tracing::warn!(
-                    "[ssh] {} mode connection failed for {}@{}: {}",
-                    mode.label(),
-                    session.user,
-                    addr,
-                    failure
+                    component = "ssh",
+                    operation = "connect_mode",
+                    host = %mask_host(&session.host),
+                    port = session.port,
+                    user = %mask_value(&session.user),
+                    mode = mode.label(),
+                    error = %error,
+                    "SSH connection mode failed"
                 );
                 failures.push(format!("{} mode: {failure}", mode.label()));
 
@@ -304,13 +372,17 @@ pub(crate) async fn connect_transport_with_retries(
                 }
 
                 attempt += 1;
+                let error = sanitize_session_error(&format!("{err:#}"), session);
                 tracing::warn!(
-                    "[ssh] transport connection to {} failed in {} mode on attempt {}: {:#}; retrying in {:?}",
-                    addr,
-                    mode.label(),
+                    component = "ssh",
+                    operation = "connect_retry",
+                    host = %mask_host(&session.host),
+                    port = session.port,
+                    mode = mode.label(),
                     attempt,
-                    err,
-                    delay
+                    retry_delay_ms = delay.as_millis(),
+                    error = %error,
+                    "SSH transport connection failed; retrying"
                 );
                 if let (Some(tab_id), Some(events)) = (tab_id, events) {
                     let _ = events
@@ -368,6 +440,17 @@ fn key_source_label(session: &Session) -> String {
     }
 }
 
+fn key_source_log_label(session: &Session) -> String {
+    let path = session.private_key_path.trim();
+    let has_inline = !session.private_key_inline.trim().is_empty();
+    match (!path.is_empty(), has_inline) {
+        (true, true) => format!("inline-or-{}", mask_path(path)),
+        (true, false) => mask_path(path),
+        (false, true) => "inline-key".to_string(),
+        (false, false) => "unknown".to_string(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -395,5 +478,22 @@ mod tests {
         let err = anyhow!("authentication failed");
 
         assert!(!is_retryable_transport_error(&err));
+    }
+
+    #[test]
+    fn key_source_log_label_masks_private_key_path() {
+        let session = Session::key(
+            "server.example.com".to_string(),
+            22,
+            "alice".to_string(),
+            "/Users/alice/.ssh/id_ed25519".to_string(),
+            String::new(),
+            String::new(),
+        );
+
+        let label = key_source_log_label(&session);
+
+        assert!(!label.contains("/Users/alice"));
+        assert_eq!(label, ".../id*19");
     }
 }

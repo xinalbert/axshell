@@ -112,7 +112,13 @@ impl AxShell {
             let entry = match entry {
                 Ok(entry) => entry,
                 Err(err) => {
-                    tracing::warn!("[local-browser] skipped unreadable entry in '{path}': {err}");
+                    tracing::warn!(
+                        component = "local_browser",
+                        operation = "read_entry",
+                        local_path = %crate::diagnostics::mask_path(path),
+                        error = %crate::diagnostics::sanitize_error(&err.to_string()),
+                        "Skipped unreadable local entry"
+                    );
                     continue;
                 }
             };
@@ -120,7 +126,11 @@ impl AxShell {
                 Ok(metadata) => metadata,
                 Err(err) => {
                     tracing::warn!(
-                        "[local-browser] skipped entry with unreadable metadata in '{path}': {err}"
+                        component = "local_browser",
+                        operation = "read_metadata",
+                        local_path = %crate::diagnostics::mask_path(path),
+                        error = %crate::diagnostics::sanitize_error(&err.to_string()),
+                        "Skipped local entry with unreadable metadata"
                     );
                     continue;
                 }
@@ -560,7 +570,12 @@ impl AxShell {
         let resolved = self.resolve_active_sftp_path(&path);
         if let Some(handle) = self.ensure_active_sftp_handle() {
             self.mark_active_sftp_activity();
-            tracing::info!("[sftp] navigating to directory: '{}'", resolved);
+            tracing::info!(
+                component = "sftp",
+                operation = "navigate",
+                remote_path = %crate::diagnostics::mask_path(&resolved),
+                "Navigating SFTP directory"
+            );
             handle.list_dir(resolved.clone());
             if let Some(sftp) = self.active_sftp_mut() {
                 sftp.status = resolved;
@@ -837,9 +852,11 @@ impl AxShell {
         self.mark_active_sftp_activity();
         let selected_count = paths.len();
         tracing::info!(
-            "[sftp] initiating upload of {} local browser entries to '{}'",
-            selected_count,
-            remote_dir
+            component = "sftp",
+            operation = "upload_selected",
+            item_count = selected_count,
+            remote_path = %crate::diagnostics::mask_path(&remote_dir),
+            "Starting SFTP upload"
         );
         let _ = handle.upload_paths(paths, remote_dir.clone());
         self.sftp_transfer_tab = crate::app::SftpTransferTab::Active;
@@ -924,7 +941,12 @@ impl AxShell {
             && let Some(handle) = self.ensure_active_sftp_handle()
         {
             self.mark_active_sftp_activity();
-            tracing::info!("[sftp] triggering edit for file: '{}'", path);
+            tracing::info!(
+                component = "sftp",
+                operation = "edit_remote_file",
+                remote_path = %crate::diagnostics::mask_path(&path),
+                "Opening remote file for editing"
+            );
             handle.edit_file(path);
         }
         cx.notify();
@@ -1045,9 +1067,11 @@ impl AxShell {
         self.mark_active_sftp_activity();
         let local_dir = self.local_file_browser.current_path.clone();
         tracing::info!(
-            "[sftp] initiating download of '{}' to '{}'",
-            remote_path,
-            local_dir
+            component = "sftp",
+            operation = "download",
+            remote_path = %crate::diagnostics::mask_path(&remote_path),
+            local_path = %crate::diagnostics::mask_path(&local_dir),
+            "Starting SFTP download"
         );
         handle.download(remote_path, local_dir.clone());
         self.sftp_transfer_tab = crate::app::SftpTransferTab::Active;
@@ -1076,9 +1100,11 @@ impl AxShell {
                     if let Some(file) = paths.pop() {
                         let local_path = file.to_string_lossy().to_string();
                         tracing::info!(
-                            "[sftp] initiating upload of file '{}' to '{}'",
-                            local_path,
-                            remote_dir
+                            component = "sftp",
+                            operation = "upload_file",
+                            local_path = %crate::diagnostics::mask_path(&local_path),
+                            remote_path = %crate::diagnostics::mask_path(&remote_dir),
+                            "Starting SFTP file upload"
                         );
                         handle.upload_paths(vec![local_path], remote_dir);
                         this.update(cx, |this, cx| {
@@ -1121,9 +1147,11 @@ impl AxShell {
                     if let Some(folder) = paths.pop() {
                         let local_path = folder.to_string_lossy().to_string();
                         tracing::info!(
-                            "[sftp] initiating upload of folder '{}' to '{}'",
-                            local_path,
-                            remote_dir
+                            component = "sftp",
+                            operation = "upload_folder",
+                            local_path = %crate::diagnostics::mask_path(&local_path),
+                            remote_path = %crate::diagnostics::mask_path(&remote_dir),
+                            "Starting SFTP folder upload"
                         );
                         handle.upload_paths(vec![local_path], remote_dir);
                         this.update(cx, |this, cx| {
@@ -1194,9 +1222,11 @@ impl AxShell {
         self.mark_active_sftp_activity();
         let local_dir = self.local_file_browser.current_path.clone();
         tracing::info!(
-            "[sftp] initiating batch download of {} entries to '{}'",
-            selected.len(),
-            local_dir
+            component = "sftp",
+            operation = "download_batch",
+            item_count = selected.len(),
+            local_path = %crate::diagnostics::mask_path(&local_dir),
+            "Starting SFTP batch download"
         );
         for remote in selected {
             let _ = handle.download(remote, local_dir.clone());
@@ -1221,9 +1251,11 @@ impl AxShell {
         };
         self.mark_active_sftp_activity();
         tracing::info!(
-            "[sftp] initiating batch upload of {} files to '{}'",
-            paths.len(),
-            remote_dir
+            component = "sftp",
+            operation = "upload_batch",
+            item_count = paths.len(),
+            remote_path = %crate::diagnostics::mask_path(&remote_dir),
+            "Starting SFTP batch upload"
         );
         let _ = handle.upload_paths(paths, remote_dir);
         self.sftp_transfer_tab = crate::app::SftpTransferTab::Active;

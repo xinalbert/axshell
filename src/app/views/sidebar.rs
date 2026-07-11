@@ -41,7 +41,7 @@ impl AxShell {
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         this.sidebar_collapsed = true;
                                         this.config.set_sidebar_collapsed(true);
-                                        let _ = this.config.save();
+                                        this.config.save_logged("collapse_sidebar");
                                         cx.notify();
                                     })),
                             )
@@ -628,7 +628,7 @@ impl AxShell {
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.sidebar_collapsed = false;
                                 this.config.set_sidebar_collapsed(false);
-                                let _ = this.config.save();
+                                this.config.save_logged("expand_sidebar");
                                 cx.notify();
                             })),
                     ),

@@ -9,6 +9,13 @@ use crate::{
 };
 
 impl AxShell {
+    fn sync_backend_name(credentials: &SyncCredentials) -> &'static str {
+        match &credentials.backend {
+            SyncBackendCredentials::WebDav { .. } => "webdav",
+            SyncBackendCredentials::S3 { .. } => "s3",
+        }
+    }
+
     fn sync_input_value(input: &Entity<InputState>, cx: &Context<Self>) -> String {
         input.read(cx).value().trim().to_string()
     }
@@ -77,6 +84,13 @@ impl AxShell {
             }
         }
         if let Err(err) = self.config.save() {
+            let error = crate::diagnostics::sanitize_error(&format!("{err:#}"));
+            tracing::error!(
+                component = "sync",
+                operation = "save_connection",
+                error = %error,
+                "Failed to save sync connection settings"
+            );
             self.sync_status = format!("{}: {err:#}", t!("sync_failed")).into();
             cx.notify();
             return None;
@@ -89,7 +103,16 @@ impl AxShell {
 
     pub(crate) fn set_sync_backend(&mut self, backend: &str, cx: &mut Context<Self>) {
         self.config.set_sync_backend(backend);
-        let _ = self.config.save();
+        if let Err(err) = self.config.save() {
+            let error = crate::diagnostics::sanitize_error(&format!("{err:#}"));
+            tracing::error!(
+                component = "sync",
+                operation = "save_backend",
+                backend,
+                error = %error,
+                "Failed to save sync backend"
+            );
+        }
         self.sync_status = t!("sync_not_run").into();
         cx.notify();
     }
@@ -104,12 +127,48 @@ impl AxShell {
         );
         let expected_etag = self.config.sync_etag().map(str::to_string);
         let events = self.runtime_state.events_tx.clone();
+        let backend = Self::sync_backend_name(&credentials);
+        tracing::info!(
+            component = "sync",
+            operation = "upload",
+            backend,
+            session_count = payload.sessions.len(),
+            "Configuration sync started"
+        );
         self.runtime_state.runtime.spawn(async move {
             let result = match sync::upload(credentials, payload, expected_etag).await {
-                Ok(etag) => SyncResult::Uploaded { etag },
-                Err(err) => SyncResult::Failed(format!("{err:#}")),
+                Ok(etag) => {
+                    tracing::info!(
+                        component = "sync",
+                        operation = "upload",
+                        backend,
+                        "Configuration sync completed"
+                    );
+                    SyncResult::Uploaded { etag }
+                }
+                Err(err) => {
+                    let error = crate::diagnostics::sanitize_error(&format!("{err:#}"));
+                    tracing::error!(
+                        component = "sync",
+                        operation = "upload",
+                        backend,
+                        error = %error,
+                        "Configuration sync failed"
+                    );
+                    SyncResult::Failed(format!("{err:#}"))
+                }
             };
-            let _ = events.send(BackendEvent::SyncFinished(result)).await;
+            if events
+                .send(BackendEvent::SyncFinished(result))
+                .await
+                .is_err()
+            {
+                tracing::warn!(
+                    component = "sync",
+                    operation = "upload",
+                    "Sync result receiver closed"
+                );
+            }
         });
     }
 
@@ -118,12 +177,48 @@ impl AxShell {
             return;
         };
         let events = self.runtime_state.events_tx.clone();
+        let backend = Self::sync_backend_name(&credentials);
+        tracing::info!(
+            component = "sync",
+            operation = "download",
+            backend,
+            "Configuration sync started"
+        );
         self.runtime_state.runtime.spawn(async move {
             let result = match sync::download(credentials).await {
-                Ok((payload, etag)) => SyncResult::Downloaded { payload, etag },
-                Err(err) => SyncResult::Failed(format!("{err:#}")),
+                Ok((payload, etag)) => {
+                    tracing::info!(
+                        component = "sync",
+                        operation = "download",
+                        backend,
+                        session_count = payload.sessions.len(),
+                        "Configuration sync completed"
+                    );
+                    SyncResult::Downloaded { payload, etag }
+                }
+                Err(err) => {
+                    let error = crate::diagnostics::sanitize_error(&format!("{err:#}"));
+                    tracing::error!(
+                        component = "sync",
+                        operation = "download",
+                        backend,
+                        error = %error,
+                        "Configuration sync failed"
+                    );
+                    SyncResult::Failed(format!("{err:#}"))
+                }
             };
-            let _ = events.send(BackendEvent::SyncFinished(result)).await;
+            if events
+                .send(BackendEvent::SyncFinished(result))
+                .await
+                .is_err()
+            {
+                tracing::warn!(
+                    component = "sync",
+                    operation = "download",
+                    "Sync result receiver closed"
+                );
+            }
         });
     }
 }

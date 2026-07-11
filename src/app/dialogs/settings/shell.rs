@@ -100,7 +100,12 @@ pub(super) fn settings_page_shell(
                     this.keybind_error = None;
                     this.config.set_key_binding(&action, &new_key);
                     if let Err(err) = this.config.save() {
-                        tracing::error!("failed to save key binding: {err:#}");
+                        tracing::error!(
+                            component = "config",
+                            operation = "save_key_binding",
+                            error = %crate::diagnostics::sanitize_error(&format!("{err:#}")),
+                            "Failed to save key binding"
+                        );
                     }
                     cx.notify();
                 });

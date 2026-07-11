@@ -26,7 +26,7 @@ pub(super) fn settings_terminal_page(view: &gpui::Entity<AxShell>, shell: &AxShe
                                     .checked(right_click_copy_paste)
                                     .on_click(window.listener_for(&view, |this, checked, _, cx| {
                                         this.config.set_right_click_copy_paste(*checked);
-                                        let _ = this.config.save();
+                                        this.config.save_logged("set_right_click_copy_paste");
                                         cx.notify();
                                     }))
                                     .into_any_element()
@@ -45,7 +45,7 @@ pub(super) fn settings_terminal_page(view: &gpui::Entity<AxShell>, shell: &AxShe
                                 .checked(keyword_highlight)
                                 .on_click(window.listener_for(&view, |this, checked, _, cx| {
                                     this.config.set_keyword_highlight(*checked);
-                                    let _ = this.config.save();
+                                    this.config.save_logged("set_keyword_highlight");
                                     cx.notify();
                                 }))
                                 .into_any_element()
@@ -111,7 +111,7 @@ pub(super) fn settings_terminal_page(view: &gpui::Entity<AxShell>, shell: &AxShe
                                             .collect::<Vec<_>>();
                                         this.config.set_ssh_connect_retry_count(retry_count);
                                         this.config.set_ssh_connect_retry_delays_ms(delays);
-                                        let _ = this.config.save();
+                                        this.config.save_logged("set_ssh_retry_policy");
                                         cx.notify();
                                     })),
                             )
@@ -169,7 +169,9 @@ pub(super) fn settings_terminal_page(view: &gpui::Entity<AxShell>, shell: &AxShe
                                                                 .set_sftp_transfer_close_behavior(
                                                                     value,
                                                                 );
-                                                            let _ = this.config.save();
+                                                            this.config.save_logged(
+                                                                "set_sftp_close_behavior",
+                                                            );
                                                             cx.notify();
                                                         },
                                                     )),

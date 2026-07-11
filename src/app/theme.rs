@@ -399,21 +399,33 @@ pub(crate) fn load_embedded_themes(cx: &mut App) {
     let registry = ThemeRegistry::global_mut(cx);
     for theme_json in EMBEDDED_THEME_JSONS {
         if let Err(err) = registry.load_themes_from_str(theme_json) {
-            tracing::warn!("failed to load embedded theme: {err:#}");
+            tracing::warn!(
+                component = "theme",
+                operation = "load_embedded",
+                error = %crate::diagnostics::sanitize_error(&format!("{err:#}")),
+                "Failed to load embedded theme"
+            );
         }
     }
 }
 
 pub(crate) fn load_user_themes(cx: &mut App) {
     let Ok(themes_dir) = ConfigStore::theme_dir_path() else {
-        tracing::warn!("failed to resolve user theme dir");
+        tracing::warn!(
+            component = "theme",
+            operation = "resolve_user_theme_dir",
+            "Failed to resolve user theme directory"
+        );
         return;
     };
 
     if let Err(err) = fs::create_dir_all(&themes_dir) {
         tracing::warn!(
-            "failed to create user theme dir {}: {err:#}",
-            themes_dir.display()
+            component = "theme",
+            operation = "create_user_theme_dir",
+            theme_path = %crate::diagnostics::mask_path(&themes_dir.to_string_lossy()),
+            error = %crate::diagnostics::sanitize_error(&format!("{err:#}")),
+            "Failed to create user theme directory"
         );
         return;
     }
@@ -428,18 +440,35 @@ pub(crate) fn load_user_themes(cx: &mut App) {
             match fs::read_to_string(&path) {
                 Ok(content) => {
                     if let Err(err) = registry.load_themes_from_str(&content) {
-                        tracing::warn!("failed to load user theme {}: {err:#}", path.display());
+                        tracing::warn!(
+                            component = "theme",
+                            operation = "load_user_theme",
+                            theme_path = %crate::diagnostics::mask_path(&path.to_string_lossy()),
+                            error = %crate::diagnostics::sanitize_error(&format!("{err:#}")),
+                            "Failed to load user theme"
+                        );
                     }
                 }
                 Err(err) => {
-                    tracing::warn!("failed to read user theme {}: {err:#}", path.display());
+                    tracing::warn!(
+                        component = "theme",
+                        operation = "read_user_theme",
+                        theme_path = %crate::diagnostics::mask_path(&path.to_string_lossy()),
+                        error = %crate::diagnostics::sanitize_error(&format!("{err:#}")),
+                        "Failed to read user theme"
+                    );
                 }
             }
         }
     }
 
     if let Err(err) = ThemeRegistry::watch_dir(themes_dir, cx, |_| {}) {
-        tracing::warn!("failed to watch user theme dir: {err:#}");
+        tracing::warn!(
+            component = "theme",
+            operation = "watch_user_theme_dir",
+            error = %crate::diagnostics::sanitize_error(&format!("{err:#}")),
+            "Failed to watch user theme directory"
+        );
     }
 }
 
@@ -747,6 +776,12 @@ impl AxShell {
     ) {
         self.config.set_custom_theme_base_name(mode, name);
         if let Err(err) = self.config.save() {
+            tracing::error!(
+                component = "theme",
+                operation = "save_custom_theme_base",
+                error = %crate::diagnostics::sanitize_error(&format!("{err:#}")),
+                "Failed to save custom theme base"
+            );
             self.status = format!("failed to save custom theme base: {err:#}").into();
         } else {
             self.status = format!("custom {} base: {name}", mode.name()).into();
@@ -789,9 +824,7 @@ impl AxShell {
         }
         rust_i18n::set_locale(&active_locale);
         gpui_component::set_locale(&active_locale);
-        if let Err(err) = self.config.save() {
-            tracing::warn!("failed to save language preferences: {err:#}");
-        }
+        self.config.save_logged("set_display_language");
         window.refresh();
         cx.notify();
     }
@@ -890,11 +923,21 @@ impl AxShell {
         match serde_json::to_string_pretty(&theme_set) {
             Ok(theme_json) => {
                 if let Err(err) = ThemeRegistry::global_mut(cx).load_themes_from_str(&theme_json) {
-                    tracing::warn!("failed to seed custom theme into registry: {err:#}");
+                    tracing::warn!(
+                        component = "theme",
+                        operation = "register_custom_theme",
+                        error = %crate::diagnostics::sanitize_error(&format!("{err:#}")),
+                        "Failed to register custom theme"
+                    );
                 }
             }
             Err(err) => {
-                tracing::warn!("failed to serialize custom theme for registry seed: {err:#}");
+                tracing::warn!(
+                    component = "theme",
+                    operation = "serialize_custom_theme",
+                    error = %crate::diagnostics::sanitize_error(&format!("{err:#}")),
+                    "Failed to serialize custom theme"
+                );
             }
         }
 
@@ -933,6 +976,12 @@ impl AxShell {
     pub(crate) fn reset_custom_appearance(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.config.reset_custom_theme_draft();
         if let Err(err) = self.config.save() {
+            tracing::error!(
+                component = "theme",
+                operation = "reset_custom_theme",
+                error = %crate::diagnostics::sanitize_error(&format!("{err:#}")),
+                "Failed to reset custom theme draft"
+            );
             self.status = format!("failed to reset custom theme draft: {err:#}").into();
             cx.notify();
             return;
@@ -974,8 +1023,6 @@ impl AxShell {
             self.appearance.light_theme_name.to_string(),
             self.appearance.dark_theme_name.to_string(),
         );
-        if let Err(err) = self.config.save() {
-            tracing::warn!("failed to save theme preferences: {err:#}");
-        }
+        self.config.save_logged("save_theme_preferences");
     }
 }

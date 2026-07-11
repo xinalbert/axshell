@@ -46,17 +46,27 @@ impl ConfigStore {
                 Ok(cache) => cache,
                 Err(err) => {
                     let backup_path = path.with_extension("json.bak");
+                    let config_path = crate::diagnostics::mask_path(&path.to_string_lossy());
+                    let backup_label =
+                        crate::diagnostics::mask_path(&backup_path.to_string_lossy());
                     if let Err(backup_err) = fs::write(&backup_path, raw.as_bytes()) {
                         tracing::warn!(
-                            "failed to parse config {}; backup to {} also failed: {backup_err:#}; parse error: {err:#}",
-                            path.display(),
-                            backup_path.display(),
+                            component = "config",
+                            operation = "load",
+                            config_path = %config_path,
+                            backup_path = %backup_label,
+                            parse_error = %crate::diagnostics::sanitize_error(&err.to_string()),
+                            backup_error = %crate::diagnostics::sanitize_error(&format!("{backup_err:#}")),
+                            "Failed to parse configuration and write backup"
                         );
                     } else {
                         tracing::warn!(
-                            "failed to parse config {}; backed up the original to {} and loaded defaults: {err:#}",
-                            path.display(),
-                            backup_path.display(),
+                            component = "config",
+                            operation = "load",
+                            config_path = %config_path,
+                            backup_path = %backup_label,
+                            error = %crate::diagnostics::sanitize_error(&err.to_string()),
+                            "Failed to parse configuration; loaded defaults"
                         );
                     }
                     ConfigFile::default()
@@ -131,9 +141,11 @@ impl ConfigStore {
                 )
             })?;
             tracing::info!(
-                "migrated legacy config from {} to {}",
-                legacy_config.display(),
-                current_config.display()
+                component = "config",
+                operation = "migrate_legacy_config",
+                source = %crate::diagnostics::mask_path(&legacy_config.to_string_lossy()),
+                destination = %crate::diagnostics::mask_path(&current_config.to_string_lossy()),
+                "Migrated legacy configuration"
             );
         }
 
@@ -148,9 +160,11 @@ impl ConfigStore {
                 )
             })?;
             tracing::info!(
-                "migrated legacy themes from {} to {}",
-                legacy_themes.display(),
-                current_themes.display()
+                component = "config",
+                operation = "migrate_legacy_themes",
+                source = %crate::diagnostics::mask_path(&legacy_themes.to_string_lossy()),
+                destination = %crate::diagnostics::mask_path(&current_themes.to_string_lossy()),
+                "Migrated legacy theme directory"
             );
         }
 
@@ -353,9 +367,7 @@ impl ConfigStore {
 
     pub fn set_transfers(&mut self, transfers: Vec<crate::sftp::Transfer>) {
         self.cache.transfers = transfers;
-        if let Err(err) = self.save() {
-            tracing::error!("failed to save config: {err:#}");
-        }
+        self.save_logged("persist_transfers");
     }
 
     pub fn set_layout_state(
@@ -815,6 +827,18 @@ impl ConfigStore {
         }
 
         Ok(())
+    }
+
+    pub fn save_logged(&self, operation: &'static str) {
+        if let Err(err) = self.save() {
+            let error = crate::diagnostics::sanitize_error(&format!("{err:#}"));
+            tracing::error!(
+                component = "config",
+                operation,
+                error = %error,
+                "Failed to save configuration"
+            );
+        }
     }
 }
 

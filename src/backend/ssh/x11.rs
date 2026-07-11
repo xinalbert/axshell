@@ -14,7 +14,10 @@ use tokio::{
     time::{Duration, sleep},
 };
 
-use crate::config::ConfigStore;
+use crate::{
+    config::ConfigStore,
+    diagnostics::{mask_host, mask_value, sanitize_error},
+};
 
 const X11_AUTH_PROTOCOL: &str = "MIT-MAGIC-COOKIE-1";
 const X11_REMOTE_DISPLAY: &str = "localhost:10.0";
@@ -95,22 +98,32 @@ pub(super) async fn handle_x11_channel(
     match prepare_x11_relay(&x11).await {
         Ok((real_cookie, local_x)) => {
             tracing::info!(
-                "[ssh:x11] accepting X11 channel from {}:{}",
-                originator_address,
-                originator_port
+                component = "ssh_x11",
+                operation = "accept_channel",
+                origin_host = %mask_host(&originator_address),
+                origin_port = originator_port,
+                "Accepting SSH X11 channel"
             );
             reply.accept().await;
             tokio::spawn(async move {
                 if let Err(err) = relay_x11_channel(channel, local_x, real_cookie, x11).await {
-                    tracing::warn!("[ssh:x11] X11 relay failed: {err:#}");
+                    tracing::warn!(
+                        component = "ssh_x11",
+                        operation = "relay",
+                        error = %sanitize_error(&format!("{err:#}")),
+                        "SSH X11 relay failed"
+                    );
                 }
             });
         }
         Err(err) => {
             tracing::warn!(
-                "[ssh:x11] rejecting X11 channel from {}:{}: {err:#}",
-                originator_address,
-                originator_port
+                component = "ssh_x11",
+                operation = "prepare_relay",
+                origin_host = %mask_host(&originator_address),
+                origin_port = originator_port,
+                error = %sanitize_error(&format!("{err:#}")),
+                "Rejecting SSH X11 channel"
             );
             reply.reject(ChannelOpenFailure::ConnectFailed).await;
         }
@@ -131,7 +144,12 @@ async fn prepare_x11_relay(
                 }
                 sleep(Duration::from_millis(700)).await;
             }
-            Err(err) => tracing::warn!("[ssh:x11] failed to launch configured X server: {err:#}"),
+            Err(err) => tracing::warn!(
+                component = "ssh_x11",
+                operation = "launch_local_server",
+                error = %sanitize_error(&format!("{err:#}")),
+                "Failed to launch configured local X server"
+            ),
         }
     }
 
@@ -142,8 +160,11 @@ async fn prepare_x11_relay(
         },
         Err(err) => {
             tracing::warn!(
-                "[ssh:x11] no local X11 MIT cookie found for {}; falling back to no-auth setup: {err:#}",
-                local_display
+                component = "ssh_x11",
+                operation = "load_cookie",
+                display = %mask_value(&local_display),
+                error = %sanitize_error(&format!("{err:#}")),
+                "No local X11 MIT cookie found; falling back to no-auth setup"
             );
             LocalX11Auth {
                 protocol: Vec::new(),
@@ -405,9 +426,11 @@ async fn relay_x11_channel(
     local_x.flush().await?;
     let (ssh_to_x, x_to_ssh) = tokio::io::copy_bidirectional(&mut ssh_x, local_x.as_mut()).await?;
     tracing::debug!(
-        "[ssh:x11] X11 relay closed (ssh->x={} bytes, x->ssh={} bytes)",
-        ssh_to_x,
-        x_to_ssh
+        component = "ssh_x11",
+        operation = "relay",
+        ssh_to_x_bytes = ssh_to_x,
+        x_to_ssh_bytes = x_to_ssh,
+        "SSH X11 relay closed"
     );
     Ok(())
 }

@@ -67,7 +67,12 @@ impl AxShell {
         let search_input =
             cx.new(|cx| InputState::new(window, cx).placeholder(t!("search").to_string()));
         let config = ConfigStore::load().unwrap_or_else(|err| {
-            tracing::warn!("failed to load config: {err:#}");
+            tracing::warn!(
+                component = "config",
+                operation = "load",
+                error = %crate::diagnostics::sanitize_error(&format!("{err:#}")),
+                "Failed to load configuration; using in-memory defaults"
+            );
             ConfigStore::in_memory()
         });
         let app_menu_bar = if cfg!(any(target_os = "windows", target_os = "linux")) {

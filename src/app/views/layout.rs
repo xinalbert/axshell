@@ -166,7 +166,7 @@ impl Render for AxShell {
             .on_action(cx.listener(|this, _: &crate::ToggleSidebar, _, cx| {
                 this.sidebar_collapsed = !this.sidebar_collapsed;
                 this.config.set_sidebar_collapsed(this.sidebar_collapsed);
-                let _ = this.config.save();
+                this.config.save_logged("toggle_sidebar");
                 cx.notify();
             }))
             .on_action(cx.listener(|this, _: &crate::ToggleSftpZoom, window, cx| {

@@ -27,7 +27,7 @@ pub(super) fn settings_monitoring_page(
                                     .checked(show_monitoring_dashboard)
                                     .on_click(window.listener_for(&view, |this, checked, _, cx| {
                                         this.config.set_show_monitoring_dashboard(*checked);
-                                        let _ = this.config.save();
+                                        this.config.save_logged("set_monitoring_visibility");
                                         cx.notify();
                                     }))
                                     .into_any_element()
@@ -67,7 +67,8 @@ pub(super) fn settings_monitoring_page(
                                                     |this, _, _window, cx| {
                                                         this.config
                                                             .set_monitoring_position("Bottom");
-                                                        let _ = this.config.save();
+                                                        this.config
+                                                            .save_logged("set_monitoring_bottom");
                                                         cx.notify();
                                                     },
                                                 )),
@@ -82,7 +83,8 @@ pub(super) fn settings_monitoring_page(
                                                     |this, _, _window, cx| {
                                                         this.config
                                                             .set_monitoring_position("Sidebar");
-                                                        let _ = this.config.save();
+                                                        this.config
+                                                            .save_logged("set_monitoring_sidebar");
                                                         cx.notify();
                                                     },
                                                 )),
@@ -135,7 +137,9 @@ pub(super) fn settings_monitoring_page(
                                                                     .set_deep_sleep_after_minutes(
                                                                         minutes,
                                                                     );
-                                                                let _ = this.config.save();
+                                                                this.config.save_logged(
+                                                                    "set_deep_sleep_delay",
+                                                                );
                                                                 cx.notify();
                                                             },
                                                         )),

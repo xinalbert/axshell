@@ -30,7 +30,7 @@ pub(super) fn settings_proxy_page(view: &gpui::Entity<AxShell>, shell: &AxShell)
                                 .checked(use_proxy)
                                 .on_click(window.listener_for(&view, |this, checked, _, cx| {
                                     this.config.set_use_proxy(*checked);
-                                    let _ = this.config.save();
+                                    this.config.save_logged("set_proxy_enabled");
                                     cx.notify();
                                 }))
                                 .into_any_element()
@@ -48,7 +48,7 @@ pub(super) fn settings_proxy_page(view: &gpui::Entity<AxShell>, shell: &AxShell)
                                     .checked(read_env_proxy)
                                     .on_click(window.listener_for(&view, |this, checked, _, cx| {
                                         this.config.set_read_env_proxy(*checked);
-                                        let _ = this.config.save();
+                                        this.config.save_logged("set_environment_proxy");
                                         cx.notify();
                                     }))
                                     .into_any_element()
@@ -172,7 +172,7 @@ pub(super) fn settings_proxy_page(view: &gpui::Entity<AxShell>, shell: &AxShell)
                                         this.config.set_global_proxy_port(port);
                                         this.config.set_global_proxy_user(user);
                                         this.config.set_global_proxy_password(password);
-                                        let _ = this.config.save();
+                                        this.config.save_logged("save_global_proxy");
                                         cx.notify();
                                     })),
                             )
@@ -193,7 +193,7 @@ pub(super) fn settings_proxy_page(view: &gpui::Entity<AxShell>, shell: &AxShell)
                                     .checked(x11_forwarding_enabled)
                                     .on_click(window.listener_for(&view, |this, checked, _, cx| {
                                         this.config.set_x11_forwarding_enabled(*checked);
-                                        let _ = this.config.save();
+                                        this.config.save_logged("set_x11_forwarding");
                                         cx.notify();
                                     }))
                                     .into_any_element()
@@ -213,7 +213,7 @@ pub(super) fn settings_proxy_page(view: &gpui::Entity<AxShell>, shell: &AxShell)
                                     .checked(x11_launch_xquartz)
                                     .on_click(window.listener_for(&view, |this, checked, _, cx| {
                                         this.config.set_x11_launch_xquartz(*checked);
-                                        let _ = this.config.save();
+                                        this.config.save_logged("set_x11_auto_launch");
                                         cx.notify();
                                     }))
                                     .into_any_element()

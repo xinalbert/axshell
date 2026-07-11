@@ -11,7 +11,7 @@ use crate::config::ConfigStore;
 const INSTANCE_KIND_ENV: &str = "AX_SHELL_INSTANCE_KIND";
 const INSTANCE_APP_ID_ENV: &str = "AX_SHELL_APP_ID";
 const DEV_RELOAD_INSTANCE_KIND: &str = "dev-reload";
-const LOG_FILES_TO_KEEP: usize = 48;
+const LOG_FILES_TO_KEEP: usize = 24 * 7;
 static CRASH_HOOK: Once = Once::new();
 
 fn current_instance_kind() -> Option<String> {
@@ -63,37 +63,41 @@ pub(crate) fn crash_report_dir() -> PathBuf {
     app_config_dir().join("crash")
 }
 
-struct LocalMinutelyRoller {
+struct LocalHourlyRoller {
     dir: std::path::PathBuf,
     prefix: String,
-    current_minute: u32,
+    current_bucket: Option<String>,
     file: Option<std::fs::File>,
 }
 
-impl LocalMinutelyRoller {
-    fn new(dir: std::path::PathBuf, prefix: String) -> Self {
-        Self {
+fn hourly_log_bucket(now: chrono::DateTime<chrono::Local>) -> String {
+    now.format("%Y-%m-%d-%H").to_string()
+}
+
+impl LocalHourlyRoller {
+    fn new(dir: std::path::PathBuf, prefix: String) -> std::io::Result<Self> {
+        let mut roller = Self {
             dir,
             prefix,
-            current_minute: 60,
+            current_bucket: None,
             file: None,
-        }
+        };
+        roller.rollover(chrono::Local::now())?;
+        Ok(roller)
     }
 
     fn rollover(&mut self, now: chrono::DateTime<chrono::Local>) -> std::io::Result<()> {
-        use chrono::Timelike;
-        let minute = now.minute();
-        if self.current_minute != minute || self.file.is_none() {
-            let filename = format!("{}-{}.log", self.prefix, now.format("%Y-%m-%d-%H-%M"));
+        let bucket = hourly_log_bucket(now);
+        if self.current_bucket.as_deref() != Some(bucket.as_str()) || self.file.is_none() {
+            let filename = format!("{}-{bucket}.log", self.prefix);
             let path = self.dir.join(filename);
             let file = std::fs::OpenOptions::new()
                 .create(true)
                 .append(true)
                 .open(&path)?;
             self.file = Some(file);
-            self.current_minute = minute;
+            self.current_bucket = Some(bucket);
 
-            // Cleanup old files keeping last 6
             if let Ok(entries) = std::fs::read_dir(&self.dir) {
                 let mut files: Vec<_> = entries
                     .filter_map(|e| e.ok())
@@ -106,7 +110,12 @@ impl LocalMinutelyRoller {
                 });
                 if files.len() > LOG_FILES_TO_KEEP {
                     for file in files.iter().take(files.len() - LOG_FILES_TO_KEEP) {
-                        let _ = std::fs::remove_file(file.path());
+                        if let Err(err) = std::fs::remove_file(file.path()) {
+                            eprintln!(
+                                "AxShell failed to remove old runtime log {}: {err}",
+                                file.path().display()
+                            );
+                        }
                     }
                 }
             }
@@ -115,65 +124,117 @@ impl LocalMinutelyRoller {
     }
 }
 
-impl std::io::Write for LocalMinutelyRoller {
+#[cfg(test)]
+mod logging_tests {
+    use chrono::{Local, TimeZone};
+
+    use super::{LOG_FILES_TO_KEEP, hourly_log_bucket};
+
+    #[test]
+    fn hourly_log_bucket_changes_across_hours_and_days() {
+        let first = Local
+            .with_ymd_and_hms(2026, 7, 11, 10, 15, 0)
+            .single()
+            .expect("valid local time");
+        let next_hour = Local
+            .with_ymd_and_hms(2026, 7, 11, 11, 15, 0)
+            .single()
+            .expect("valid local time");
+        let next_day = Local
+            .with_ymd_and_hms(2026, 7, 12, 10, 15, 0)
+            .single()
+            .expect("valid local time");
+
+        assert_eq!(hourly_log_bucket(first), "2026-07-11-10");
+        assert_ne!(hourly_log_bucket(first), hourly_log_bucket(next_hour));
+        assert_ne!(hourly_log_bucket(first), hourly_log_bucket(next_day));
+    }
+
+    #[test]
+    fn runtime_logs_keep_seven_days_of_hourly_files() {
+        assert_eq!(LOG_FILES_TO_KEEP, 168);
+    }
+}
+
+impl std::io::Write for LocalHourlyRoller {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         let now = chrono::Local::now();
-        let _ = self.rollover(now);
+        if let Err(err) = self.rollover(now) {
+            eprintln!("AxShell runtime log rollover failed: {err}");
+            return Err(err);
+        }
         if let Some(f) = &mut self.file {
-            f.write(buf)
+            f.write(buf).inspect_err(|err| {
+                eprintln!("AxShell runtime log write failed: {err}");
+            })
         } else {
-            Ok(buf.len())
+            Err(std::io::Error::other("runtime log file is unavailable"))
         }
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
         if let Some(f) = &mut self.file {
-            f.flush()
+            f.flush().inspect_err(|err| {
+                eprintln!("AxShell runtime log flush failed: {err}");
+            })
         } else {
-            Ok(())
+            Err(std::io::Error::other("runtime log file is unavailable"))
         }
     }
 }
 
-pub(crate) fn init_logging() {
+pub(crate) fn init_logging() -> Option<tracing_appender::non_blocking::WorkerGuard> {
     use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
     let log_dir = runtime_log_dir();
-
-    std::fs::create_dir_all(&log_dir).ok();
-
-    let roller = LocalMinutelyRoller::new(log_dir.clone(), "ax_shell".to_string());
-
-    let (non_blocking, _guard) = tracing_appender::non_blocking(roller);
-    // Leak the guard so it lives for the entire duration of the app since GPUI's run might not return
-    std::mem::forget(_guard);
+    let (file_writer, guard) = match std::fs::create_dir_all(&log_dir)
+        .and_then(|_| LocalHourlyRoller::new(log_dir.clone(), "ax_shell".to_string()))
+    {
+        Ok(roller) => {
+            let (writer, guard) = tracing_appender::non_blocking::NonBlockingBuilder::default()
+                .lossy(false)
+                .finish(roller);
+            (Some(writer), Some(guard))
+        }
+        Err(err) => {
+            eprintln!(
+                "AxShell runtime file logging is unavailable at {}: {err}",
+                log_dir.display()
+            );
+            (None, None)
+        }
+    };
 
     let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("ax_shell=info,warn"));
 
-    let stdout_layer = if cfg!(debug_assertions) {
+    let stderr_layer = if cfg!(debug_assertions) || file_writer.is_none() {
         Some(
             tracing_subscriber::fmt::layer()
                 .with_timer(tracing_subscriber::fmt::time::LocalTime::rfc_3339())
+                .with_writer(std::io::stderr)
                 .with_target(true),
         )
     } else {
         None
     };
 
-    let file_layer = tracing_subscriber::fmt::layer()
-        .with_timer(tracing_subscriber::fmt::time::LocalTime::rfc_3339())
-        .with_writer(non_blocking)
-        .with_ansi(false)
-        .with_target(true);
+    let file_layer = file_writer.map(|writer| {
+        tracing_subscriber::fmt::layer()
+            .with_timer(tracing_subscriber::fmt::time::LocalTime::rfc_3339())
+            .with_writer(writer)
+            .with_ansi(false)
+            .with_target(true)
+    });
 
     tracing_subscriber::registry()
         .with(env_filter)
-        .with(stdout_layer)
+        .with(stderr_layer)
         .with(file_layer)
         .init();
 
     log_startup_summary(&log_dir);
+    guard
 }
 
 fn log_startup_summary(log_dir: &std::path::Path) {
@@ -189,9 +250,9 @@ fn log_startup_summary(log_dir: &std::path::Path) {
         arch = std::env::consts::ARCH,
         profile,
         instance_kind,
-        config_dir = %app_config_dir().display(),
-        log_dir = %log_dir.display(),
-        crash_dir = %crash_report_dir().display(),
+        config_dir = %crate::diagnostics::mask_path(&app_config_dir().to_string_lossy()),
+        log_dir = %crate::diagnostics::mask_path(&log_dir.to_string_lossy()),
+        crash_dir = %crate::diagnostics::mask_path(&crash_report_dir().to_string_lossy()),
         log_files_to_keep = LOG_FILES_TO_KEEP,
         "AxShell startup"
     );
@@ -206,9 +267,10 @@ pub(crate) fn install_crash_hook() {
             match &crash_path {
                 Some(path) => {
                     tracing::error!(
-                        "AxShell crashed; crash report saved to {}. Please report it at {}",
-                        path.display(),
-                        ISSUES_URL
+                        component = "crash",
+                        operation = "panic",
+                        crash_path = %crate::diagnostics::mask_path(&path.to_string_lossy()),
+                        "AxShell crashed; crash report was written"
                     );
                     eprintln!(
                         "AxShell crashed. Crash report saved to: {}\nPlease report it at: {}",
@@ -517,11 +579,13 @@ pub(crate) fn open_main_window(cx: &mut App) {
     let _ = crate::backend::proxy::ENV_PROXY.get_or_init(|| {
         read_proxy_from_env().map(|(proxy_type, host, port, user, password)| {
             tracing::info!(
-                "[proxy] Loaded proxy configuration from environment: type={}, host={}, port={:?}, user={}",
+                component = "proxy",
+                operation = "load_environment",
                 proxy_type,
-                host,
-                port,
-                user
+                host = %crate::diagnostics::mask_host(&host),
+                port = ?port,
+                user = %crate::diagnostics::mask_value(&user),
+                "Loaded proxy configuration from environment"
             );
             crate::backend::proxy::EnvProxy {
                 proxy_type,
@@ -611,7 +675,11 @@ pub(crate) fn open_main_window(cx: &mut App) {
         gpui_component::Theme::sync_system_appearance(Some(window), cx);
         let view = cx.new(|cx| AxShell::new(window, cx));
 
-        tracing::info!("[ui] main application window opened");
+        tracing::info!(
+            component = "window",
+            operation = "open",
+            "Main application window opened"
+        );
         let focus_handle = view.read(cx).focus_handle.clone();
         let deferred_focus_handle = focus_handle.clone();
         let should_activate = should_force_app_activation();
@@ -628,7 +696,9 @@ pub(crate) fn open_main_window(cx: &mut App) {
             let handle = window.window_handle();
             if !cx.windows().contains(&handle) {
                 tracing::warn!(
-                    "[ui] window not found in app during close, skipping save layout state."
+                    component = "window",
+                    operation = "close",
+                    "Window was not registered during close; skipping layout save"
                 );
                 return true;
             }

@@ -88,8 +88,11 @@ pub(super) fn settings_about_page() -> SettingPage {
                                         let _ = std::fs::create_dir_all(&log_dir);
                                         if let Err(err) = open::that(&log_dir) {
                                             tracing::warn!(
-                                                "failed to open runtime log dir {}: {err:#}",
-                                                log_dir.display()
+                                                component = "diagnostics",
+                                                operation = "open_runtime_log_dir",
+                                                log_path = %crate::diagnostics::mask_path(&log_dir.to_string_lossy()),
+                                                error = %crate::diagnostics::sanitize_error(&format!("{err:#}")),
+                                                "Failed to open runtime log directory"
                                             );
                                         }
                                     }),
@@ -102,8 +105,11 @@ pub(super) fn settings_about_page() -> SettingPage {
                                         let _ = std::fs::create_dir_all(&crash_dir);
                                         if let Err(err) = open::that(&crash_dir) {
                                             tracing::warn!(
-                                                "failed to open crash report dir {}: {err:#}",
-                                                crash_dir.display()
+                                                component = "diagnostics",
+                                                operation = "open_crash_report_dir",
+                                                crash_path = %crate::diagnostics::mask_path(&crash_dir.to_string_lossy()),
+                                                error = %crate::diagnostics::sanitize_error(&format!("{err:#}")),
+                                                "Failed to open crash report directory"
                                             );
                                         }
                                     }),

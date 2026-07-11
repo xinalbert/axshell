@@ -299,7 +299,7 @@ impl AxShell {
                         .config
                         .set_session_last_successful_ssh_mode(&session_id, mode)
                     {
-                        let _ = self.config.save();
+                        self.config.save_logged("save_ssh_connection_mode");
                     }
                 }
                 BackendEvent::SftpEntries {
@@ -398,6 +398,13 @@ impl AxShell {
                     }
                 }
                 BackendEvent::RemoteSystemUnavailable { tab_id, reason } => {
+                    tracing::warn!(
+                        component = "monitoring",
+                        operation = "remote_sample",
+                        tab_id = %tab_id,
+                        error = %crate::diagnostics::sanitize_error(&reason),
+                        "Remote system monitoring is unavailable"
+                    );
                     result.ui_changed = true;
                     self.monitoring.remote_sample_in_flight = false;
                     if self.monitoring.system_tab_id.as_deref() == Some(tab_id.as_str()) {
@@ -514,7 +521,16 @@ impl AxShell {
                                 self.config.set_sync_etag(etag);
                             }
                             self.sync_status = rust_i18n::t!("sync_upload_complete").into();
-                            let _ = self.config.save();
+                            if let Err(err) = self.config.save() {
+                                tracing::error!(
+                                    component = "sync",
+                                    operation = "save_upload_state",
+                                    error = %crate::diagnostics::sanitize_error(&format!("{err:#}")),
+                                    "Failed to save sync upload state"
+                                );
+                                self.sync_status =
+                                    format!("{}: {err:#}", rust_i18n::t!("sync_failed")).into();
+                            }
                         }
                         crate::sync::SyncResult::Downloaded { payload, etag } => {
                             self.config.replace_sessions(payload.sessions);
@@ -525,6 +541,12 @@ impl AxShell {
                                         rust_i18n::t!("sync_download_complete").into()
                                 }
                                 Err(err) => {
+                                    tracing::error!(
+                                        component = "sync",
+                                        operation = "save_download",
+                                        error = %crate::diagnostics::sanitize_error(&format!("{err:#}")),
+                                        "Failed to save downloaded configuration"
+                                    );
                                     self.sync_status =
                                         format!("{}: {err:#}", rust_i18n::t!("sync_failed")).into()
                                 }

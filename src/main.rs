@@ -6,6 +6,7 @@ use gpui_component_assets::Assets;
 mod app;
 mod backend;
 mod config;
+mod diagnostics;
 mod events;
 mod monitoring;
 mod platform;
@@ -29,7 +30,7 @@ pub(crate) use app::{AxShell, PaneLayout, SelectorEntry, SftpContextMenuState, T
 fn main() {
     app::startup::install_crash_hook();
     app::startup::sync_macos_launch_environment();
-    app::startup::init_logging();
+    let _log_guard = app::startup::init_logging();
 
     #[cfg(target_os = "macos")]
     let app = gpui_platform::application()
@@ -63,7 +64,12 @@ fn main() {
         app::theme::load_embedded_themes(cx);
         app::theme::load_user_themes(cx);
         if let Err(err) = app::theme::load_fonts(cx) {
-            tracing::warn!("failed to load embedded fonts: {err:#}");
+            tracing::warn!(
+                component = "theme",
+                operation = "load_fonts",
+                error = %diagnostics::sanitize_error(&format!("{err:#}")),
+                "Failed to load embedded fonts"
+            );
         }
         app::startup::open_main_window(cx);
     });

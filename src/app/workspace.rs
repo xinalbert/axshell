@@ -238,9 +238,7 @@ impl AxShell {
         if remember {
             self.config
                 .set_settings_close_shortcut_confirms(close_settings);
-            if let Err(err) = self.config.save() {
-                tracing::warn!("failed to save Settings shortcut preference: {err:#}");
-            }
+            self.config.save_logged("remember_settings_close_choice");
         }
 
         self.active_dialog = None;
@@ -405,9 +403,7 @@ impl AxShell {
     ) {
         if remember {
             self.config.set_sftp_transfer_close_behavior(choice);
-            if let Err(err) = self.config.save() {
-                tracing::warn!("failed to save SFTP close preference: {err:#}");
-            }
+            self.config.save_logged("remember_sftp_close_choice");
         }
         self.sftp_close_remember_choice = false;
         self.sftp_close_confirm_group_id = None;
@@ -682,7 +678,11 @@ impl AxShell {
 
     pub(crate) fn save_layout_state(&self, window: &mut gpui::Window, cx: &gpui::App) {
         if self.is_layout_reset {
-            tracing::info!("[ui] layout was reset, skipping save layout state.");
+            tracing::info!(
+                component = "workspace",
+                operation = "save_layout",
+                "Layout was reset; skipping layout save"
+            );
             return;
         }
         let current_bounds = window.window_bounds();
@@ -693,7 +693,11 @@ impl AxShell {
         };
         let size = bounds.size;
         if size.width.as_f32() > 400.0 && size.height.as_f32() > 300.0 {
-            tracing::info!("[ui] saving layout state...");
+            tracing::info!(
+                component = "workspace",
+                operation = "save_layout",
+                "Saving workspace layout"
+            );
             let mut config = ConfigStore::load().unwrap_or_else(|_| ConfigStore::in_memory());
             let saved_bounds = match current_bounds {
                 gpui::WindowBounds::Fullscreen(b) => crate::config::SavedWindowBounds::Fullscreen {
@@ -761,11 +765,14 @@ impl AxShell {
 
             config.set_layout_state(Some(saved_bounds), Some(workspace_sizes), Some(body_sizes));
             config.set_sidebar_collapsed(self.sidebar_collapsed);
-            let _ = config.save();
+            config.save_logged("save_layout");
         } else {
             tracing::warn!(
-                "[ui] window size is too small ({:?}), skipping save layout state to prevent corrupting saved bounds.",
-                size
+                component = "workspace",
+                operation = "save_layout",
+                width = size.width.as_f32(),
+                height = size.height.as_f32(),
+                "Window is too small; skipping layout save"
             );
         }
     }

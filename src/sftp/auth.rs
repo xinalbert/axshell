@@ -14,8 +14,25 @@ use crate::{
             ssh_client_config,
         },
     },
+    diagnostics::{mask_host, mask_value, sanitize_error_with_values},
     session::{AuthMethod, Session, SshConnectionMode, ordered_ssh_connection_modes},
 };
+
+fn sanitize_session_error(message: &str, session: &Session) -> String {
+    sanitize_error_with_values(
+        message,
+        &[
+            &session.user,
+            &session.host,
+            &session.private_key_path,
+            &session.password,
+            &session.passphrase,
+            &session.proxy_host,
+            &session.proxy_user,
+            &session.proxy_password,
+        ],
+    )
+}
 
 pub(super) async fn connect_and_authenticate(
     session: &Session,
@@ -24,6 +41,16 @@ pub(super) async fn connect_and_authenticate(
     SshConnectionMode,
 )> {
     let addr = format!("{}:{}", session.host, session.port);
+    let log_host = mask_host(&session.host);
+    let log_user = mask_value(&session.user);
+    tracing::info!(
+        component = "sftp",
+        operation = "connect",
+        host = %log_host,
+        port = session.port,
+        user = %log_user,
+        "Initiating SFTP SSH connection"
+    );
     let (mut handle, connected_mode) = connect_with_mode_priority(session, &addr).await?;
 
     let authed = match session.auth {
@@ -44,12 +71,25 @@ pub(super) async fn connect_and_authenticate(
                     }
                     Ok(_) => {
                         tracing::debug!(
-                            "[sftp] public key auth failed with algorithm, trying next"
+                            component = "sftp",
+                            operation = "authenticate_key",
+                            host = %log_host,
+                            port = session.port,
+                            user = %log_user,
+                            "SFTP public key algorithm was rejected; trying next"
                         );
                         continue;
                     }
                     Err(e) => {
-                        tracing::debug!("[sftp] public key auth error: {:?}, trying next", e);
+                        tracing::debug!(
+                            component = "sftp",
+                            operation = "authenticate_key",
+                            host = %log_host,
+                            port = session.port,
+                            user = %log_user,
+                            error = %sanitize_session_error(&e.to_string(), session),
+                            "SFTP public key algorithm failed; trying next"
+                        );
                         continue;
                     }
                 }
@@ -67,9 +107,27 @@ pub(super) async fn connect_and_authenticate(
     };
 
     if !authed {
-        let _ = handle
+        tracing::warn!(
+            component = "sftp",
+            operation = "authenticate",
+            host = %log_host,
+            port = session.port,
+            user = %log_user,
+            "SFTP authentication failed"
+        );
+        if let Err(err) = handle
             .disconnect(Disconnect::ByApplication, "auth failed", "")
-            .await;
+            .await
+        {
+            tracing::debug!(
+                component = "sftp",
+                operation = "disconnect",
+                host = %log_host,
+                port = session.port,
+                error = %sanitize_session_error(&err.to_string(), session),
+                "SFTP disconnect after authentication failure was rejected"
+            );
+        }
         return Err(anyhow!(
             "authentication failed: server rejected {} authentication for {}@{}:{}",
             match session.auth {
@@ -81,6 +139,15 @@ pub(super) async fn connect_and_authenticate(
             session.port
         ));
     }
+
+    tracing::info!(
+        component = "sftp",
+        operation = "authenticate",
+        host = %log_host,
+        port = session.port,
+        user = %log_user,
+        "SFTP authentication succeeded"
+    );
 
     Ok((Arc::new(handle), connected_mode))
 }
@@ -98,12 +165,16 @@ async fn connect_with_mode_priority(
             Err(err) => {
                 let details = negotiation_error_details(&err);
                 let failure = details.clone().unwrap_or_else(|| format!("{err:#}"));
+                let error = sanitize_session_error(&failure, session);
                 tracing::warn!(
-                    "[sftp] {} mode connection failed for {}@{}: {}",
-                    mode.label(),
-                    session.user,
-                    addr,
-                    failure
+                    component = "sftp",
+                    operation = "connect_mode",
+                    host = %mask_host(&session.host),
+                    port = session.port,
+                    user = %mask_value(&session.user),
+                    mode = mode.label(),
+                    error = %error,
+                    "SFTP SSH connection mode failed"
                 );
                 failures.push(format!("{} mode: {failure}", mode.label()));
 

@@ -255,9 +255,11 @@ impl TerminalTab {
             self.cols = new_cols;
             self.rows = new_rows;
             tracing::info!(
-                "[ui] terminal resized to {}x{} (cols x rows)",
-                self.cols,
-                self.rows
+                component = "terminal",
+                operation = "resize",
+                cols = self.cols,
+                rows = self.rows,
+                "Terminal resized"
             );
             self.term.resize(TerminalSize::new(self.cols, self.rows));
             self.refresh_viewport_signature();

@@ -27,7 +27,7 @@ pub(super) fn settings_workspace_page(
                                     .checked(lock_layout)
                                     .on_click(window.listener_for(&view, |this, checked, _, cx| {
                                         this.config.set_lock_layout(*checked);
-                                        let _ = this.config.save();
+                                        this.config.save_logged("set_lock_layout");
                                         cx.notify();
                                     }))
                                     .into_any_element()
@@ -47,7 +47,7 @@ pub(super) fn settings_workspace_page(
                                     .checked(color_inactive_tabs)
                                     .on_click(window.listener_for(&view, |this, checked, _, cx| {
                                         this.config.set_color_inactive_tabs(*checked);
-                                        let _ = this.config.save();
+                                        this.config.save_logged("set_inactive_tab_color");
                                         cx.notify();
                                     }))
                                     .into_any_element()
@@ -67,7 +67,7 @@ pub(super) fn settings_workspace_page(
                                     .checked(settings_close_shortcut_confirms)
                                     .on_click(window.listener_for(&view, |this, checked, _, cx| {
                                         this.config.set_settings_close_shortcut_confirms(*checked);
-                                        let _ = this.config.save();
+                                        this.config.save_logged("set_settings_close_shortcut");
                                         cx.notify();
                                     }))
                                     .into_any_element()

@@ -200,7 +200,11 @@ impl SftpHandle {
                 return;
             }
 
-            tracing::warn!("[sftp] graceful shutdown timed out; aborting worker");
+            tracing::warn!(
+                component = "sftp",
+                operation = "shutdown",
+                "SFTP graceful shutdown timed out; aborting worker"
+            );
             join.abort();
             let _ = join.await;
         });
@@ -232,6 +236,16 @@ pub fn spawn_sftp(
     });
     let initial_pin = work_tracker.pin();
     let worker_tracker = work_tracker.clone();
+    let sensitive_values = [
+        session.user.clone(),
+        session.host.clone(),
+        session.private_key_path.clone(),
+        session.password.clone(),
+        session.passphrase.clone(),
+        session.proxy_host.clone(),
+        session.proxy_user.clone(),
+        session.proxy_password.clone(),
+    ];
     let join = runtime.spawn(async move {
         if let Err(err) = run_sftp(
             tab_id.clone(),
@@ -244,6 +258,21 @@ pub fn spawn_sftp(
         )
         .await
         {
+            let sensitive_values = sensitive_values
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>();
+            let error = crate::diagnostics::sanitize_error_with_values(
+                &format!("{err:#}"),
+                &sensitive_values,
+            );
+            tracing::error!(
+                component = "sftp",
+                operation = "worker",
+                tab_id = %tab_id,
+                error = %error,
+                "SFTP worker failed"
+            );
             let _ = events
                 .send(BackendEvent::SftpStatus {
                     tab_id: tab_id.clone(),

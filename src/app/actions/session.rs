@@ -14,48 +14,6 @@ use crate::{
     terminal::{BackendCommand, RenderSnapshot, TabKind, TerminalTab},
 };
 
-pub(super) fn mask_session_part(value: &str) -> String {
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        return "***".to_string();
-    }
-
-    let chars: Vec<char> = trimmed.chars().collect();
-    if chars.len() <= 2 {
-        return "*".to_string();
-    }
-    if chars.len() <= 4 {
-        return format!("{}*", chars[0]);
-    }
-
-    let prefix: String = chars.iter().take(2).collect();
-    let suffix: String = chars.iter().skip(chars.len().saturating_sub(2)).collect();
-    format!("{prefix}*{suffix}")
-}
-
-pub(super) fn mask_session_host(host: &str) -> String {
-    let trimmed = host.trim();
-    let ipv4_parts: Vec<&str> = trimmed.split('.').collect();
-    if ipv4_parts.len() == 4
-        && ipv4_parts
-            .iter()
-            .all(|part| !part.is_empty() && part.chars().all(|ch| ch.is_ascii_digit()))
-    {
-        return format!("{}.*.*.{}", ipv4_parts[0], ipv4_parts[3]);
-    }
-
-    let ipv6_parts: Vec<&str> = trimmed.split(':').filter(|part| !part.is_empty()).collect();
-    if trimmed.contains(':') && ipv6_parts.len() >= 2 {
-        return format!(
-            "{}:****:{}",
-            ipv6_parts.first().unwrap_or(&""),
-            ipv6_parts.last().unwrap_or(&"")
-        );
-    }
-
-    mask_session_part(trimmed)
-}
-
 pub(super) fn normalize_session_group_name(value: &str) -> String {
     value.trim().to_string()
 }
@@ -107,6 +65,12 @@ impl AxShell {
                 self.set_workspace_page(WorkspacePage::Terminal, cx);
             }
             Err(err) => {
+                tracing::error!(
+                    component = "local_terminal",
+                    operation = "open",
+                    error = %crate::diagnostics::sanitize_error(&format!("{err:#}")),
+                    "Failed to open local terminal"
+                );
                 self.status = format!("failed to open local terminal: {err:#}").into();
             }
         }
@@ -196,9 +160,7 @@ impl AxShell {
         session.proxy_user = self.proxy_user_input.read(cx).value().trim().to_string();
         session.proxy_password = self.proxy_password_input.read(cx).value().to_string();
         self.config.upsert(session.clone());
-        if let Err(err) = self.config.save() {
-            tracing::warn!("failed to save config: {err:#}");
-        }
+        self.config.save_logged("save_ssh_session");
 
         self.open_ssh_session(session, cx);
         self.editing_session_id = None;
@@ -378,6 +340,12 @@ impl AxShell {
         );
         self.config.set_local_x_server_app_path(default_path);
         if let Err(err) = self.config.save() {
+            tracing::error!(
+                component = "x11",
+                operation = "reset_local_x_server_path",
+                error = %crate::diagnostics::sanitize_error(&format!("{err:#}")),
+                "Failed to save local X server path"
+            );
             self.status = format!("failed to save local X server path: {err:#}").into();
         } else {
             self.status = "local X server path reset".into();
@@ -394,6 +362,12 @@ impl AxShell {
             .to_string();
         self.config.set_local_x_server_app_path(path);
         if let Err(err) = self.config.save() {
+            tracing::error!(
+                component = "x11",
+                operation = "save_settings",
+                error = %crate::diagnostics::sanitize_error(&format!("{err:#}")),
+                "Failed to save X11 settings"
+            );
             self.status = format!("failed to save X11 settings: {err:#}").into();
         } else {
             self.status = "X11 settings saved".into();
@@ -482,9 +456,7 @@ impl AxShell {
             crate::app::TerminalFontMetrics::fallback(self.appearance.terminal_font_size);
         self.config
             .set_terminal_font_size(self.appearance.terminal_font_size);
-        if let Err(err) = self.config.save() {
-            tracing::warn!("failed to save terminal font size: {err:#}");
-        }
+        self.config.save_logged("set_terminal_font_size");
         self.status = format!(
             "terminal font size: {:.0}px",
             self.appearance.terminal_font_size
@@ -496,9 +468,7 @@ impl AxShell {
     pub(crate) fn change_ui_font_size(&mut self, delta: f32, cx: &mut Context<Self>) {
         self.appearance.ui_font_size = (self.appearance.ui_font_size + delta).clamp(8.0, 24.0);
         self.config.set_ui_font_size(self.appearance.ui_font_size);
-        if let Err(err) = self.config.save() {
-            tracing::warn!("failed to save UI font size: {err:#}");
-        }
+        self.config.save_logged("set_ui_font_size");
         Theme::global_mut(cx).font_size = px(self.appearance.ui_font_size);
         self.status = format!("UI font size: {:.0}px", self.appearance.ui_font_size).into();
         cx.notify();
@@ -512,9 +482,7 @@ impl AxShell {
     ) {
         self.appearance.ui_font_family = family.into();
         self.config.set_ui_font_family(family);
-        if let Err(err) = self.config.save() {
-            tracing::warn!("failed to save UI font family: {err:#}");
-        }
+        self.config.save_logged("set_ui_font_family");
         crate::app::theme::set_theme_font_names(
             Theme::global_mut(cx),
             &self.appearance.ui_font_family,
@@ -528,9 +496,7 @@ impl AxShell {
         self.appearance.terminal_font_metrics =
             crate::app::TerminalFontMetrics::fallback(self.appearance.terminal_font_size);
         self.config.set_terminal_font_family(family);
-        if let Err(err) = self.config.save() {
-            tracing::warn!("failed to save terminal font family: {err:#}");
-        }
+        self.config.save_logged("set_terminal_font_family");
         cx.notify();
     }
 
@@ -541,15 +507,13 @@ impl AxShell {
     ) {
         self.appearance.cursor_style = style;
         self.config.set_cursor_style(style);
-        if let Err(err) = self.config.save() {
-            tracing::warn!("failed to save cursor style: {err:#}");
-        }
+        self.config.save_logged("set_cursor_style");
         cx.notify();
     }
 
     pub(crate) fn reset_layout(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         self.config.set_layout_state(None, None, None);
-        let _ = self.config.save();
+        self.config.save_logged("reset_layout");
 
         self.is_layout_reset = true;
         self.workspace_panels = cx.new(|_| crate::app::resizable::ResizableState::default());
@@ -570,8 +534,10 @@ impl AxShell {
 
     pub(crate) fn connect_saved_session(&mut self, session_id: String, cx: &mut Context<Self>) {
         tracing::info!(
-            "[ui] user clicked to connect saved session '{}'",
-            session_id
+            component = "session",
+            operation = "connect_saved",
+            session_id,
+            "Connecting saved SSH session"
         );
         let Some(session) = self.config.get(&session_id).cloned() else {
             self.status = "saved session not found".into();
@@ -583,10 +549,13 @@ impl AxShell {
 
     pub(crate) fn open_ssh_session(&mut self, session: Session, cx: &mut Context<Self>) {
         tracing::info!(
-            "[session] opening ssh tab for session '{}' ({}@{})",
-            session.name,
-            session.user,
-            session.host
+            component = "session",
+            operation = "open_ssh",
+            session_name = %crate::diagnostics::mask_value(&session.name),
+            user = %crate::diagnostics::mask_value(&session.user),
+            host = %crate::diagnostics::mask_host(&session.host),
+            port = session.port,
+            "Opening SSH tab"
         );
         self.expanded_saved_groups
             .insert(normalize_session_group_name(&session.group_name));
@@ -668,9 +637,7 @@ impl AxShell {
                 self.renaming_saved_group = None;
             }
         }
-        if let Err(err) = self.config.save() {
-            tracing::warn!("failed to save config: {err:#}");
-        }
+        self.config.save_logged("remove_saved_session");
         self.status = "session removed".into();
         cx.notify();
     }
@@ -756,6 +723,13 @@ impl AxShell {
                     self.tabs[ix].send_backend(BackendCommand::Resize { cols, rows });
                 }
                 Err(err) => {
+                    tracing::error!(
+                        component = "local_terminal",
+                        operation = "reopen",
+                        tab_id,
+                        error = %crate::diagnostics::sanitize_error(&format!("{err:#}")),
+                        "Failed to reopen local terminal"
+                    );
                     self.status = format!("failed to reopen local terminal: {err:#}").into();
                     cx.notify();
                     return;

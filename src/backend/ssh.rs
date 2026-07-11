@@ -18,6 +18,7 @@ use tokio::{
 
 use crate::{
     config::ConfigStore,
+    diagnostics::{mask_host, mask_value, sanitize_error, sanitize_error_with_values},
     events::{BackendEvent, BackendEventSender},
     session::Session,
     terminal::{BackendCommand, BackendShutdown, BackendTx},
@@ -68,7 +69,12 @@ impl BackendShutdown for SshBackendShutdown {
                 return;
             }
 
-            tracing::warn!("[ssh] graceful shutdown timed out; aborting terminal task");
+            tracing::warn!(
+                component = "ssh",
+                operation = "shutdown",
+                timeout_ms = SSH_SHUTDOWN_TIMEOUT.as_millis(),
+                "SSH terminal shutdown timed out; aborting task"
+            );
             join.abort();
             let _ = join.await;
         });
@@ -87,6 +93,19 @@ pub fn spawn_ssh_terminal(
     let task_tab = tab_id.clone();
     let shutdown_requested = Arc::new(AtomicBool::new(false));
     let task_shutdown_requested = shutdown_requested.clone();
+    let log_host = mask_host(&session.host);
+    let log_user = mask_value(&session.user);
+    let log_port = session.port;
+    let sensitive_values = [
+        session.user.clone(),
+        session.host.clone(),
+        session.private_key_path.clone(),
+        session.password.clone(),
+        session.passphrase.clone(),
+        session.proxy_host.clone(),
+        session.proxy_user.clone(),
+        session.proxy_password.clone(),
+    ];
     let join = runtime.spawn(async move {
         if let Err(err) = run_ssh(
             task_tab.clone(),
@@ -99,6 +118,19 @@ pub fn spawn_ssh_terminal(
         )
         .await
         {
+            let sensitive_values = sensitive_values
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>();
+            tracing::error!(
+                component = "ssh",
+                operation = "terminal",
+                host = %log_host,
+                port = log_port,
+                user = %log_user,
+                error = %sanitize_error_with_values(&format!("{err:#}"), &sensitive_values),
+                "SSH terminal failed"
+            );
             if !task_shutdown_requested.load(Ordering::SeqCst) {
                 let _ = events
                     .send(BackendEvent::Closed {
@@ -168,9 +200,17 @@ async fn run_ssh(
             .await
         {
             Ok(()) => {
-                let _ = channel
+                if let Err(err) = channel
                     .set_env(false, "DISPLAY", x11.remote_display.clone())
-                    .await;
+                    .await
+                {
+                    tracing::warn!(
+                        component = "ssh",
+                        operation = "set_x11_display",
+                        error = %sanitize_error(&err.to_string()),
+                        "SSH server rejected the X11 DISPLAY environment"
+                    );
+                }
                 let _ = events
                     .send(BackendEvent::Status {
                         tab_id: tab_id.clone(),
@@ -179,7 +219,12 @@ async fn run_ssh(
                     .await;
             }
             Err(err) => {
-                tracing::warn!("[ssh] X11 forwarding request failed: {err}");
+                tracing::warn!(
+                    component = "ssh",
+                    operation = "request_x11",
+                    error = %sanitize_error(&err.to_string()),
+                    "SSH X11 forwarding request failed"
+                );
                 let _ = events
                     .send(BackendEvent::Status {
                         tab_id: tab_id.clone(),
@@ -213,13 +258,29 @@ async fn run_ssh(
                 match command {
                     Some(BackendCommand::Input(bytes)) => {
                         if let Err(err) = channel.data(bytes.as_slice()).await {
-                            tracing::error!("[ssh] write error on tab {}: {}", tab_id, err);
+                            tracing::error!(
+                                component = "ssh",
+                                operation = "write",
+                                tab_id,
+                                error = %sanitize_error(&err.to_string()),
+                                "SSH terminal write failed"
+                            );
                             exit_reason = format!("ssh write error: {err}");
                             break;
                         }
                     }
                     Some(BackendCommand::Resize { cols, rows }) => {
-                        let _ = channel.window_change(cols.into(), rows.into(), 0, 0).await;
+                        if let Err(err) = channel.window_change(cols.into(), rows.into(), 0, 0).await {
+                            tracing::warn!(
+                                component = "ssh",
+                                operation = "resize",
+                                tab_id,
+                                cols,
+                                rows,
+                                error = %sanitize_error(&err.to_string()),
+                                "SSH terminal resize failed"
+                            );
+                        }
                     }
                     Some(BackendCommand::SampleMetrics) => {
                         let handle_clone = handle.clone();
@@ -256,15 +317,25 @@ async fn run_ssh(
                                 }
                                 Err(err) => {
                                     tracing::debug!(
-                                        "[ssh] working directory query failed for tab {}: {err:#}",
-                                        tab_id_clone
+                                        component = "ssh",
+                                        operation = "query_working_directory",
+                                        tab_id = tab_id_clone,
+                                        error = %sanitize_error(&format!("{err:#}")),
+                                        "SSH working directory query failed"
                                     );
                                 }
                             }
                         });
                     }
                     Some(BackendCommand::Close) | None => {
-                        tracing::info!("[ssh] local client closed the session for tab {}", tab_id);
+                        tracing::info!(
+                            component = "ssh",
+                            operation = "close",
+                            tab_id,
+                            close_source = "client",
+                            graceful = true,
+                            "SSH session close requested"
+                        );
                         let _ = channel.eof().await;
                         exit_reason = "ssh session closed".to_string();
                         break;
@@ -285,20 +356,48 @@ async fn run_ssh(
                     }
                     Some(ChannelMsg::Close) => {
                         if is_graceful_close {
-                            tracing::info!("[ssh] session gracefully closed by server for tab {}", tab_id);
+                            tracing::info!(
+                                component = "ssh",
+                                operation = "close",
+                                tab_id,
+                                close_source = "server",
+                                graceful = true,
+                                "SSH session closed"
+                            );
                             exit_reason = "ssh session closed".to_string();
                         } else {
-                            tracing::warn!("[ssh] connection abruptly closed by server for tab {}", tab_id);
+                            tracing::warn!(
+                                component = "ssh",
+                                operation = "close",
+                                tab_id,
+                                close_source = "server",
+                                graceful = false,
+                                "SSH connection closed abruptly"
+                            );
                             exit_reason = "ssh connection lost (abrupt close)".to_string();
                         }
                         break;
                     }
                     None => {
                         if is_graceful_close {
-                            tracing::info!("[ssh] network stream ended gracefully for tab {}", tab_id);
+                            tracing::info!(
+                                component = "ssh",
+                                operation = "close",
+                                tab_id,
+                                close_source = "network",
+                                graceful = true,
+                                "SSH network stream ended"
+                            );
                             exit_reason = "ssh session closed".to_string();
                         } else {
-                            tracing::warn!("[ssh] network drop detected for tab {}", tab_id);
+                            tracing::warn!(
+                                component = "ssh",
+                                operation = "close",
+                                tab_id,
+                                close_source = "network",
+                                graceful = false,
+                                "SSH network connection dropped"
+                            );
                             exit_reason = "ssh connection lost (network drop)".to_string();
                         }
                         break;
@@ -310,11 +409,20 @@ async fn run_ssh(
     }
 
     cancel_ssh_child_tasks(&mut child_tasks).await;
-    let _ = handle
+    if let Err(err) = handle
         .lock()
         .await
         .disconnect(Disconnect::ByApplication, "bye", "")
-        .await;
+        .await
+    {
+        tracing::debug!(
+            component = "ssh",
+            operation = "disconnect",
+            tab_id,
+            error = %sanitize_error(&err.to_string()),
+            "SSH disconnect request failed"
+        );
+    }
     if !shutdown_requested.load(Ordering::SeqCst) {
         let _ = events
             .send(BackendEvent::Closed {
@@ -332,13 +440,21 @@ async fn cancel_ssh_child_tasks(child_tasks: &mut JoinSet<()>) {
 }
 
 async fn request_shell_integration_env(channel: &mut Channel<Msg>) {
-    let _ = channel.set_env(false, "TERM_PROGRAM", "AxShell").await;
-    let _ = channel
-        .set_env(false, "AXSHELL_SHELL_INTEGRATION", "1")
-        .await;
-    let _ = channel
-        .set_env(false, "PROMPT_COMMAND", BASH_CWD_PROMPT_COMMAND)
-        .await;
+    for (name, value) in [
+        ("TERM_PROGRAM", "AxShell"),
+        ("AXSHELL_SHELL_INTEGRATION", "1"),
+        ("PROMPT_COMMAND", BASH_CWD_PROMPT_COMMAND),
+    ] {
+        if let Err(err) = channel.set_env(false, name, value).await {
+            tracing::debug!(
+                component = "ssh",
+                operation = "set_shell_environment",
+                variable = name,
+                error = %sanitize_error(&err.to_string()),
+                "SSH server rejected a shell integration environment variable"
+            );
+        }
+    }
 }
 
 async fn query_remote_working_directory_with_handle(

@@ -219,7 +219,9 @@ pub(super) fn settings_appearance_page(
                                                         this.config.set_title_bar_style(
                                                             crate::config::TitleBarStyle::Native,
                                                         );
-                                                        let _ = this.config.save();
+                                                        this
+                                                            .config
+                                                            .save_logged("set_native_title_bar");
                                                         cx.notify();
                                                     },
                                                 )),
@@ -239,7 +241,9 @@ pub(super) fn settings_appearance_page(
                                                         this.config.set_title_bar_style(
                                                             crate::config::TitleBarStyle::Integrated,
                                                         );
-                                                        let _ = this.config.save();
+                                                        this
+                                                            .config
+                                                            .save_logged("set_integrated_title_bar");
                                                         cx.notify();
                                                     },
                                                 )),

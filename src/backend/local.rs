@@ -45,7 +45,12 @@ impl BackendShutdown for LocalBackendShutdown {
             .take()
         {
             if let Err(err) = child_killer.kill() {
-                tracing::debug!("[local] failed to kill local shell during shutdown: {err}");
+                tracing::debug!(
+                    component = "local_terminal",
+                    operation = "shutdown_kill",
+                    error = %crate::diagnostics::sanitize_error(&err.to_string()),
+                    "Failed to kill local shell during shutdown"
+                );
             }
         }
 
@@ -59,8 +64,18 @@ impl BackendShutdown for LocalBackendShutdown {
         };
 
         thread::spawn(move || {
-            let _ = threads.writer.join();
-            let _ = threads.reader.join();
+            if threads.writer.join().is_err() {
+                tracing::warn!(
+                    component = "local_terminal",
+                    "Local terminal writer thread panicked"
+                );
+            }
+            if threads.reader.join().is_err() {
+                tracing::warn!(
+                    component = "local_terminal",
+                    "Local terminal reader thread panicked"
+                );
+            }
         });
     }
 }
@@ -88,6 +103,16 @@ pub fn spawn_local_terminal(
             "/bin/zsh".into()
         }
     });
+    let shell_label = crate::diagnostics::mask_path(&shell);
+    tracing::info!(
+        component = "local_terminal",
+        operation = "start",
+        tab_id = %tab_id,
+        shell = %shell_label,
+        cols,
+        rows,
+        "Starting local terminal"
+    );
 
     let cmd = local_shell_command(&shell);
     let mut child = pair.slave.spawn_command(cmd).context("spawn local shell")?;
@@ -116,6 +141,14 @@ pub fn spawn_local_terminal(
                 }
                 Err(err) => {
                     if !reader_shutdown_requested.load(Ordering::SeqCst) {
+                        let error = crate::diagnostics::sanitize_error(&err.to_string());
+                        tracing::error!(
+                            component = "local_terminal",
+                            operation = "read",
+                            tab_id = %read_tab,
+                            error = %error,
+                            "Local terminal read failed"
+                        );
                         let _ = read_events.blocking_send(BackendEvent::Closed {
                             tab_id: read_tab.clone(),
                             reason: format!("local read error: {err}"),
@@ -126,6 +159,12 @@ pub fn spawn_local_terminal(
             }
         }
         if !reader_shutdown_requested.load(Ordering::SeqCst) {
+            tracing::info!(
+                component = "local_terminal",
+                operation = "read",
+                tab_id = %read_tab,
+                "Local shell output closed"
+            );
             let _ = read_events.blocking_send(BackendEvent::Closed {
                 tab_id: read_tab,
                 reason: "local shell closed".into(),
@@ -143,6 +182,14 @@ pub fn spawn_local_terminal(
                     BackendCommand::Input(bytes) => {
                         if let Err(err) = writer.write_all(&bytes) {
                             if !writer_shutdown_requested.load(Ordering::SeqCst) {
+                                let error = crate::diagnostics::sanitize_error(&err.to_string());
+                                tracing::error!(
+                                    component = "local_terminal",
+                                    operation = "write",
+                                    tab_id = %write_tab,
+                                    error = %error,
+                                    "Local terminal write failed"
+                                );
                                 let _ = write_events.blocking_send(BackendEvent::Closed {
                                     tab_id: write_tab.clone(),
                                     reason: format!("local write error: {err}"),
@@ -150,21 +197,48 @@ pub fn spawn_local_terminal(
                             }
                             break;
                         }
-                        let _ = writer.flush();
+                        if let Err(err) = writer.flush() {
+                            let error = crate::diagnostics::sanitize_error(&err.to_string());
+                            tracing::warn!(
+                                component = "local_terminal",
+                                operation = "flush",
+                                tab_id = %write_tab,
+                                error = %error,
+                                "Local terminal flush failed"
+                            );
+                        }
                     }
                     BackendCommand::Resize { cols, rows } => {
-                        let _ = master.resize(PtySize {
+                        if let Err(err) = master.resize(PtySize {
                             rows,
                             cols,
                             pixel_width: 0,
                             pixel_height: 0,
-                        });
+                        }) {
+                            let error = crate::diagnostics::sanitize_error(&err.to_string());
+                            tracing::warn!(
+                                component = "local_terminal",
+                                operation = "resize",
+                                tab_id = %write_tab,
+                                error = %error,
+                                cols,
+                                rows,
+                                "Local terminal resize failed"
+                            );
+                        }
                     }
                     BackendCommand::Close => break,
                     BackendCommand::SampleMetrics | BackendCommand::QueryWorkingDirectory => {}
                 },
-                Err(mpsc::RecvTimeoutError::Timeout) => {
-                    if let Ok(Some(status)) = child.try_wait() {
+                Err(mpsc::RecvTimeoutError::Timeout) => match child.try_wait() {
+                    Ok(Some(status)) => {
+                        tracing::info!(
+                            component = "local_terminal",
+                            operation = "wait",
+                            tab_id = %write_tab,
+                            status = %status,
+                            "Local shell exited"
+                        );
                         if !writer_shutdown_requested.load(Ordering::SeqCst) {
                             let _ = write_events.blocking_send(BackendEvent::Closed {
                                 tab_id: write_tab,
@@ -173,11 +247,37 @@ pub fn spawn_local_terminal(
                         }
                         return;
                     }
-                }
+                    Ok(None) => {}
+                    Err(err) => {
+                        let error = crate::diagnostics::sanitize_error(&err.to_string());
+                        tracing::error!(
+                            component = "local_terminal",
+                            operation = "wait",
+                            tab_id = %write_tab,
+                            error = %error,
+                            "Failed to query local shell status"
+                        );
+                        if !writer_shutdown_requested.load(Ordering::SeqCst) {
+                            let _ = write_events.blocking_send(BackendEvent::Closed {
+                                tab_id: write_tab,
+                                reason: format!("local shell status error: {err}"),
+                            });
+                        }
+                        return;
+                    }
+                },
                 Err(mpsc::RecvTimeoutError::Disconnected) => break,
             }
         }
-        let _ = child.kill();
+        if let Err(err) = child.kill() {
+            tracing::debug!(
+                component = "local_terminal",
+                operation = "kill",
+                tab_id = %write_tab,
+                error = %crate::diagnostics::sanitize_error(&err.to_string()),
+                "Local shell was already stopped or could not be killed"
+            );
+        }
     });
 
     let _ = events.try_send(BackendEvent::Status {

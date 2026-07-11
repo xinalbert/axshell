@@ -88,7 +88,13 @@ pub(super) async fn run_sftp(
                 if let Some(Err(err)) = result
                     && !err.is_cancelled()
                 {
-                    tracing::warn!("[sftp] child task failed: {err}");
+                    tracing::warn!(
+                        component = "sftp",
+                        operation = "child_task",
+                        tab_id = %tab_id,
+                        error = %crate::diagnostics::sanitize_error(&err.to_string()),
+                        "SFTP child task failed"
+                    );
                 }
                 continue;
             }
@@ -142,6 +148,7 @@ pub(super) async fn run_sftp(
                 {
                     Ok(()) => browse_path = actual_path,
                     Err(err) => {
+                        log_sftp_error("list_dir", &tab_id, &err);
                         let _ = events
                             .send(BackendEvent::SftpStatus {
                                 tab_id: tab_id.clone(),
@@ -155,6 +162,7 @@ pub(super) async fn run_sftp(
                 if let Err(err) =
                     emit_next_browser_page(&events, &tab_id, &mut browse_cursor, true).await
                 {
+                    log_sftp_error("load_more", &tab_id, &err);
                     close_browse_cursor(&mut browse_cursor).await;
                     let _ = emit_browser_page(
                         &events,
@@ -198,6 +206,7 @@ pub(super) async fn run_sftp(
                         {
                             Ok(()) => browse_path = directory,
                             Err(err) => {
+                                log_sftp_error("reveal_list", &tab_id, &err);
                                 let _ = events
                                     .send(BackendEvent::SftpStatus {
                                         tab_id: tab_id.clone(),
@@ -208,6 +217,7 @@ pub(super) async fn run_sftp(
                         }
                     }
                     Err(err) => {
+                        log_sftp_error("reveal_path", &tab_id, &err);
                         let _ = events
                             .send(BackendEvent::SftpStatus {
                                 tab_id: tab_id.clone(),
@@ -228,6 +238,7 @@ pub(super) async fn run_sftp(
                             .await;
                     }
                     Err(err) => {
+                        log_sftp_error("preview", &tab_id, &err);
                         let _ = events
                             .send(BackendEvent::SftpStatus {
                                 tab_id: tab_id.clone(),
@@ -436,6 +447,7 @@ pub(super) async fn run_sftp(
                     let sftp_session = match open_transfer_sftp_session(&handle_clone).await {
                         Ok(session) => session,
                         Err(err) => {
+                            log_sftp_error("edit_open_session", &tab_id_clone, &err);
                             let _ = events_clone
                                 .send(BackendEvent::SftpStatus {
                                     tab_id: tab_id_clone.clone(),
@@ -464,6 +476,7 @@ pub(super) async fn run_sftp(
                     )
                     .await
                     {
+                        log_sftp_error("edit_download", &tab_id_clone, &err);
                         let _ = events_clone
                             .send(BackendEvent::SftpStatus {
                                 tab_id: tab_id_clone.clone(),
@@ -474,6 +487,7 @@ pub(super) async fn run_sftp(
                     }
 
                     if let Err(err) = open::that(&local_path) {
+                        log_sftp_error("edit_open_editor", &tab_id_clone, &err);
                         let _ = events_clone
                             .send(BackendEvent::SftpStatus {
                                 tab_id: tab_id_clone.clone(),
@@ -485,17 +499,21 @@ pub(super) async fn run_sftp(
 
                     use notify::Watcher;
                     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+                    let watcher_tab_id = tab_id_clone.clone();
                     let mut watcher = match notify::recommended_watcher(
-                        move |res: notify::Result<notify::Event>| {
-                            if let Ok(event) = res {
-                                if event.kind.is_modify() {
-                                    let _ = tx.send(());
-                                }
+                        move |res: notify::Result<notify::Event>| match res {
+                            Ok(event) if event.kind.is_modify() => {
+                                let _ = tx.send(());
+                            }
+                            Ok(_) => {}
+                            Err(err) => {
+                                log_sftp_error("edit_watch_event", &watcher_tab_id, &err);
                             }
                         },
                     ) {
                         Ok(w) => w,
                         Err(err) => {
+                            log_sftp_error("edit_create_watcher", &tab_id_clone, &err);
                             let _ = events_clone
                                 .send(BackendEvent::SftpStatus {
                                     tab_id: tab_id_clone.clone(),
@@ -509,6 +527,7 @@ pub(super) async fn run_sftp(
                     if let Err(err) =
                         watcher.watch(&local_path, notify::RecursiveMode::NonRecursive)
                     {
+                        log_sftp_error("edit_watch_file", &tab_id_clone, &err);
                         let _ = events_clone
                             .send(BackendEvent::SftpStatus {
                                 tab_id: tab_id_clone.clone(),
@@ -551,6 +570,7 @@ pub(super) async fn run_sftp(
                     let sftp_session = match open_transfer_sftp_session(&handle_clone).await {
                         Ok(session) => session,
                         Err(err) => {
+                            log_sftp_error("edit_upload_session", &tab_id_clone, &err);
                             let _ = events_clone
                                 .send(BackendEvent::SftpStatus {
                                     tab_id: tab_id_clone.clone(),
@@ -592,6 +612,7 @@ pub(super) async fn run_sftp(
                                 .await;
                         }
                         Err(err) => {
+                            log_sftp_error("edit_upload", &tab_id_clone, &err);
                             let _ = events_clone
                                 .send(BackendEvent::SftpStatus {
                                     tab_id: tab_id_clone.clone(),
@@ -611,7 +632,13 @@ pub(super) async fn run_sftp(
                     path.clone()
                 };
 
-                tracing::info!("[sftp] creating directory: '{}'", actual_path);
+                tracing::info!(
+                    component = "sftp",
+                    operation = "create_dir",
+                    tab_id = %tab_id,
+                    remote_path = %crate::diagnostics::mask_path(&actual_path),
+                    "Creating SFTP directory"
+                );
 
                 match sftp.create_dir(&actual_path).await {
                     Ok(_) => {
@@ -631,6 +658,7 @@ pub(super) async fn run_sftp(
                         }
                     }
                     Err(err) => {
+                        log_sftp_error("create_dir", &tab_id, &err);
                         let _ = events
                             .send(BackendEvent::SftpStatus {
                                 tab_id: tab_id.clone(),
@@ -642,7 +670,13 @@ pub(super) async fn run_sftp(
                 }
             }
             SftpCommand::DeletePaths { paths, pin: _pin } => {
-                tracing::info!("[sftp] batch deleting {} paths", paths.len());
+                tracing::info!(
+                    component = "sftp",
+                    operation = "delete_paths",
+                    tab_id = %tab_id,
+                    item_count = paths.len(),
+                    "Deleting SFTP paths"
+                );
                 let _ = events
                     .send(BackendEvent::SftpStatus {
                         tab_id: tab_id.clone(),
@@ -673,6 +707,15 @@ pub(super) async fn run_sftp(
                         })
                         .await;
                 } else {
+                    let error = crate::diagnostics::sanitize_error(&errors.join(", "));
+                    tracing::error!(
+                        component = "sftp",
+                        operation = "delete_paths",
+                        tab_id = %tab_id,
+                        failed_count = errors.len(),
+                        error = %error,
+                        "SFTP delete failed"
+                    );
                     let _ = events
                         .send(BackendEvent::SftpStatus {
                             tab_id: tab_id.clone(),
@@ -703,6 +746,17 @@ pub(super) async fn run_sftp(
         .disconnect(Disconnect::ByApplication, "bye", "")
         .await;
     Ok(())
+}
+
+fn log_sftp_error(operation: &'static str, tab_id: &str, error: &dyn std::fmt::Display) {
+    let error = crate::diagnostics::sanitize_error(&error.to_string());
+    tracing::error!(
+        component = "sftp",
+        operation,
+        tab_id,
+        error = %error,
+        "SFTP operation failed"
+    );
 }
 
 fn queue_list_dir(
