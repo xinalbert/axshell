@@ -320,22 +320,24 @@ impl Render for AxShell {
                         v_flex()
                             .w_full()
                             .when(is_dir, |this| {
-                                this.child(
+                                let open_button =
                                     Button::new("sftp-context-open")
                                         .ghost()
                                         .w_full()
                                         .justify_start()
+                                        .hover(|style| style.bg(cx.theme().list_hover))
                                         .label(t!("open_folder"))
                                         .on_click(cx.listener(|this, _, _, cx| {
                                             this.trigger_sftp_context_open(cx);
-                                        })),
-                                )
+                                        }));
+                                this.child(open_button)
                             })
                             .child(
                                 Button::new("sftp-context-download")
                                     .ghost()
                                     .w_full()
                                     .justify_start()
+                                    .hover(|style| style.bg(cx.theme().list_hover))
                                     .label(download_label)
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.trigger_sftp_context_download(window, cx);
@@ -347,6 +349,7 @@ impl Render for AxShell {
                                         .ghost()
                                         .w_full()
                                         .justify_start()
+                                        .hover(|style| style.bg(cx.theme().list_hover))
                                         .label(t!("edit_file"))
                                         .tooltip(t!("edit_file_tooltip").to_string())
                                         .on_click(cx.listener(|this, _, _, cx| {
@@ -359,6 +362,7 @@ impl Render for AxShell {
                                     .ghost()
                                     .w_full()
                                     .justify_start()
+                                    .hover(|style| style.bg(cx.theme().list_hover))
                                     .label(t!("refresh"))
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         this.trigger_sftp_context_refresh(cx);
@@ -369,6 +373,7 @@ impl Render for AxShell {
                                     .ghost()
                                     .w_full()
                                     .justify_start()
+                                    .hover(|style| style.bg(cx.theme().list_hover))
                                     .label(t!("new_folder"))
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.trigger_sftp_context_new_folder(window, cx);
@@ -379,6 +384,7 @@ impl Render for AxShell {
                                     .ghost()
                                     .w_full()
                                     .justify_start()
+                                    .hover(|style| style.bg(cx.theme().list_hover))
                                     .label(t!("upload_file"))
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.trigger_sftp_context_upload_file(window, cx);
@@ -389,6 +395,7 @@ impl Render for AxShell {
                                     .ghost()
                                     .w_full()
                                     .justify_start()
+                                    .hover(|style| style.bg(cx.theme().list_hover))
                                     .label(t!("upload_folder"))
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.trigger_sftp_context_upload_folder(window, cx);
@@ -399,6 +406,7 @@ impl Render for AxShell {
                                     .ghost()
                                     .w_full()
                                     .justify_start()
+                                    .hover(|style| style.bg(cx.theme().list_hover))
                                     .label(t!("delete"))
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.trigger_sftp_context_delete(window, cx);
@@ -413,6 +421,7 @@ impl Render for AxShell {
                                 .ghost()
                                 .w_full()
                                 .justify_start()
+                                .hover(|style| style.bg(cx.theme().list_hover))
                                 .label(if is_dir { t!("open_folder") } else { t!("open_file") })
                                 .on_click(cx.listener(|this, _, _, cx| {
                                     this.trigger_sftp_context_open(cx);
@@ -423,6 +432,7 @@ impl Render for AxShell {
                                 .ghost()
                                 .w_full()
                                 .justify_start()
+                                .hover(|style| style.bg(cx.theme().list_hover))
                                 .label(t!("upload"))
                                 .disabled(!sftp_context_remote_ready)
                                 .on_click(cx.listener(|this, _, _, cx| {
@@ -434,6 +444,7 @@ impl Render for AxShell {
                                 .ghost()
                                 .w_full()
                                 .justify_start()
+                                .hover(|style| style.bg(cx.theme().list_hover))
                                 .label(t!("refresh"))
                                 .on_click(cx.listener(|this, _, _, cx| {
                                     this.trigger_sftp_context_refresh(cx);

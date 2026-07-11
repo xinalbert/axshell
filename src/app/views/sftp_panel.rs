@@ -297,7 +297,7 @@ impl AxShell {
                                     .gap_1()
                                     .overflow_hidden()
                                     .cursor_pointer()
-                                    .hover(|style| style.bg(cx.theme().muted))
+                                    .hover(|style| style.bg(cx.theme().list_hover))
                                     .on_mouse_down(
                                         MouseButton::Left,
                                         cx.listener(|this, _, _, cx| {
@@ -336,7 +336,7 @@ impl AxShell {
                             .gap_1()
                             .overflow_hidden()
                             .cursor_pointer()
-                            .hover(|style| style.bg(cx.theme().muted))
+                            .hover(|style| style.bg(cx.theme().list_hover))
                             .on_mouse_down(
                                 MouseButton::Left,
                                 cx.listener(|this, _, _, cx| {
@@ -374,7 +374,7 @@ impl AxShell {
                             .gap_1()
                             .overflow_hidden()
                             .cursor_pointer()
-                            .hover(|style| style.bg(cx.theme().muted))
+                            .hover(|style| style.bg(cx.theme().list_hover))
                             .on_mouse_down(
                                 MouseButton::Left,
                                 cx.listener(|this, _, _, cx| {
@@ -451,13 +451,16 @@ impl AxShell {
                                             let entry_modified = format_mtime(entry.modified);
                                             Some(
                                                 h_flex()
+                                                    .id(ElementId::Name(
+                                                        format!("remote-file-row-{entry_id}").into(),
+                                                    ))
                                                     .w_full()
                                                     .h(px(28.))
                                                     .items_center()
                                                     .px_3()
                                                     .gap_2()
                                                     .bg(bg)
-                                                    .hover(|style| style.bg(theme.muted.opacity(0.8)))
+                                                    .hover(|style| style.bg(theme.list_hover))
                                                     .border_b_1()
                                                     .border_color(theme.border.opacity(0.35))
                                                     .on_mouse_down(
@@ -801,7 +804,7 @@ impl AxShell {
                                     .gap_1()
                                     .overflow_hidden()
                                     .cursor_pointer()
-                                    .hover(|style| style.bg(cx.theme().muted))
+                                    .hover(|style| style.bg(cx.theme().list_hover))
                                     .on_mouse_down(
                                         MouseButton::Left,
                                         cx.listener(|this, _, _, cx| {
@@ -840,7 +843,7 @@ impl AxShell {
                             .gap_1()
                             .overflow_hidden()
                             .cursor_pointer()
-                            .hover(|style| style.bg(cx.theme().muted))
+                            .hover(|style| style.bg(cx.theme().list_hover))
                             .on_mouse_down(
                                 MouseButton::Left,
                                 cx.listener(|this, _, _, cx| {
@@ -878,7 +881,7 @@ impl AxShell {
                             .gap_1()
                             .overflow_hidden()
                             .cursor_pointer()
-                            .hover(|style| style.bg(cx.theme().muted))
+                            .hover(|style| style.bg(cx.theme().list_hover))
                             .on_mouse_down(
                                 MouseButton::Left,
                                 cx.listener(|this, _, _, cx| {
@@ -954,13 +957,16 @@ impl AxShell {
                                         let entry_modified = format_mtime(entry.modified);
                                         Some(
                                             h_flex()
+                                                .id(ElementId::Name(
+                                                    format!("local-file-row-{entry_id}").into(),
+                                                ))
                                                 .w_full()
                                                 .h(px(28.))
                                                 .items_center()
                                                 .px_3()
                                                 .gap_2()
                                                 .bg(bg)
-                                                .hover(|style| style.bg(theme.muted.opacity(0.8)))
+                                                .hover(|style| style.bg(theme.list_hover))
                                                 .border_b_1()
                                                 .border_color(theme.border.opacity(0.35))
                                                 .on_mouse_down(
