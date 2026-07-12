@@ -2,9 +2,10 @@ use gpui::{App, Menu, MenuItem, OsAction, SystemMenuType};
 use gpui_component::GlobalState;
 
 use crate::{
-    ClosePane, Copy, FocusPaneDown, FocusPaneLeft, FocusPaneRight, FocusPaneUp, NewSsh, NextTab,
-    OpenSearch, OpenSession, OpenSettings, OpenTransfers, Paste, PrevTab, SplitPaneDown,
-    SplitPaneLeft, SplitPaneRight, SplitPaneUp, ToggleSftpZoom, ToggleSidebar,
+    ClosePane, Copy, ExportSavedSessions, FocusPaneDown, FocusPaneLeft, FocusPaneRight,
+    FocusPaneUp, ImportSavedSessions, NewSsh, NextTab, OpenSearch, OpenSession, OpenSettings,
+    OpenTransfers, Paste, PrevTab, SplitPaneDown, SplitPaneLeft, SplitPaneRight, SplitPaneUp,
+    ToggleSftpZoom, ToggleSidebar,
 };
 
 gpui::actions!(ax_shell_app_menu, [Quit]);
@@ -54,6 +55,9 @@ fn app_menus() -> [Menu; 6] {
         Menu::new("File").items([
             MenuItem::action("Open Session", OpenSession),
             MenuItem::action("New SSH Connection", NewSsh),
+            MenuItem::separator(),
+            MenuItem::action("Import Saved SSH...", ImportSavedSessions),
+            MenuItem::action("Export Saved SSH...", ExportSavedSessions),
             MenuItem::separator(),
             MenuItem::action("Transfers", OpenTransfers),
         ]),

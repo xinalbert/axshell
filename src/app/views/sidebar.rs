@@ -397,6 +397,7 @@ impl AxShell {
             } => {
                 let group_key = group_name.clone();
                 let rename_group_name = group_name.clone();
+                let menu_group_name = group_name.clone();
                 div()
                     .id(("saved-sidebar-row", row_ix))
                     .w_full()
@@ -425,6 +426,22 @@ impl AxShell {
                                     window.listener_for(&view, move |this, _, _, cx| {
                                         this.toggle_saved_group(group_key.clone(), cx)
                                     }),
+                                )
+                            })
+                            .when(!is_renaming, |this| {
+                                this.on_mouse_down(
+                                    MouseButton::Right,
+                                    window.listener_for(
+                                        &view,
+                                        move |this, event: &MouseDownEvent, _, cx| {
+                                            this.open_saved_group_context_menu(
+                                                menu_group_name.clone(),
+                                                event.position,
+                                                cx,
+                                            );
+                                            cx.stop_propagation();
+                                        },
+                                    ),
                                 )
                             })
                             .child(
@@ -666,6 +683,7 @@ impl AxShell {
             } => {
                 let group_abbrev = Self::collapsed_sidebar_abbrev(&display_name);
                 let group_tooltip = format!("{} ({})", display_name, count);
+                let menu_group_name = group_name.clone();
                 div()
                     .id(("collapsed-saved-sidebar-row", row_ix))
                     .w_full()
@@ -702,6 +720,20 @@ impl AxShell {
                                 window.listener_for(&view, move |this, _, _, cx| {
                                     this.toggle_saved_group(group_name.clone(), cx)
                                 }),
+                            )
+                            .on_mouse_down(
+                                MouseButton::Right,
+                                window.listener_for(
+                                    &view,
+                                    move |this, event: &MouseDownEvent, _, cx| {
+                                        this.open_saved_group_context_menu(
+                                            menu_group_name.clone(),
+                                            event.position,
+                                            cx,
+                                        );
+                                        cx.stop_propagation();
+                                    },
+                                ),
                             )
                             .tooltip(move |window, cx| {
                                 gpui_component::tooltip::Tooltip::new(group_tooltip.clone())

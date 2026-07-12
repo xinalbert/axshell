@@ -60,6 +60,12 @@ pub(crate) struct SavedSessionContextMenuState {
     pub(crate) position: Point<Pixels>,
 }
 
+#[derive(Clone)]
+pub(crate) struct SavedGroupContextMenuState {
+    pub(crate) group_name: String,
+    pub(crate) position: Point<Pixels>,
+}
+
 pub(crate) struct AxShell {
     pub(crate) focus_handle: FocusHandle,
     pub(crate) selector_focus_handle: FocusHandle,
@@ -132,6 +138,7 @@ pub(crate) struct AxShell {
     pub(crate) pending_local_sftp_path_sync: Option<String>,
     pub(crate) local_file_browser: LocalFileBrowserState,
     pub(crate) sftp_context_menu: Option<SftpContextMenuState>,
+    pub(crate) saved_group_context_menu: Option<SavedGroupContextMenuState>,
     pub(crate) saved_session_context_menu: Option<SavedSessionContextMenuState>,
     pub(crate) sftp_creating_folder: bool,
     pub(crate) sftp_close_remember_choice: bool,

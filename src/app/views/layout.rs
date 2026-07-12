@@ -152,6 +152,12 @@ impl Render for AxShell {
                 this.open_sftp_transfers_page(window, cx);
             }))
             .on_action(cx.listener(|this, _: &crate::NewSsh, window, cx| this.show_ssh_dialog(window, cx)))
+            .on_action(cx.listener(|this, _: &crate::ImportSavedSessions, window, cx| {
+                this.import_saved_sessions_share_file(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &crate::ExportSavedSessions, window, cx| {
+                this.export_saved_sessions_share_file(window, cx);
+            }))
             .on_action(cx.listener(|this, _: &crate::OpenSearch, window, cx| this.toggle_search(window, cx)))
             .on_action(cx.listener(|this, _: &crate::PrevTab, window, cx| {
                 this.switch_workspace_tab(-1, window, cx);
@@ -569,6 +575,7 @@ impl Render for AxShell {
                         .child(label)
                 };
                 let copy_value = menu.connection_info.clone();
+                let export_id = menu.session_id.clone();
                 let clone_id = menu.session_id.clone();
                 let edit_id = menu.session_id.clone();
                 let delete_id = menu.session_id.clone();
@@ -585,6 +592,21 @@ impl Render for AxShell {
                                 cx.stop_propagation();
                             }),
                         ))
+                    .child(
+                        menu_item("saved-context-export", t!("export_ssh").to_string())
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                window.listener_for(&view, move |this, _, window, cx| {
+                                    this.dismiss_saved_session_context_menu(cx);
+                                    this.export_saved_session_share_file(
+                                        export_id.clone(),
+                                        window,
+                                        cx,
+                                    );
+                                    cx.stop_propagation();
+                                }),
+                            ),
+                    )
                     .child(
                         menu_item("saved-context-clone", t!("clone").to_string()).on_mouse_down(
                             MouseButton::Left,
@@ -632,6 +654,86 @@ impl Render for AxShell {
                             MouseButton::Right,
                             cx.listener(|this, _, _, cx| {
                                 this.dismiss_saved_session_context_menu(cx);
+                            }),
+                        )
+                        .child(
+                            div()
+                                .absolute()
+                                .left(menu.position.x)
+                                .top(menu.position.y)
+                                .w(px(190.))
+                                .p_1()
+                                .rounded_md()
+                                .border_1()
+                                .border_color(cx.theme().border)
+                                .bg(cx.theme().popover)
+                                .shadow_lg()
+                                .on_mouse_down(MouseButton::Left, |_, window, cx| {
+                                    window.prevent_default();
+                                    cx.stop_propagation();
+                                })
+                                .on_mouse_down(MouseButton::Right, |_, window, cx| {
+                                    window.prevent_default();
+                                    cx.stop_propagation();
+                                })
+                                .child(menu_body),
+                        ),
+                )
+            })
+            .when_some(self.saved_group_context_menu.clone(), |this, menu| {
+                let view = cx.entity();
+                let menu_hover_tokens = fast_hover_tokens(cx);
+                let menu_radius = cx.theme().radius;
+                let menu_fg = cx.theme().popover_foreground;
+                let menu_item = move |id: &'static str, label: String| {
+                    div()
+                        .id(id)
+                        .w_full()
+                        .h(px(30.))
+                        .px_2()
+                        .flex()
+                        .items_center()
+                        .justify_start()
+                        .rounded(menu_radius)
+                        .text_size(rems(0.917))
+                        .text_color(menu_fg)
+                        .cursor_pointer()
+                        .fast_hover_with_tokens(menu_hover_tokens)
+                        .child(label)
+                };
+                let export_group_name = menu.group_name.clone();
+                let menu_body = v_flex().w_full().child(
+                    menu_item("saved-group-context-export", t!("export_group").to_string())
+                        .on_mouse_down(
+                            MouseButton::Left,
+                            window.listener_for(&view, move |this, _, window, cx| {
+                                this.dismiss_saved_group_context_menu(cx);
+                                this.export_saved_group_share_file(
+                                    export_group_name.clone(),
+                                    window,
+                                    cx,
+                                );
+                                cx.stop_propagation();
+                            }),
+                        ),
+                );
+                this.child(
+                    div()
+                        .absolute()
+                        .top_0()
+                        .left_0()
+                        .right_0()
+                        .bottom_0()
+                        .on_mouse_down(
+                            MouseButton::Left,
+                            cx.listener(|this, _, _, cx| {
+                                this.dismiss_saved_group_context_menu(cx);
+                            }),
+                        )
+                        .on_mouse_down(
+                            MouseButton::Right,
+                            cx.listener(|this, _, _, cx| {
+                                this.dismiss_saved_group_context_menu(cx);
                             }),
                         )
                         .child(

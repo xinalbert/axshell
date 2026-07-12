@@ -445,6 +445,7 @@ impl AxShell {
                 selected_entries: HashSet::new(),
             },
             sftp_context_menu: None,
+            saved_group_context_menu: None,
             saved_session_context_menu: None,
             sftp_creating_folder: false,
             sftp_close_remember_choice: false,

@@ -18,6 +18,8 @@ gpui::actions!(
         OpenSession,
         OpenTransfers,
         NewSsh,
+        ImportSavedSessions,
+        ExportSavedSessions,
         OpenSearch,
         PrevTab,
         NextTab,
