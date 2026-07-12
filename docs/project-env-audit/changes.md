@@ -1,3 +1,19 @@
+## 2026-07-12 新增内置主题预设预检
+
+- 日期：2026-07-12 09:54 +0800
+- 变化摘要：运行时、依赖、工具链和 CI 入口不变；本轮新增内置 theme JSON 和默认 Theme profile，候选主题来自用户允许的联网检索。
+- 受影响文件：`assets/themes/popular.json`，`src/app/theme.rs`，`src/config/model.rs`，`src/config/store.rs`，跟踪文档。
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo；不新增依赖，不修改 `Cargo.toml` / `Cargo.lock`，不修改外部 cargo 缓存源码。
+- 验证结果：计划执行相关 `rustfmt`、主题/profile 聚焦测试、`cargo check`、`git diff --check` 和 tracking docs validator。
+
+## 2026-07-12 完成新增内置主题预设环境验证
+
+- 日期：2026-07-12 10:01 +0800
+- 变化摘要：新增 `assets/themes/popular.json` 并注册 embedded themes；默认 Theme profile 增加 Catppuccin、Dracula、Nord、Rose Pine 和组合预设；运行时、依赖、manifest/lock 与 CI 配置不变。
+- 受影响文件：`assets/themes/popular.json`，`src/app/theme.rs`，`src/config/model.rs`，`src/config/store.rs`，跟踪文档。
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo；没有新增运行或测试依赖。
+- 验证结果：相关 `rustfmt` 通过；theme/profile 聚焦测试通过；`cargo check` 通过；完整 `cargo test --quiet` 117 项通过；`git diff --check` 通过；tracking docs validator 通过。保留既有 `block v0.1.6` future-incompat warning；真实 GUI 主题视觉仍需手工确认。
+
 ## 2026-07-12 Base Theme 下拉 lazy fast menu 预检
 
 - 日期：2026-07-12 09:44 +0800
@@ -1867,3 +1883,82 @@
 - 受影响文件：`src/config/model.rs`，`src/config/store.rs`，`src/app/state/appearance.rs`，`src/app/lifecycle/init.rs`，`src/app/lifecycle/event_loop.rs`，`src/app/theme.rs`，`src/app/actions/session.rs`，`src/app/dialogs/settings/appearance.rs`，`src/app/dialogs/settings/custom.rs`，`src/terminal/element.rs`，`locales/en.yml`，`locales/zh-CN.yml`，跟踪文档。
 - 更新后的命令或环境：继续使用 Rust 2024 / Cargo；没有新增运行或测试依赖。
 - 验证结果：相关 `rustfmt` 通过；theme/profile 聚焦测试 12 项通过；font brightness 设置测试 2 项通过；import theme 测试 5 项通过；`cargo check` 通过；`cargo test --quiet` 117 项全部通过；`git diff --check` 和 tracking docs validator 通过。保留既有 `block v0.1.6` future-incompat warning；GUI 亮度视觉效果仍需手工确认。
+## 2026-07-12 新增内置字体资源预检
+
+- 日期：2026-07-12 10:07 +0800
+- 变化摘要：运行时、依赖、工具链和 CI 入口不变；本轮从用户提供的三个字体压缩包筛选必要字体，新增编译期字体资源、授权和 Settings 内置字体标识。
+- 受影响文件：`assets/fonts/`，`src/app/theme.rs`，`src/app/dialogs/settings/font_page.rs`，跟踪文档。
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo；不新增依赖，不修改 `Cargo.toml` / `Cargo.lock`；使用本机 `unzip`、`otfinfo` / `fc-scan` 核对字体资源。
+- 验证结果：计划执行字体元数据检查、相关 `rustfmt`、字体聚焦测试、`cargo check`、完整 `cargo test --quiet`、`git diff --check` 和 tracking docs validator。
+
+## 2026-07-12 完成新增内置字体资源环境验证
+
+- 日期：2026-07-12 10:25 +0800
+- 变化摘要：新增 Iosevka Term、JetBrains Mono 和 Monaspace Neon Var 内置字体资源、授权和 Settings 优先排序；运行时架构、依赖、manifest/lock 与 CI 配置不变。
+- 受影响文件：`assets/fonts/`，`src/app/theme.rs`，`src/app/dialogs/settings/font_page.rs`，跟踪文档。
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo；没有新增运行或测试依赖；字体通过编译期 `include_bytes!` 和 GPUI `add_fonts()` 注册。
+- 验证结果：字体 metadata、CoreText family 和 variable axes 核对通过；`rustfmt`、3 项字体聚焦测试、`cargo check`、`cargo build`、120 项完整测试、fast hover 审计、`git diff --check` 和 tracking validator 均通过；真实 GUI 字体视觉仍需手工确认。
+
+## 2026-07-12 监控 Bottom 位置修复预检
+
+- 日期：2026-07-12 10:34 +0800
+- 变化摘要：运行时、依赖、工具链和 CI 入口不变；本轮修正 `Monitoring Position = Bottom` 时监控面板实际显示在主内容上方的问题。
+- 受影响文件：`src/app/views/layout.rs`，跟踪文档。
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo；不新增依赖，不修改 `Cargo.toml` / `Cargo.lock`。
+- 验证结果：计划执行 `rustfmt --edition 2024 src/app/views/layout.rs`、`cargo check`、`git diff --check` 和 tracking docs validator；真实 GUI 位置仍需手工确认。
+
+## 2026-07-12 完成监控 Bottom 位置修复环境验证
+
+- 日期：2026-07-12 10:40 +0800
+- 变化摘要：`Monitoring Position = Bottom` 时监控面板改为在主内容之后渲染；运行时架构、依赖、manifest/lock 与 CI 配置不变。
+- 受影响文件：`src/app/views/layout.rs`，跟踪文档。
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo；没有新增运行或测试依赖。
+- 验证结果：`rustfmt`、`cargo check`、完整 `cargo test --quiet`（120 项）、fast hover 路径审计、`git diff --check` 和 tracking validator 均通过；真实 GUI 位置仍需手工确认。
+
+## 2026-07-12 Integrated 标题栏横线修复预检
+
+- 日期：2026-07-12 10:45 +0800
+- 变化摘要：运行时、依赖、工具链和 CI 入口不变；本轮修正 Integrated 标题栏中 `TabBar` 底部分隔线只覆盖中间区域的问题。
+- 受影响文件：`src/app/views/layout.rs`，跟踪文档。
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo；不新增依赖，不修改 `Cargo.toml` / `Cargo.lock`，不修改外部 cargo 缓存源码。
+- 验证结果：计划执行 `rustfmt --edition 2024 src/app/views/layout.rs`、`cargo check`、`git diff --check` 和 tracking docs validator；真实 GUI 横线贯穿效果仍需手工确认。
+
+## 2026-07-12 完成 Integrated 标题栏横线修复环境验证
+
+- 日期：2026-07-12 10:52 +0800
+- 变化摘要：Integrated 标题栏改为覆盖 `TabBar` 内部局部分隔线，并单独绘制一条全宽 1px 底部分隔线；运行时架构、依赖、manifest/lock 与 CI 配置不变。
+- 受影响文件：`src/app/views/layout.rs`，跟踪文档。
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo；没有新增运行或测试依赖。
+- 验证结果：`rustfmt`、`cargo check`、完整 `cargo test --quiet`（120 项）、`git diff --check` 和 tracking validator 均通过；真实 GUI 横线贯穿和无叠线效果仍需手工确认。
+
+## 2026-07-12 saved session 右键菜单检查预检
+
+- 日期：2026-07-12 11:02 +0800
+- 变化摘要：运行时、依赖、工具链和 CI 入口不变；本轮检查 saved session 自绘右键菜单接线，并修正菜单缺少窗口边界夹取的问题。
+- 受影响文件：`src/app/views/layout.rs`，跟踪文档。
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo；不新增依赖，不修改 `Cargo.toml` / `Cargo.lock`。
+- 验证结果：计划执行 `rustfmt --edition 2024 src/app/views/layout.rs`、`cargo check`、完整 `cargo test --quiet`、fast hover/context 审计、`git diff --check` 和 tracking docs validator；真实 GUI 右键菜单仍需手工确认。
+
+## 2026-07-12 完成 saved session 右键菜单环境验证
+
+- 日期：2026-07-12 11:07 +0800
+- 变化摘要：saved session 右键菜单 Copy Info / Clone / Edit / Delete 接线复核完成，并新增窗口边界夹取，避免菜单靠右或靠下打开时被裁掉；运行时架构、依赖、manifest/lock 与 CI 配置不变。
+- 受影响文件：`src/app/views/layout.rs`，跟踪文档。
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo；没有新增运行或测试依赖。
+- 验证结果：`rustfmt`、`cargo check`、完整 `cargo test --quiet`（120 项）、fast hover/context 审计、`git diff --check` 和 tracking validator 均通过；真实 GUI 右键菜单仍需手工确认。
+
+## 2026-07-12 无密码无私钥 SSH 终端密码输入预检
+
+- 日期：2026-07-12 11:15 +0800
+- 变化摘要：运行时、依赖、工具链和 CI 入口不变；本轮在 SSH 会话既无密码也无私钥时直接创建未连接 tab 并进入终端内本地密码提示，回车后再用临时密码发起连接。
+- 受影响文件：`src/app.rs`，`src/app/session_ui.rs`，`src/app/actions/session.rs`，`src/app/actions/terminal.rs`，`src/app/workspace.rs`，`src/app/lifecycle/event_loop.rs`，`src/terminal/backend.rs`，跟踪文档。
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo；不新增依赖，不修改 `Cargo.toml` / `Cargo.lock`，不修改外部 cargo 缓存源码。
+- 验证结果：计划执行受影响 Rust 文件 `rustfmt --edition 2024`、`cargo check`、聚焦测试或完整 `cargo test --quiet`、`git diff --check` 和 tracking docs validator；真实 GUI 终端密码输入仍需手工确认。
+
+## 2026-07-12 完成无密码无私钥 SSH 终端密码输入环境验证
+
+- 日期：2026-07-12 11:32 +0800
+- 变化摘要：无密码无私钥的密码认证 SSH 会话改为打开 tab 后直接显示终端内 `Password: `，输入密码后再发起连接；运行时架构、依赖、manifest/lock 与 CI 配置不变。
+- 受影响文件：`src/app.rs`，`src/app/session_ui.rs`，`src/app/actions/session.rs`，`src/app/actions/terminal.rs`，`src/app/workspace.rs`，`src/app/lifecycle/event_loop.rs`，`src/app/lifecycle/init.rs`，`src/terminal/backend.rs`，跟踪文档。
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo；没有新增运行或测试依赖；终端密码为当前 tab 临时值，不保存到配置。
+- 验证结果：`rustfmt`、`cargo check`、新增聚焦测试 4 项、完整 `cargo test --quiet`（124 项）、`git diff --check` 和 tracking validator 均通过；真实 GUI 终端密码输入仍需手工确认。
