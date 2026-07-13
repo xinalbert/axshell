@@ -166,6 +166,9 @@ impl AxShell {
         };
 
         if self.workspace_page == page {
+            if page == WorkspacePage::Sftp {
+                self.restore_active_local_sftp_path(cx);
+            }
             self.ensure_active_workspace_tab_visible();
             return;
         }
@@ -193,6 +196,9 @@ impl AxShell {
         }
 
         self.workspace_page = page;
+        if page == WorkspacePage::Sftp {
+            self.restore_active_local_sftp_path(cx);
+        }
         if page == WorkspacePage::Sftp && self.active_sftp_should_sync_shell_dir_on_entry() {
             self.sync_active_sftp_to_shell_working_dir(cx);
         }

@@ -210,6 +210,12 @@ impl AxShell {
         })
     }
 
+    fn active_sftp_saved_session_id(&self) -> Option<String> {
+        let group_id = self.active_group.as_deref()?;
+        let session = self.session_for_sftp_group(group_id)?;
+        self.config.get(&session.id).map(|_| session.id)
+    }
+
     pub(crate) fn ensure_sftp_handle_for_group(&mut self, group_id: &str) -> Option<SftpHandle> {
         if self
             .tab_groups
@@ -711,22 +717,64 @@ impl AxShell {
         });
     }
 
-    pub(crate) fn navigate_local_file_browser(&mut self, path: String, cx: &mut Context<Self>) {
+    fn load_local_file_browser(&mut self, path: &str) -> Result<String, String> {
         let current_path = self.local_file_browser.current_path.clone();
-        let resolved = Self::resolve_local_browser_path(&current_path, &path);
+        let resolved = Self::resolve_local_browser_path(&current_path, path);
         let resolved_str = resolved.to_string_lossy().to_string();
-        match Self::read_local_browser_entries(&resolved_str) {
-            Ok(entries) => {
-                self.local_file_browser.current_path = resolved_str.clone();
-                self.local_file_browser.status = resolved_str.clone();
-                self.local_file_browser.entries = entries;
-                self.local_file_browser.selected_path = None;
-                self.local_file_browser.selected_entries.clear();
-                self.pending_local_sftp_path_sync = Some(resolved_str);
-            }
-            Err(err) => {
+        let entries = Self::read_local_browser_entries(&resolved_str)?;
+        self.local_file_browser.current_path = resolved_str.clone();
+        self.local_file_browser.status = resolved_str.clone();
+        self.local_file_browser.entries = entries;
+        self.local_file_browser.selected_path = None;
+        self.local_file_browser.selected_entries.clear();
+        self.pending_local_sftp_path_sync = Some(resolved_str.clone());
+        Ok(resolved_str)
+    }
+
+    fn persist_active_local_sftp_path(&mut self, path: &str) {
+        let Some(session_id) = self.active_sftp_saved_session_id() else {
+            return;
+        };
+        if self.config.set_last_local_sftp_path(&session_id, path) {
+            self.config.save_logged("set_last_local_sftp_path");
+        }
+    }
+
+    pub(crate) fn restore_active_local_sftp_path(&mut self, cx: &mut Context<Self>) {
+        let saved_path = self
+            .active_sftp_saved_session_id()
+            .and_then(|session_id| self.config.last_local_sftp_path(&session_id))
+            .map(str::to_string);
+
+        let result = match saved_path.as_deref() {
+            Some(path) => self.load_local_file_browser(path),
+            None => self.load_local_file_browser(&Self::default_local_browser_dir()),
+        };
+        if let Err(err) = result {
+            if let Some(path) = saved_path {
+                tracing::warn!(
+                    component = "local_browser",
+                    operation = "restore_last_path",
+                    local_path = %crate::diagnostics::mask_path(&path),
+                    error = %crate::diagnostics::sanitize_error(&err),
+                    "Saved local SFTP directory is unavailable; falling back to the home directory"
+                );
+                if let Err(fallback_err) =
+                    self.load_local_file_browser(&Self::default_local_browser_dir())
+                {
+                    self.local_file_browser.status = fallback_err;
+                }
+            } else {
                 self.local_file_browser.status = err;
             }
+        }
+        cx.notify();
+    }
+
+    pub(crate) fn navigate_local_file_browser(&mut self, path: String, cx: &mut Context<Self>) {
+        match self.load_local_file_browser(&path) {
+            Ok(path) => self.persist_active_local_sftp_path(&path),
+            Err(err) => self.local_file_browser.status = err,
         }
         cx.notify();
     }

@@ -264,6 +264,8 @@ pub(super) struct ConfigFile {
     pub(super) cursor_style: CursorStyle,
     #[serde(default)]
     pub(super) sessions: Vec<Session>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub(super) last_local_sftp_paths: BTreeMap<String, String>,
     #[serde(default)]
     pub(super) window_bounds: Option<SavedWindowBounds>,
     #[serde(default)]
@@ -513,6 +515,7 @@ impl Default for ConfigFile {
             title_bar_style: TitleBarStyle::default(),
             cursor_style: CursorStyle::default(),
             sessions: Vec::new(),
+            last_local_sftp_paths: BTreeMap::new(),
             window_bounds: None,
             workspace_panels: None,
             body_panels: None,

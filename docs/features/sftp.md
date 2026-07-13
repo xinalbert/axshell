@@ -6,6 +6,12 @@
 
 Open SFTP from an active SSH session. The page combines a remote browser, a local browser, and transfer state for that session.
 
+## Local Directory Memory
+
+For a saved SSH session, the local browser reopens its own last successfully opened directory. New or unsaved connections start in the user home directory and do not save a local-directory entry. If a remembered directory is deleted or unreadable, AxShell opens the user home directory without replacing the remembered value.
+
+These local paths stay on the current computer and are not included in WebDAV or S3 session sync.
+
 ## File Operations
 
 - Browse remote directories and show or hide hidden files.
