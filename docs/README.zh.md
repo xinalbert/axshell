@@ -8,7 +8,7 @@
 
 - [快速入门](getting-started.zh.md)：环境要求、启动命令和主界面区域
 - [使用指南索引](user-guide.zh.md)：原单篇使用指南的兼容入口
-- [开发与打包](development.md)：本地开发、安装包和发布流程
+- [开发与打包](development.zh.md)：本地开发、安装包和发布流程
 
 ## 功能指南
 
@@ -26,13 +26,12 @@
 
 ## 设计与维护
 
-- [资源生命周期](resource-lifecycle.md)：后台资源策略和深度休眠设计
+- [资源生命周期](resource-lifecycle.zh.md)：后台资源策略和深度休眠设计
 - [截图说明](images/README.zh.md)：后续文档图片的命名和放置方式
 - [项目实施记录](project-implementation-tracker/current.md)：当前仓库实施状态
 
 ## 文档约定
 
-- 根 README 和新增功能页使用英文 `name.md`、中文 `name.zh.md`。
-- 已有设计与开发资料暂时保留原双语文件名，后续单独迁移。
+- 根 README、开发/设计资料和功能页使用英文 `name.md`、中文 `name.zh.md`。
 - 双语页面保持相同结构，并使用相对链接。
 - 功能截图放在 `docs/images/features/`；各功能页已用注释预留插入位置。

@@ -20,7 +20,7 @@ cargo run --release
 cargo dev-reload
 ```
 
-打包依赖和各平台命令见[开发与打包](development.md)。
+打包依赖和各平台命令见[开发与打包](development.zh.md)。
 
 ## 主工作区
 

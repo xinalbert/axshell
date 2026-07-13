@@ -20,7 +20,7 @@ For restart-based development reload:
 cargo dev-reload
 ```
 
-Packaging prerequisites and platform commands are documented in [Development and Packaging](development.en.md).
+Packaging prerequisites and platform commands are documented in [Development and Packaging](development.md).
 
 ## Main Workspace
 

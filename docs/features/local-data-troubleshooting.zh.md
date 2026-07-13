@@ -38,6 +38,6 @@
 4. 附上最近的相关运行日志，并先移除主机、用户名、路径和凭据信息。
 5. 在 <https://github.com/xinalbert/axshell/issues> 创建 issue。
 
-构建失败还应提供执行命令和编译器输出。开发日志说明见[开发与打包](../development.md)。
+构建失败还应提供执行命令和编译器输出。开发日志说明见[开发与打包](../development.zh.md)。
 
 <!-- 截图目标：../images/features/local-data-log-settings.png -->

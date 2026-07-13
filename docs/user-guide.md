@@ -13,4 +13,4 @@ The former single-page guide has been split into focused pages so each workflow 
 - [Proxy And X11](features/proxy-x11.md)
 - [Monitoring And Lifecycle](features/monitoring-lifecycle.md)
 - [Local Data And Troubleshooting](features/local-data-troubleshooting.md)
-- [Development And Packaging](development.en.md)
+- [Development And Packaging](development.md)

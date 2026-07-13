@@ -19,7 +19,7 @@ The configurable delay is Off, 1, 5, 15, or 30 minutes; the default is 5 minutes
 
 After the delay, AxShell keeps only low-frequency backend event handling. Deep sleep does not disconnect local terminals or SSH sessions. Refocusing the window restores rendering, monitoring, theme updates, and the active page immediately.
 
-For implementation boundaries and lifecycle rationale, see [Resource Lifecycle](../resource-lifecycle.en.md).
+For implementation boundaries and lifecycle rationale, see [Resource Lifecycle](../resource-lifecycle.md).
 
 <!-- Screenshot target: ../images/features/monitoring-dashboard.png -->
 <!-- Screenshot target: ../images/features/monitoring-lifecycle-settings.png -->

@@ -38,6 +38,6 @@ Platform configuration roots can differ, so use the log-directory action in Sett
 4. Include the latest relevant runtime log after removing hosts, usernames, paths, and credentials.
 5. Open an issue at <https://github.com/xinalbert/axshell/issues>.
 
-For build failures, also include the command and compiler output. Development logging details are in [Development and Packaging](../development.en.md).
+For build failures, also include the command and compiler output. Development logging details are in [Development and Packaging](../development.md).
 
 <!-- Screenshot target: ../images/features/local-data-log-settings.png -->

@@ -1,70 +1,70 @@
-[English](resource-lifecycle.en.md)
+[中文](resource-lifecycle.zh.md)
 
-# 资源生命周期与深度休眠
+# Resource Lifecycle and Deep Sleep
 
-## 目标
+## Goal
 
-在窗口不活跃时降低 AxShell 的 CPU、网络和重绘开销，同时不打断用户正在运行的 SSH 命令、本地 PTY 或 SFTP 传输。该机制不创建一个轮询焦点的额外线程；窗口激活/失活由 GPUI 的系统窗口事件驱动。
+Reduce CPU, network, and repaint work while AxShell is unfocused without interrupting SSH commands, local PTYs, or SFTP transfers. Focus changes come from GPUI window activation events; AxShell does not create a polling thread to detect focus.
 
-## 状态机
+## State Machine
 
 ```text
-前台 --窗口失焦--> 后台 --超过阈值--> 深度休眠
-  ^                  |                    |
-  +------窗口激活----+--------------------+
+Foreground --window deactivates--> Background --timeout--> DeepSleep
+    ^                                  |                    |
+    +----------window activates--------+--------------------+
 ```
 
-- 前台：按正常频率刷新终端、光标、监控和主题。
-- 后台：立即停止远程/本地系统监控、主题轮询和光标闪烁；仍读取 backend 事件，并以低频合并刷新，避免 SSH 输出堆积在内存或 channel 中。
-- 深度休眠：保持同一个低频事件泵以收集 backend 事件和执行必要的 SFTP 空闲回收；不轮询窗口焦点。系统窗口激活事件会立即恢复前台。
+- Foreground: normal terminal, cursor, monitoring, and theme refresh rates.
+- Background: stop local/remote monitoring, theme polling, and cursor blinking immediately. Backend events still drain and rendering is coalesced at a lower rate so SSH output cannot accumulate in memory or a channel.
+- DeepSleep: retain the same low-frequency event pump for backend events and required SFTP idle cleanup. Focus is never polled; the system window activation event restores foreground work immediately.
 
-默认在窗口失焦 5 分钟后进入深度休眠。设置项允许选择：关闭、1、5、15 或 30 分钟。关闭只禁用深度休眠，窗口失焦后的后台降载仍然生效。
+The default deep-sleep delay is 5 minutes after the window loses focus. Settings allow Off, 1, 5, 15, or 30 minutes. Off disables deep sleep only; background throttling still applies.
 
-## 第一阶段：安全降载
+## Phase One: Safe Throttling
 
-本阶段不关闭 SSH、PTY 或 SFTP worker，包含：
+Phase one does not close SSH, PTY, or SFTP workers. It provides:
 
-- 持久化深度休眠时间设置，默认 5 分钟。
-- 使用 `observe_window_activation` 接收系统窗口激活状态，维护 `Foreground / Background / DeepSleep` 状态。
-- 后台和深度休眠停止监控采样、主题轮询和光标闪烁。
-- 后台继续 drain 所有 backend 事件；终端和普通 UI 改为合并、低频刷新。
-- 将 SFTP 空闲回收检查从事件泵的高频路径节流到定时检查，保留既有的 5 分钟空闲语义。
+- A persistent deep-sleep timeout setting with a 5-minute default.
+- `Foreground / Background / DeepSleep` state driven by `observe_window_activation`.
+- No monitoring samples, theme polling, or cursor blinking while backgrounded or asleep.
+- Continued backend draining with coalesced lower-frequency terminal and UI refreshes.
+- A throttled SFTP idle-reclaim check that retains the existing five-minute idle behavior.
 
-不会做的事：暂停远端命令、关闭本地 shell、断开 SSH 或暂停/取消 SFTP 传输。本阶段不会新增任何基于深睡的 SFTP 关闭规则；既有 SFTP 空闲回收保持原样，远程编辑 watcher 的 pin/refcount 保护留待第二阶段补齐。
+It intentionally does not pause remote commands, close local shells, disconnect SSH, or pause/cancel transfers. Phase one adds no deep-sleep SFTP close rule; existing idle reclamation remains unchanged, and remote-edit watcher pin/refcount protection is deferred to phase two.
 
-## 后续防线
+## Later Defenses
 
-### 第二阶段：SFTP 引用保护和深睡回收
+### Phase Two: SFTP pins and deep-sleep reclamation
 
-为每个 SFTP group 建立显式 pin/refcount。传输、远程编辑 watcher、同步、目录操作和预览下载持有 pin；只有 pin 为零、非当前聚焦 group 且已达到深睡条件时，才允许关闭 worker。恢复焦点时按需建连，不能批量重连全部页面。
+Each SFTP group gains explicit pins/refcounts. Transfers, remote-edit watchers, sync, directory work, and preview downloads hold a pin. Only an unpinned, unfocused group that has reached deep sleep may release its worker. Refocus reconnects on demand, never all pages at once.
 
-实施语义：pin 在命令入队前取得，因此等待 worker 接收的操作也受保护；短操作完成后释放，传输和自动上传在 child task 结束后释放，远程编辑 watcher 在用户关闭编辑器或 worker 强制关闭后释放。用户显式关闭、取消传输或重连仍可强制结束 worker。普通后台的 5 分钟空闲回收保持原有规则；深睡时立即回收无 pin、非当前 group 的 worker。
+Implementation semantics: a pin is acquired before a command is queued, so work waiting for the worker is protected too. Short work releases on completion; transfers and auto-uploads release when their child task ends; a remote-edit watcher releases when the editor closes or the worker is explicitly closed. Explicit close, transfer cancellation, and reconnect may still force worker shutdown. The ordinary five-minute background idle rule remains unchanged; deep sleep immediately reclaims an unpinned, non-current group.
 
-### 第三阶段：SSH、PTY 和查询任务所有权
+### Phase Three: SSH, PTY, and query task ownership
 
-已实现。terminal backend 现在同时保存 command channel 和非阻塞 shutdown 控制器；现有的 tab 关闭、重连和自然 `Closed` 事件都经由该控制器收口。SSH 主任务的 `JoinHandle` 会先接收 `Close`，最多等待 2 秒，随后才 `abort`；远程监控和 CWD 查询改由主会话内的 `JoinSet` 托管，主会话退出时统一 abort/join。Local PTY 关闭时先 kill shell，再由后台 reaper join reader/writer 线程，避免阻塞 UI。
+Implemented. A terminal backend now owns both its command channel and a non-blocking shutdown controller, so tab close, reconnect, and a natural `Closed` event converge on one path. The SSH primary task receives `Close`, waits for up to two seconds, and is aborted only after that timeout. Remote monitoring and CWD queries are held in the primary session's `JoinSet` and aborted/joined when it exits. Local PTY shutdown kills the shell first, then a background reaper joins its reader and writer without blocking the UI.
 
-窗口关闭和应用菜单 Quit 都会调用 `shutdown_all_backends()`，同时关闭 SFTP handle；布局保存仍在关闭请求内同步执行。该阶段不递归终止 shell 自行派生的后台进程树，也不保证在 OS 强制杀进程时完成两秒 graceful window。
+Window close and the application Quit menu both call `shutdown_all_backends()`, including SFTP handles; layout saving remains synchronous during the close request. This phase does not recursively terminate background process trees started by a shell, and cannot guarantee the two-second graceful window if the OS force-kills the application.
 
-### 第四阶段：进程退出和系统睡眠
+### Phase Four: Process exit and system sleep
 
-实现应用级 `shutdown_all()`：先停止新任务，再取消并 join 后端任务，最后保存布局。操作系统睡眠/恢复后先重新判定连接健康度，按当前聚焦页面恢复监控，避免同时向所有 SSH 发采样或重连。
+Add application-level `shutdown_all()`: stop new work, cancel and join backends, then save layout. After OS sleep/resume, validate connection health and resume monitoring only for the focused page, avoiding a reconnect or probe storm.
 
-## 资源策略
+## Resource Policy
 
-| 资源 | 后台 | 深度休眠 | 恢复 |
+| Resource | Background | DeepSleep | Resume |
 | --- | --- | --- | --- |
-| SSH terminal / 本地 PTY | 保持，不中断命令 | 保持，不中断命令 | 原样继续；关闭/重连时有界回收 |
-| Backend event 接收 | 低频 drain | 低频 drain | 立即合并刷新 |
-| 终端渲染 / 光标 | 合并刷新，停闪烁 | 更低频刷新，停闪烁 | 恢复正常刷新 |
-| 系统监控 / 远程 probe | 停止新采样 | 停止新采样 | 仅当前页面立即采样 |
-| 跟随系统主题 | 停止轮询 | 停止轮询 | 恢复时同步一次 |
-| SFTP 传输 | 继续 | 继续 | 不需要重连 |
-| 空闲 SFTP worker | 保持既有超时回收 | 第二阶段按 pin 决定回收 | 按需重连 |
+| SSH terminal / local PTY | Keep running | Keep running | Continue unchanged; bounded cleanup on close/reconnect |
+| Backend events | Low-frequency drain | Low-frequency drain | Refresh immediately |
+| Terminal paint / cursor | Coalesced paint; no blink | Lower-rate paint; no blink | Normal refresh |
+| Local and remote monitoring | No new samples | No new samples | Sample focused page only |
+| Follow-system theme | No polling | No polling | Sync once |
+| SFTP transfers | Continue | Continue | No reconnect needed |
+| Idle SFTP worker | Existing timeout applies | Phase two evaluates pins | Reconnect on demand |
 
-## 验证边界
+## Verification Boundary
 
-- 单元测试：状态转换、超时、禁用深睡和配置归一化。
-- 本机验证：`rustfmt`、`cargo check`、`cargo test --quiet`、`git diff --check`。
-- GUI 手工验证：失焦后监控停止；5 分钟后进入深睡；重新聚焦立即恢复监控和终端刷新；高频 SSH 输出在后台没有持续无界堆积。
-- 联机手工验证：SSH 连接中、远程 probe/CWD 查询中关闭 tab 或窗口，应在 2 秒内退出或记录 abort；local shell 关闭和重连后 reader/writer 不应遗留。
+- Unit tests: state transitions, timeouts, disabled deep sleep, and configuration normalization.
+- Local checks: `rustfmt`, `cargo check`, `cargo test --quiet`, and `git diff --check`.
+- GUI checks: monitoring stops after focus loss; five minutes reaches deep sleep; refocus restores monitoring and terminal rendering; background SSH output remains bounded.
+- Connected checks: closing a tab or window while SSH is connecting or while a remote probe/CWD query is running should exit within two seconds or log an abort; closing and reconnecting a local shell must not leave reader/writer threads behind.

@@ -13,4 +13,4 @@
 - [代理与 X11](features/proxy-x11.zh.md)
 - [监控与生命周期](features/monitoring-lifecycle.zh.md)
 - [本地数据与故障排查](features/local-data-troubleshooting.zh.md)
-- [开发与打包](development.md)
+- [开发与打包](development.zh.md)

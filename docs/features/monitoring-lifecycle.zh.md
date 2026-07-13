@@ -19,7 +19,7 @@
 
 进入深度休眠后，AxShell 只保留低频 backend 事件处理。深睡不会断开本地终端或 SSH 会话；窗口重新获得焦点后，会立即恢复渲染、监控、主题更新和当前页面。
 
-实现边界和生命周期设计见[资源生命周期](../resource-lifecycle.md)。
+实现边界和生命周期设计见[资源生命周期](../resource-lifecycle.zh.md)。
 
 <!-- 截图目标：../images/features/monitoring-dashboard.png -->
 <!-- 截图目标：../images/features/monitoring-lifecycle-settings.png -->

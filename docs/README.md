@@ -8,7 +8,7 @@ This directory contains task-focused user guides, development notes, and design 
 
 - [Getting Started](getting-started.md): requirements, launch commands, and the main workspace areas
 - [User Guide Index](user-guide.md): compatibility entry point for the former single-page guide
-- [Development and Packaging](development.en.md): local development, packages, and release automation
+- [Development and Packaging](development.md): local development, packages, and release automation
 
 ## Feature Guides
 
@@ -26,13 +26,12 @@ This directory contains task-focused user guides, development notes, and design 
 
 ## Design And Maintenance
 
-- [Resource Lifecycle](resource-lifecycle.en.md): background resource policy and deep-sleep design
+- [Resource Lifecycle](resource-lifecycle.md): background resource policy and deep-sleep design
 - [Screenshot Guide](images/README.md): filenames and placement for future documentation images
 - [Project Implementation Tracker](project-implementation-tracker/current.md): current repository implementation record
 
 ## Documentation Convention
 
-- Root README files and new feature guides use English `name.md` with Chinese `name.zh.md` counterparts.
-- Existing design and development references keep their established bilingual filenames until separately migrated.
+- Root README files, development references, and feature guides use English `name.md` with Chinese `name.zh.md` counterparts.
 - Keep language pairs structurally aligned and use relative links.
 - Put feature screenshots under `docs/images/features/`; each feature guide contains commented insertion targets.

@@ -37,7 +37,7 @@ cargo dev-reload
 - [Getting started](docs/getting-started.md)
 - [Feature guides](docs/README.md#feature-guides)
 - [Bundled fonts](docs/features/bundled-fonts.md)
-- [Development and packaging](docs/development.en.md)
+- [Development and packaging](docs/development.md)
 
 ## Project Notes
 
@@ -47,7 +47,7 @@ cargo dev-reload
 
 ## Contributing And Support
 
-Use [GitHub Issues](https://github.com/xinalbert/axshell/issues) for bugs and feature requests. See [Development and Packaging](docs/development.en.md) before preparing code or release changes.
+Use [GitHub Issues](https://github.com/xinalbert/axshell/issues) for bugs and feature requests. See [Development and Packaging](docs/development.md) before preparing code or release changes.
 
 ## License
 
