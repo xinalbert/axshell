@@ -20,7 +20,7 @@ pub(crate) use input::{app_menu, keybinding_recorder};
 pub(crate) use lifecycle::startup;
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
     time::Instant,
 };
 
@@ -152,6 +152,8 @@ pub(crate) struct AxShell {
     pub(crate) sftp_creating_folder: bool,
     pub(crate) sftp_close_remember_choice: bool,
     pub(crate) sftp_close_confirm_group_id: Option<String>,
+    pub(crate) sftp_overwrite_requests: VecDeque<crate::sftp::SftpOverwriteRequest>,
+    pub(crate) sftp_replace_all_for_run: bool,
     pub(crate) sftp_new_folder_input: Entity<InputState>,
     pub(crate) sftp_delete_scroll_handle: gpui::ScrollHandle,
     pub(crate) show_hidden_files: bool,

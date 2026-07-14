@@ -455,6 +455,22 @@ impl AxShell {
                                 self.status = text.into();
                             }
                         }
+                        BackendEvent::SftpOverwriteConflict { request } => {
+                            result.ui_changed = true;
+                            self.mark_sftp_activity_for_group(&request.tab_id);
+                            tracing::debug!(
+                                component = "sftp",
+                                transfer_id = %request.transfer_id,
+                                "Waiting for local overwrite decision"
+                            );
+                            if self.sftp_replace_all_for_run {
+                                let _ = request
+                                    .response
+                                    .send(crate::sftp::SftpOverwriteDecision::Replace);
+                            } else {
+                                self.sftp_overwrite_requests.push_back(request);
+                            }
+                        }
                         BackendEvent::RemoteSystem { tab_id, snapshot } => {
                             result.ui_changed = true;
                             self.monitoring.remote_sample_in_flight = false;

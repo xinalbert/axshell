@@ -14,7 +14,7 @@ pub(crate) fn backend_event_channel() -> (
     tokio::sync::mpsc::channel(BACKEND_EVENT_QUEUE_CAPACITY)
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(crate) enum BackendEvent {
     Output {
         tab_id: String,
@@ -47,6 +47,9 @@ pub(crate) enum BackendEvent {
     SftpStatus {
         tab_id: String,
         text: String,
+    },
+    SftpOverwriteConflict {
+        request: crate::sftp::SftpOverwriteRequest,
     },
     RemoteSystem {
         tab_id: String,

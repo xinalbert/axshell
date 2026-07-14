@@ -7,6 +7,22 @@ pub struct RemoteEntry {
     pub modified: u32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SftpOverwriteDecision {
+    Skip,
+    Replace,
+    ReplaceAllInTransfer,
+}
+
+#[derive(Debug)]
+pub(crate) struct SftpOverwriteRequest {
+    pub(crate) tab_id: String,
+    pub(crate) transfer_id: String,
+    pub(crate) remote_path: String,
+    pub(crate) local_path: String,
+    pub(crate) response: tokio::sync::oneshot::Sender<SftpOverwriteDecision>,
+}
+
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct PreviewData {

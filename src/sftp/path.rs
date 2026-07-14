@@ -84,16 +84,6 @@ pub(crate) fn resolve_remote_path(current_dir: &str, path: &str, home_dir: &str)
     normalize_remote_path(&join_remote(current_dir, trimmed))
 }
 
-#[allow(dead_code)]
-pub(super) fn strip_archive_suffix(name: &str) -> &str {
-    for suffix in [".tar.gz", ".tgz", ".zip", ".tar"] {
-        if let Some(stripped) = name.strip_suffix(suffix) {
-            return stripped;
-        }
-    }
-    name
-}
-
 pub(super) fn format_bytes(bytes: u64) -> String {
     if bytes < 1024 {
         format!("{bytes} B")
@@ -112,26 +102,6 @@ pub fn format_mtime(ts: u32) -> String {
         .single()
         .unwrap_or_else(Utc::now);
     dt.format("%Y-%m-%d %H:%M").to_string()
-}
-
-pub(super) fn remote_parent(path: &str) -> String {
-    if path == "/" {
-        "/".to_string()
-    } else {
-        path.rsplit_once('/')
-            .map(|(parent, _)| {
-                if parent.is_empty() {
-                    "/".to_string()
-                } else {
-                    parent.to_string()
-                }
-            })
-            .unwrap_or_else(|| "/".to_string())
-    }
-}
-
-pub(super) fn shell_quote(value: &str) -> String {
-    format!("'{}'", value.replace('\'', "'\"'\"'"))
 }
 
 #[cfg(test)]

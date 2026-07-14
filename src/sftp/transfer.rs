@@ -1,5 +1,5 @@
 use std::{
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
     sync::{
         Arc,
         atomic::{AtomicU8, AtomicU64, Ordering},
@@ -10,12 +10,11 @@ use anyhow::{Context, Result};
 use russh_sftp::client::SftpSession;
 use rust_i18n::t;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use uuid::Uuid;
 use walkdir::WalkDir;
 
 use crate::events::{BackendEvent, BackendEventSender};
 
-use super::model::TransferState;
+use super::model::{SftpOverwriteDecision, SftpOverwriteRequest, TransferState};
 
 pub(super) struct TransferStateFlag(pub(super) Arc<AtomicU8>);
 
@@ -176,20 +175,33 @@ pub(super) async fn fail_transfer_start(
 }
 
 use super::{
-    archive::{
-        create_remote_archive, extract_archive_to, maybe_extract_archive, remove_remote_path,
-    },
-    auth::SftpClientHandler,
     browse::list_dir_impl,
     path::{base_name, join_remote},
 };
 
+#[derive(Default)]
+pub(super) struct DownloadOverwritePolicy {
+    replace_remaining_in_transfer: bool,
+}
+
+impl DownloadOverwritePolicy {
+    fn replace_existing_file(&self) -> bool {
+        self.replace_remaining_in_transfer
+    }
+
+    fn apply(&mut self, decision: SftpOverwriteDecision) {
+        if decision == SftpOverwriteDecision::ReplaceAllInTransfer {
+            self.replace_remaining_in_transfer = true;
+        }
+    }
+}
+
 pub(super) async fn download_path_impl(
-    handle: &russh::client::Handle<SftpClientHandler>,
     sftp: &SftpSession,
     remote: &str,
     local_dir: &Path,
-    flag: TransferStateFlag,
+    flag: &TransferStateFlag,
+    overwrite_policy: &mut DownloadOverwritePolicy,
     events: &BackendEventSender,
     tab_id: &str,
     id: &str,
@@ -215,154 +227,99 @@ pub(super) async fn download_path_impl(
         .unwrap_or(false);
 
     if is_dir {
-        let local_archive = local_dir.join(format!(
-            ".ax_shell-{}-{}.tar.gz",
-            base_name(remote),
-            Uuid::new_v4()
-        ));
-        let extracted_to = download_remote_directory_archive(
-            handle,
+        let local_path = local_path_for_remote_entry(local_dir, &base_name(remote))?;
+        download_dir_recursive(
             sftp,
             remote,
-            &local_archive,
-            &flag,
+            &local_path,
+            flag,
+            overwrite_policy,
             events,
             tab_id,
             id,
-            report_completion,
         )
         .await?;
-        return Ok(t!("downloaded_folder", path = extracted_to.display()).to_string());
+        return Ok(t!("downloaded_folder", path = local_path.display()).to_string());
     }
 
-    let local_path = local_dir.join(base_name(remote));
-    download_file_impl(
+    let local_path = local_path_for_remote_entry(local_dir, &base_name(remote))?;
+    let downloaded = download_file_impl(
         sftp,
         remote,
         &local_path,
-        &flag,
+        flag,
+        Some(overwrite_policy),
         events,
         tab_id,
         id,
         report_completion,
     )
     .await?;
+    if !downloaded {
+        send_sftp_status(
+            events,
+            tab_id,
+            t!("download_skipped", path = local_path.display()).to_string(),
+        )
+        .await;
+    }
     Ok(t!("downloaded_file", path = local_path.display()).to_string())
 }
 
-#[allow(dead_code)]
 async fn download_dir_recursive(
     sftp: &SftpSession,
     remote_dir: &str,
     local_dir: &Path,
     flag: &TransferStateFlag,
+    overwrite_policy: &mut DownloadOverwritePolicy,
     events: &BackendEventSender,
     tab_id: &str,
     id: &str,
 ) -> Result<()> {
+    flag.yield_if_paused(events, tab_id, id, 0, None).await?;
     tokio::fs::create_dir_all(local_dir)
         .await
         .with_context(|| format!("create {}", local_dir.display()))?;
     let entries = list_dir_impl(sftp, remote_dir).await?;
     for entry in entries {
-        let local_path = local_dir.join(&entry.name);
+        flag.yield_if_paused(events, tab_id, id, 0, None).await?;
+        let local_path = local_path_for_remote_entry(local_dir, &entry.name)?;
         if entry.is_dir {
             Box::pin(download_dir_recursive(
                 sftp,
                 &entry.full_path,
                 &local_path,
                 flag,
+                overwrite_policy,
                 events,
                 tab_id,
                 id,
             ))
             .await?;
         } else {
-            download_file_impl(
+            let downloaded = download_file_impl(
                 sftp,
                 &entry.full_path,
                 &local_path,
                 flag,
+                Some(overwrite_policy),
                 events,
                 tab_id,
                 id,
-                true,
+                false,
             )
             .await?;
-            let _ = maybe_extract_archive(&local_path).await;
+            if !downloaded {
+                send_sftp_status(
+                    events,
+                    tab_id,
+                    t!("download_skipped", path = local_path.display()).to_string(),
+                )
+                .await;
+            }
         }
     }
     Ok(())
-}
-
-async fn download_remote_directory_archive(
-    handle: &russh::client::Handle<SftpClientHandler>,
-    sftp: &SftpSession,
-    remote_dir: &str,
-    local_archive: &Path,
-    flag: &TransferStateFlag,
-    events: &BackendEventSender,
-    tab_id: &str,
-    id: &str,
-    report_completion: bool,
-) -> Result<PathBuf> {
-    let remote_archive = format!(
-        "/tmp/ax_shell-{}-{}.tar.gz",
-        base_name(remote_dir),
-        Uuid::new_v4()
-    );
-
-    // Check for cancellation before creating remote archive
-    let state = flag.0.load(Ordering::SeqCst);
-    if state == 2 {
-        return Err(anyhow::anyhow!("transfer cancelled"));
-    }
-
-    create_remote_archive(handle, remote_dir, &remote_archive).await?;
-
-    let local_extract_root = local_archive
-        .parent()
-        .unwrap_or_else(|| Path::new("."))
-        .join(base_name(remote_dir));
-
-    let archive_download = async {
-        download_file_impl(
-            sftp,
-            &remote_archive,
-            local_archive,
-            flag,
-            events,
-            tab_id,
-            id,
-            report_completion,
-        )
-        .await?;
-        extract_archive_to(
-            local_archive,
-            local_archive.parent().unwrap_or_else(|| Path::new(".")),
-        )
-        .await?;
-        tokio::fs::remove_file(local_archive)
-            .await
-            .with_context(|| format!("remove {}", local_archive.display()))?;
-        Ok::<PathBuf, anyhow::Error>(local_extract_root)
-    }
-    .await;
-
-    let cleanup_result = remove_remote_path(handle, &remote_archive).await;
-
-    let extracted_to = archive_download?;
-    if let Err(err) = cleanup_result {
-        tracing::warn!(
-            component = "sftp",
-            operation = "cleanup_remote_archive",
-            remote_path = %crate::diagnostics::mask_path(&remote_archive),
-            error = %crate::diagnostics::sanitize_error(&format!("{err:#}")),
-            "Failed to clean remote archive"
-        );
-    }
-
-    Ok(extracted_to)
 }
 
 pub(super) async fn download_file_impl(
@@ -370,11 +327,16 @@ pub(super) async fn download_file_impl(
     remote: &str,
     local: &Path,
     flag: &TransferStateFlag,
+    overwrite_policy: Option<&mut DownloadOverwritePolicy>,
     events: &BackendEventSender,
     tab_id: &str,
     id: &str,
     report_completion: bool,
-) -> Result<()> {
+) -> Result<bool> {
+    if !confirm_local_overwrite(local, remote, flag, overwrite_policy, events, tab_id, id).await? {
+        return Ok(false);
+    }
+
     let mut remote_file = sftp
         .open(remote)
         .await
@@ -427,7 +389,93 @@ pub(super) async fn download_file_impl(
         .await;
     }
 
-    Ok(())
+    Ok(true)
+}
+
+fn local_path_for_remote_entry(parent: &Path, name: &str) -> Result<PathBuf> {
+    let mut components = Path::new(name).components();
+    let is_single_normal_component =
+        matches!(components.next(), Some(Component::Normal(_))) && components.next().is_none();
+    if name.is_empty()
+        || name == "."
+        || name == ".."
+        || name.contains('/')
+        || name.contains('\\')
+        || !is_single_normal_component
+    {
+        return Err(anyhow::anyhow!("unsafe remote entry name: {name:?}"));
+    }
+    Ok(parent.join(name))
+}
+
+async fn confirm_local_overwrite(
+    local: &Path,
+    remote: &str,
+    flag: &TransferStateFlag,
+    overwrite_policy: Option<&mut DownloadOverwritePolicy>,
+    events: &BackendEventSender,
+    tab_id: &str,
+    id: &str,
+) -> Result<bool> {
+    let exists = tokio::fs::try_exists(local)
+        .await
+        .with_context(|| format!("check local destination {}", local.display()))?;
+    if !exists {
+        return Ok(true);
+    }
+
+    let metadata = tokio::fs::metadata(local)
+        .await
+        .with_context(|| format!("inspect local destination {}", local.display()))?;
+    if metadata.is_dir() {
+        return Err(anyhow::anyhow!(
+            "local destination is a directory: {}",
+            local.display()
+        ));
+    }
+
+    let Some(overwrite_policy) = overwrite_policy else {
+        return Ok(true);
+    };
+    if overwrite_policy.replace_existing_file() {
+        return Ok(true);
+    }
+
+    let (response, mut decision_rx) = tokio::sync::oneshot::channel();
+    events
+        .send(BackendEvent::SftpOverwriteConflict {
+            request: SftpOverwriteRequest {
+                tab_id: tab_id.to_string(),
+                transfer_id: id.to_string(),
+                remote_path: remote.to_string(),
+                local_path: local.display().to_string(),
+                response,
+            },
+        })
+        .await
+        .map_err(|_| anyhow::anyhow!("application stopped while waiting for overwrite choice"))?;
+
+    let decision = loop {
+        tokio::select! {
+            response = &mut decision_rx => {
+                break response.map_err(|_| anyhow::anyhow!("overwrite choice dialog was closed"))?;
+            }
+            _ = tokio::time::sleep(std::time::Duration::from_millis(50)) => {
+                if flag.0.load(Ordering::SeqCst) == 2 {
+                    return Err(anyhow::anyhow!("transfer cancelled"));
+                }
+            }
+        }
+    };
+
+    match decision {
+        SftpOverwriteDecision::Skip => Ok(false),
+        SftpOverwriteDecision::Replace => Ok(true),
+        SftpOverwriteDecision::ReplaceAllInTransfer => {
+            overwrite_policy.apply(decision);
+            Ok(true)
+        }
+    }
 }
 
 pub(super) async fn upload_paths_impl(
@@ -624,4 +672,40 @@ async fn create_remote_dir_all(sftp: &SftpSession, remote_dir: &str) -> Result<(
         let _ = sftp.create_dir(&current).await;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use super::{DownloadOverwritePolicy, SftpOverwriteDecision, local_path_for_remote_entry};
+
+    #[test]
+    fn local_download_path_rejects_unsafe_remote_entry_names() {
+        let parent = Path::new("downloads");
+
+        assert_eq!(
+            local_path_for_remote_entry(parent, "report.txt").unwrap(),
+            parent.join("report.txt")
+        );
+        for name in ["", ".", "..", "nested/report.txt", "nested\\report.txt"] {
+            assert!(
+                local_path_for_remote_entry(parent, name).is_err(),
+                "{name:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn replace_all_in_transfer_only_changes_its_own_policy() {
+        let mut first = DownloadOverwritePolicy::default();
+        let second = DownloadOverwritePolicy::default();
+
+        assert!(!first.replace_existing_file());
+        assert!(!second.replace_existing_file());
+        first.apply(SftpOverwriteDecision::ReplaceAllInTransfer);
+
+        assert!(first.replace_existing_file());
+        assert!(!second.replace_existing_file());
+    }
 }

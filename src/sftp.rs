@@ -1,4 +1,3 @@
-mod archive;
 mod auth;
 mod browse;
 mod model;
@@ -15,6 +14,7 @@ pub use self::{
     worker::spawn_sftp,
 };
 pub(crate) use self::{
+    model::{SftpOverwriteDecision, SftpOverwriteRequest},
     path::{join_remote, resolve_remote_path},
     worker::SftpHandle,
 };

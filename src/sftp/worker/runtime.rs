@@ -31,9 +31,9 @@ use crate::sftp::{
     preview::preview_impl,
     session::{open_sftp_session, open_transfer_sftp_session},
     transfer::{
-        TransferStateFlag, download_file_impl, download_path_impl, fail_transfer_start,
-        send_sftp_status, send_transfer_error, send_transfer_progress, upload_file_impl,
-        upload_paths_impl,
+        DownloadOverwritePolicy, TransferStateFlag, download_file_impl, download_path_impl,
+        fail_transfer_start, send_sftp_status, send_transfer_error, send_transfer_progress,
+        upload_file_impl, upload_paths_impl,
     },
 };
 
@@ -303,6 +303,7 @@ pub(super) async fn run_sftp(
 
                     let local_dir = PathBuf::from(local_dir);
                     let mut failures = Vec::new();
+                    let mut overwrite_policy = DownloadOverwritePolicy::default();
                     for remote in remotes {
                         if flag.0.load(Ordering::SeqCst) == 2 {
                             failures.clear();
@@ -317,11 +318,11 @@ pub(super) async fn run_sftp(
                         .await;
 
                         if let Err(err) = download_path_impl(
-                            &handle_clone,
                             &sftp_session,
                             &remote,
                             &local_dir,
-                            TransferStateFlag(Arc::clone(&flag.0)),
+                            &flag,
+                            &mut overwrite_policy,
                             &events_clone,
                             &tab_id_clone,
                             &id,
@@ -505,6 +506,7 @@ pub(super) async fn run_sftp(
                         &remote_path,
                         &local_path,
                         &flag,
+                        None,
                         &events_clone,
                         &tab_id_clone,
                         "edit-download",

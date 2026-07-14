@@ -488,6 +488,8 @@ impl AxShell {
             sftp_creating_folder: false,
             sftp_close_remember_choice: false,
             sftp_close_confirm_group_id: None,
+            sftp_overwrite_requests: std::collections::VecDeque::new(),
+            sftp_replace_all_for_run: false,
             sftp_new_folder_input,
             sftp_delete_scroll_handle: gpui::ScrollHandle::new(),
             show_hidden_files: config.show_hidden_files(),

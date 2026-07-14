@@ -16,6 +16,7 @@ impl Render for AxShell {
             self.show_transfers_dialog = false;
             self.show_transfers_dialog(window, cx);
         }
+        self.show_next_sftp_overwrite_dialog(window, cx);
         if let Some(active_id) = self.active_tab.clone() {
             if let Some(scrollbar) = self.terminal_scrollbars.get(&active_id) {
                 if let Some(new_display_offset) = scrollbar.future_display_offset.take() {
