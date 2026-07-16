@@ -2,14 +2,14 @@
 
 ## 当前目标
 
-- 目标：完善保存 SSH 会话的快捷键、悬浮信息、无凭据 JSON 复制/导入与菜单“关于”入口。
-- 交付物：会话快捷键、tooltip 配置字段、剪贴板 JSON 往返、分组导入兼容、菜单栏“关于”直达与自动化验证。
+- 目标：修复从 terminal 明确路径打开 SFTP 时的重复跳转，并明确远端初始目录优先级。
+- 交付物：显式路径直达、无显式路径时会话预设路径、无预设路径时服务器 home，以及覆盖该决策的回归测试与验证记录。
 
 ## 项目边界
 
 - 根目录：`<repo-root>`
-- 当前范围：`src/session.rs`、`src/app.rs`、`src/app/actions/saved_sessions.rs`、`src/app/actions/session.rs`、`src/app/actions/terminal.rs`、`src/app/dialogs/ssh.rs`、`src/app/dialogs/settings.rs`、`src/app/input/`、`src/app/views/`、`src/app/workspace.rs`、`src/main.rs`、`locales/`、`docs/features/`、`docs/project-implementation-tracker/`。
-- 不在本轮范围内：`Cargo.toml` / `Cargo.lock`、SSH/SFTP 协议、分享 JSON schema、密码、私钥、passphrase 或代理密码导出。
+- 当前范围：`src/app/actions/sftp.rs`、`src/app/actions/session.rs`、`src/app/sftp.rs`、`src/app/lifecycle/event_loop.rs`、`src/config/model.rs`、`src/config/store.rs`、`src/sftp.rs`、`src/sftp/worker.rs`、`src/sftp/worker/runtime.rs`、`docs/features/`、`docs/project-implementation-tracker/`。
+- 不在本轮范围内：`Cargo.toml` / `Cargo.lock`、SSH/SFTP 认证和传输协议、终端 CWD 采集、配置 schema 与本地目录逻辑。
 
 ## 当前状态
 
@@ -22,32 +22,30 @@
 
 | Step | Status | Deliverable | Verification | Notes |
 | --- | --- | --- | --- | --- |
-| P1 | completed | 确认分享 JSON、右键复制和 SSH 表单路径 | 源码路径审查 | 复用既有无凭据 schema，不改文件导入/导出格式 |
-| P2 | completed | 会话快捷键、tooltip、JSON 剪贴板往返、分组导入和菜单“关于” | 聚焦单元测试、`cargo check` | 单条剪贴板导入保留编辑中的本机凭据与快捷键；分组沿用标准分享格式 |
-| P3 | completed | 完整回归与追踪记录收口 | `rustfmt`、`cargo test --quiet`、validator | GUI 剪贴板、tooltip 与菜单跳转保留手工验收 |
+| P1 | completed | 定位 terminal 路径链接与 SFTP worker 初始列举链 | 源码路径审查 | 明确目标在 worker 已启动前会先按默认路径列举、再发送 `RevealPath` |
+| P2 | completed | 分离显式定位、会话预设和 home 回退的启动意图 | 聚焦单元测试 | 显式路径以首次 worker 请求直接定位；普通新页面不再使用上次目录作为初始路径 |
+| P3 | completed | 格式化、构建、完整回归和追踪记录收口 | `rustfmt`、`cargo check`、`cargo test --quiet`、validator | 保留真实 SSH/SFTP GUI 手工验收 |
 
 ## 已完成
 
-- 已确认单条 JSON 导出已复用 `ax-shell-saved-sessions` schema，并排除密码、私钥、passphrase、代理密码和本机快捷键。
-- 已确认现有右键“复制信息”只复制三行文本；SSH 新建和编辑共用一个表单，适合增加不自动保存的剪贴板导入动作。
-- 已确定剪贴板导入只接受恰好一个有效 JSON 会话；编辑已有会话时保留当前 ID、本机快捷键及未导出的凭据。
-- 已实现会话快捷键录制、冲突检查与终端/SFTP 工作区连接；侧栏 hover 展示快捷键和会话 SFTP 路径。
-- 已将右键复制改为标准无凭据单会话 JSON，并在 SSH 表单加入“从剪贴板导入”；分组导出文件可直接通过现有文件导入恢复全部会话及其组名。
-- 已在原生应用菜单增加 About AxShell，并使其切换到设置页中的“关于”分页。
+- 已确认 terminal 中的路径链接由 `open_sftp_and_reveal_path` 打开 SFTP；它创建 worker 后再额外发送 `RevealPath`，因此首次显示默认目录后才到目标路径。
+- 已以 `Browse` 和 `Reveal` 两种初始意图传给 worker：`Reveal` 会在首次列举前解析文件/目录目标，避免 home 或预设目录的中间列举。
+- 已实现初始路径优先级：terminal 路径链接、远端地址栏输入和“打开终端当前目录”的明确路径最高；无明确路径时使用会话 `sftp_path`；无会话预设时使用服务器 home。已打开页面在 worker 回收或连接失效后仍恢复当前目录，包含根目录 `/`。
+- 已删除不再参与决策的 `last_remote_sftp_paths` 配置；旧配置可正常读取并会在下次保存时自动丢弃该废弃字段。
 
 ## 验证
 
-- 已完成：环境与实施记录、项目地图、分享 schema、右键菜单、SSH 表单和剪贴板 API 路径审查；`rustfmt`；分享 JSON 聚焦测试 5 项；会话快捷键聚焦测试 3 项；`cargo check`；完整 `cargo test --quiet`（207 项）；`git diff --check`；hover 静态审计。
-- 未完成：真实 GUI 中的快捷键录制/连接、展开与折叠侧栏 tooltip、剪贴板 JSON 往返、分组文件导入和菜单栏 About 跳转验收。
+- 已完成：环境与实施记录、项目地图、terminal 路径链接、SFTP action、worker、配置迁移和事件消费路径审查；受影响 Rust 文件 `rustfmt`；初始路径、旧配置迁移和 reveal 聚焦测试；`cargo check`；完整 `cargo test --quiet`（208 项）；`git diff --check`；tracking docs validator。
+- 未完成：真实 SSH/SFTP GUI 验收，确认 terminal 绝对目录/文件路径、地址栏、终端当前目录和无路径打开均无中间跳转。
 
 ## 风险与阻塞
 
-- 无阻塞。
+- 无阻塞；显式路径指向文件时继续列出其父目录并选中该文件。
 
 ## 下一步
 
-- 在桌面 GUI 中完成上述交互验收。
+- 在真实 SSH/SFTP 服务器上确认 terminal 绝对目录/文件路径、地址栏、终端当前目录均不会出现 home/预设目录闪现，以及无路径打开按会话预设或服务器 home 进入。
 
 ## 最后更新时间
 
-- 2026-07-16 11:30 +0800
+- 2026-07-16 10:23 +0800
