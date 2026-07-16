@@ -2,14 +2,14 @@
 
 ## 当前目标
 
-- 目标：让 SFTP 打开行为可预测且只加载一次初始目录。
-- 交付物：保存会话的远端目录恢复、固定路径优先级、显式“打开终端当前目录”动作和自动化验证。
+- 目标：完善保存 SSH 会话的快捷键、悬浮信息、无凭据 JSON 复制/导入与菜单“关于”入口。
+- 交付物：会话快捷键、tooltip 配置字段、剪贴板 JSON 往返、分组导入兼容、菜单栏“关于”直达与自动化验证。
 
 ## 项目边界
 
 - 根目录：`<repo-root>`
-- 当前范围：`src/config/model.rs`、`src/config/store.rs`、`src/app.rs`、`src/app/actions/sftp.rs`、`src/app/workspace.rs`、`src/app/lifecycle/event_loop.rs`、`src/app/lifecycle/init.rs`、`src/app/views/sftp_panel.rs`、`src/sftp/worker.rs`、`src/sftp/worker/runtime.rs`、`locales/`、`docs/features/`、`docs/project-implementation-tracker/`。
-- 不在本轮范围内：`Cargo.toml` / `Cargo.lock`、SFTP 协议、传输模型、会话导入导出格式、终端 CWD 捕获协议。
+- 当前范围：`src/session.rs`、`src/app.rs`、`src/app/actions/saved_sessions.rs`、`src/app/actions/session.rs`、`src/app/actions/terminal.rs`、`src/app/dialogs/ssh.rs`、`src/app/dialogs/settings.rs`、`src/app/input/`、`src/app/views/`、`src/app/workspace.rs`、`src/main.rs`、`locales/`、`docs/features/`、`docs/project-implementation-tracker/`。
+- 不在本轮范围内：`Cargo.toml` / `Cargo.lock`、SSH/SFTP 协议、分享 JSON schema、密码、私钥、passphrase 或代理密码导出。
 
 ## 当前状态
 
@@ -22,34 +22,32 @@
 
 | Step | Status | Deliverable | Verification | Notes |
 | --- | --- | --- | --- | --- |
-| P1 | completed | 确认初始目录双请求根因和主流客户端目录优先级 | 代码路径与官方文档核对 | 当前 home 列举与终端 CWD 同步并行 |
-| P2 | completed | 保存远端目录、单一初始列举和显式终端目录动作 | 3 项聚焦测试、`cargo check` | 优先级为活动重连路径、固定路径、上次目录、home |
-| P3 | completed | 格式化、完整测试、追踪记录收口 | `rustfmt`、`cargo test`、validator | GUI 行为保留手工验收 |
+| P1 | completed | 确认分享 JSON、右键复制和 SSH 表单路径 | 源码路径审查 | 复用既有无凭据 schema，不改文件导入/导出格式 |
+| P2 | completed | 会话快捷键、tooltip、JSON 剪贴板往返、分组导入和菜单“关于” | 聚焦单元测试、`cargo check` | 单条剪贴板导入保留编辑中的本机凭据与快捷键；分组沿用标准分享格式 |
+| P3 | completed | 完整回归与追踪记录收口 | `rustfmt`、`cargo test --quiet`、validator | GUI 剪贴板、tooltip 与菜单跳转保留手工验收 |
 
 ## 已完成
 
-- 已确认 worker 连接后按 `sftp_path` 或 home 列举目录，而 SFTP 页面切入同时会自动同步 SSH 终端 CWD，导致出现两次目录列举和 home 闪现。
-- 已完成外部检索：WinSCP 支持每站点初始远端目录及“记住上次目录”；Cyberduck 将当前目录到终端的关联设计为显式动作。
-- 已确定本轮目录优先级：固定 `SFTP 路径`、保存会话的上次远端目录、服务端 home；终端当前目录仅由用户显式触发。
-- 已新增本机 `last_remote_sftp_paths`，仅在成功接收目录列表后记录已保存会话的远端目录；删除或导入替换会话时自动清理失效记录。
-- 已将连接重建路径传入 worker 启动参数，移除启动后的第二次 `ListDir`；worker 现在只列举一次选定的初始目录。
-- 已移除进入 SFTP 页与终端 CWD 事件的隐式同步，并在远端地址栏加入显式“打开终端当前目录”按钮。
+- 已确认单条 JSON 导出已复用 `ax-shell-saved-sessions` schema，并排除密码、私钥、passphrase、代理密码和本机快捷键。
+- 已确认现有右键“复制信息”只复制三行文本；SSH 新建和编辑共用一个表单，适合增加不自动保存的剪贴板导入动作。
+- 已确定剪贴板导入只接受恰好一个有效 JSON 会话；编辑已有会话时保留当前 ID、本机快捷键及未导出的凭据。
+- 已实现会话快捷键录制、冲突检查与终端/SFTP 工作区连接；侧栏 hover 展示快捷键和会话 SFTP 路径。
+- 已将右键复制改为标准无凭据单会话 JSON，并在 SSH 表单加入“从剪贴板导入”；分组导出文件可直接通过现有文件导入恢复全部会话及其组名。
+- 已在原生应用菜单增加 About AxShell，并使其切换到设置页中的“关于”分页。
 
 ## 验证
 
-- 已完成：环境记录、实施记录、项目地图、SFTP worker/workspace/配置路径审查；WinSCP 与 Cyberduck 官方文档检索；受影响 Rust 文件 `rustfmt --edition 2024`；启动路径、worker 初始路径和远端路径存储各 1 项聚焦测试；`cargo check`；完整 `cargo test --quiet`（202 项）；`git diff --check`；tracking docs validator。
-- 未完成：真实 GUI 连接、目录恢复和显式终端目录跳转验收。
+- 已完成：环境与实施记录、项目地图、分享 schema、右键菜单、SSH 表单和剪贴板 API 路径审查；`rustfmt`；分享 JSON 聚焦测试 5 项；会话快捷键聚焦测试 3 项；`cargo check`；完整 `cargo test --quiet`（207 项）；`git diff --check`；hover 静态审计。
+- 未完成：真实 GUI 中的快捷键录制/连接、展开与折叠侧栏 tooltip、剪贴板 JSON 往返、分组文件导入和菜单栏 About 跳转验收。
 
 ## 风险与阻塞
 
-- 风险：旧配置没有远端目录记录，必须无缝回退服务端 home。
-- 风险：SFTP 连接重建必须带上已知当前目录，但不能再通过独立命令重复列举。
 - 无阻塞。
 
 ## 下一步
 
-- 在真实 SSH/SFTP 服务器上确认固定路径、上次远端目录、home 回退和工具栏“打开终端当前目录”的顺序及无 home 闪现。
+- 在桌面 GUI 中完成上述交互验收。
 
 ## 最后更新时间
 
-- 2026-07-15 16:32 +0800
+- 2026-07-16 11:30 +0800
