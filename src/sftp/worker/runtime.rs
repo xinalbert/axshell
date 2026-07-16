@@ -55,15 +55,7 @@ pub(super) async fn run_sftp(
         })
         .await;
 
-    let session_id = session.id.clone();
-    let (handle, connected_mode) = connect_and_authenticate(&session).await?;
-    let _ = events
-        .send(BackendEvent::SshConnectionModeResolved {
-            tab_id: tab_id.clone(),
-            session_id,
-            mode: connected_mode,
-        })
-        .await;
+    let handle = connect_and_authenticate(&tab_id, &session, &events).await?;
     let sftp = open_sftp_session(&handle).await?;
 
     let home = sftp

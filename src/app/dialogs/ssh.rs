@@ -88,6 +88,8 @@ impl AxShell {
                         let show_proxy_fields = proxy_type != "none";
                         let show_advanced_options = shell.ssh_advanced_options_visible;
                         let session_x11_forwarding = shell.session_x11_forwarding;
+                        let session_legacy_ssh_compatibility =
+                            shell.session_legacy_ssh_compatibility;
                         let recording_session_shortcut = shell.recording_session_shortcut;
                         let session_shortcut = shell.session_shortcut.clone();
                         let session_shortcut_error = shell.session_shortcut_error.clone();
@@ -733,6 +735,45 @@ impl AxShell {
                                                                 cx.notify();
                                                             },
                                                         )),
+                                                    )
+                                                    .child(
+                                                        v_flex()
+                                                            .gap_1()
+                                                            .child(
+                                                                Checkbox::new(
+                                                                    "ssh-session-legacy-compatibility",
+                                                                )
+                                                                .checked(
+                                                                    session_legacy_ssh_compatibility,
+                                                                )
+                                                                .label(
+                                                                    t!(
+                                                                        "legacy_ssh_compatibility"
+                                                                    )
+                                                                    .to_string(),
+                                                                )
+                                                                .on_click(window.listener_for(
+                                                                    &view,
+                                                                    |this, checked, _, cx| {
+                                                                        this.session_legacy_ssh_compatibility =
+                                                                            *checked;
+                                                                        cx.notify();
+                                                                    },
+                                                                )),
+                                                            )
+                                                            .child(
+                                                                div()
+                                                                    .text_xs()
+                                                                    .text_color(
+                                                                        cx.theme().muted_foreground,
+                                                                    )
+                                                                    .child(
+                                                                        t!(
+                                                                            "legacy_ssh_compatibility_hint"
+                                                                        )
+                                                                        .to_string(),
+                                                                    ),
+                                                            ),
                                                     )
                                                     .when(x11_server_missing, |this| {
                                                         this.child(

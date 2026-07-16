@@ -438,31 +438,6 @@ impl AxShell {
                                 self.connection_progress = None;
                             }
                         }
-                        BackendEvent::SshConnectionModeResolved {
-                            tab_id,
-                            session_id,
-                            mode,
-                        } => {
-                            result.ui_changed = true;
-                            for tab in self.tabs.iter_mut() {
-                                if tab.id == tab_id
-                                    || tab
-                                        .session
-                                        .as_ref()
-                                        .is_some_and(|session| session.id == session_id)
-                                {
-                                    if let Some(session) = tab.session.as_mut() {
-                                        session.last_successful_ssh_mode = Some(mode);
-                                    }
-                                }
-                            }
-                            if self
-                                .config
-                                .set_session_last_successful_ssh_mode(&session_id, mode)
-                            {
-                                self.config.save_logged("save_ssh_connection_mode");
-                            }
-                        }
                         BackendEvent::SftpEntries {
                             tab_id,
                             path,
@@ -642,6 +617,10 @@ impl AxShell {
                             } else {
                                 self.discard_sftp_edit_session(&tab_id, &local_path);
                             }
+                        }
+                        BackendEvent::HostKeyVerification { request } => {
+                            result.ui_changed = true;
+                            self.host_key_verification_requests.push_back(request);
                         }
                         BackendEvent::SftpOverwriteConflict { request } => {
                             result.ui_changed = true;

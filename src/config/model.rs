@@ -221,6 +221,15 @@ pub(crate) struct LocalShellProfile {
     pub(crate) args: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct TrustedHostKey {
+    pub(crate) host: String,
+    pub(crate) port: u16,
+    pub(crate) algorithm: String,
+    pub(crate) public_key: String,
+    pub(crate) fingerprint: String,
+}
+
 fn local_shell_profile<I>(
     id: &str,
     name: &str,
@@ -353,6 +362,8 @@ pub(super) struct ConfigFile {
     pub(super) cursor_style: CursorStyle,
     #[serde(default)]
     pub(super) sessions: Vec<Session>,
+    #[serde(default)]
+    pub(super) trusted_host_keys: Vec<TrustedHostKey>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub(super) last_local_sftp_paths: BTreeMap<String, String>,
     #[serde(default)]
@@ -621,6 +632,7 @@ impl Default for ConfigFile {
             title_bar_style: TitleBarStyle::default(),
             cursor_style: CursorStyle::default(),
             sessions: Vec::new(),
+            trusted_host_keys: Vec::new(),
             last_local_sftp_paths: BTreeMap::new(),
             default_local_sftp_path: String::new(),
             window_bounds: None,

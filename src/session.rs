@@ -62,8 +62,7 @@ pub(crate) enum AuthMethod {
     Key,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SshConnectionMode {
     Default,
     Legacy,
@@ -76,21 +75,6 @@ impl SshConnectionMode {
             Self::Legacy => "legacy compatibility",
         }
     }
-}
-
-pub(crate) fn ordered_ssh_connection_modes(
-    preferred: Option<SshConnectionMode>,
-) -> Vec<SshConnectionMode> {
-    let mut modes = Vec::with_capacity(2);
-    if let Some(preferred) = preferred {
-        modes.push(preferred);
-    }
-    for mode in [SshConnectionMode::Default, SshConnectionMode::Legacy] {
-        if !modes.contains(&mode) {
-            modes.push(mode);
-        }
-    }
-    modes
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -116,7 +100,7 @@ pub(crate) struct Session {
     #[serde(default)]
     pub(crate) last_used: Option<String>,
     #[serde(default)]
-    pub(crate) last_successful_ssh_mode: Option<SshConnectionMode>,
+    pub(crate) legacy_ssh_compatibility: bool,
     #[serde(default = "default_global_proxy_type")]
     pub(crate) proxy_type: String,
     #[serde(default)]
@@ -164,7 +148,7 @@ impl Session {
             private_key_inline: String::new(),
             passphrase: String::new(),
             last_used: None,
-            last_successful_ssh_mode: None,
+            legacy_ssh_compatibility: false,
             proxy_type: "none".to_string(),
             proxy_host: String::new(),
             proxy_port: None,
@@ -205,7 +189,7 @@ impl Session {
             private_key_inline,
             passphrase,
             last_used: None,
-            last_successful_ssh_mode: None,
+            legacy_ssh_compatibility: false,
             proxy_type: "none".to_string(),
             proxy_host: String::new(),
             proxy_port: None,
@@ -239,7 +223,7 @@ impl Session {
             private_key_inline: String::new(),
             passphrase: String::new(),
             last_used: None,
-            last_successful_ssh_mode: None,
+            legacy_ssh_compatibility: false,
             proxy_type: "none".to_string(),
             proxy_host: String::new(),
             proxy_port: None,
@@ -265,30 +249,28 @@ impl Session {
         session.x11_forwarding = false;
         session
     }
+
+    pub(crate) fn ssh_connection_mode(&self) -> SshConnectionMode {
+        if self.legacy_ssh_compatibility {
+            SshConnectionMode::Legacy
+        } else {
+            SshConnectionMode::Default
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{SessionKind, SshConnectionMode, ordered_ssh_connection_modes};
+    use super::{Session, SessionKind, SshConnectionMode};
 
     #[test]
-    fn ssh_connection_modes_default_to_safe_order() {
-        assert_eq!(
-            ordered_ssh_connection_modes(None),
-            vec![SshConnectionMode::Default, SshConnectionMode::Legacy]
-        );
-    }
+    fn legacy_ssh_mode_requires_explicit_session_opt_in() {
+        let mut session =
+            Session::password("example.com".into(), 22, "root".into(), "password".into());
+        assert_eq!(session.ssh_connection_mode(), SshConnectionMode::Default);
 
-    #[test]
-    fn ssh_connection_modes_prioritize_last_successful_mode() {
-        assert_eq!(
-            ordered_ssh_connection_modes(Some(SshConnectionMode::Legacy)),
-            vec![SshConnectionMode::Legacy, SshConnectionMode::Default]
-        );
-        assert_eq!(
-            ordered_ssh_connection_modes(Some(SshConnectionMode::Default)),
-            vec![SshConnectionMode::Default, SshConnectionMode::Legacy]
-        );
+        session.legacy_ssh_compatibility = true;
+        assert_eq!(session.ssh_connection_mode(), SshConnectionMode::Legacy);
     }
 
     #[test]
@@ -315,7 +297,15 @@ mod tests {
         value
             .as_object_mut()
             .expect("session is an object")
+            .remove("legacy_ssh_compatibility");
+        value
+            .as_object_mut()
+            .expect("session is an object")
             .remove("baud_rate");
+        value.as_object_mut().expect("session is an object").insert(
+            "last_successful_ssh_mode".to_string(),
+            serde_json::json!("legacy"),
+        );
 
         let session: super::Session =
             serde_json::from_value(value).expect("existing session deserializes");
@@ -325,6 +315,9 @@ mod tests {
         assert!(session.shortcut.is_empty());
         assert_eq!(session.kind, SessionKind::Ssh);
         assert_eq!(session.baud_rate, 115_200);
+        assert!(!session.legacy_ssh_compatibility);
+        let serialized = serde_json::to_value(session).expect("session should serialize");
+        assert!(serialized.get("last_successful_ssh_mode").is_none());
     }
 
     #[test]

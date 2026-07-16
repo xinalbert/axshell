@@ -28,6 +28,7 @@ use crate::{
 pub(super) use crate::app::hover::{FastHoverExt, list_fast_hover_options};
 
 mod delete_confirm;
+mod host_key_confirm;
 mod selector;
 pub(super) mod settings;
 mod settings_close_confirm;
@@ -43,6 +44,7 @@ pub(crate) enum DialogKind {
     Transfers,
     TransferFiles,
     NewSsh,
+    HostKeyConfirm,
     SettingsCloseConfirm,
     SftpCloseConfirm,
     SftpEditUploadConfirm,

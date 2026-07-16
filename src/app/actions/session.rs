@@ -642,17 +642,6 @@ impl AxShell {
         let existing_last_used = existing_session
             .as_ref()
             .and_then(|session| session.last_used.clone());
-        let existing_last_successful_ssh_mode = existing_session
-            .as_ref()
-            .filter(|session| {
-                kind == SessionKind::Ssh
-                    && session.kind == SessionKind::Ssh
-                    && session.host == host
-                    && session.port == port
-                    && session.user == user
-            })
-            .and_then(|session| session.last_successful_ssh_mode);
-
         let mut session = match kind {
             SessionKind::Ssh => match self.ssh_auth_method {
                 AuthMethod::Password => Session::password(host, port, user, password),
@@ -674,7 +663,6 @@ impl AxShell {
             session.id = id;
         }
         session.last_used = existing_last_used;
-        session.last_successful_ssh_mode = existing_last_successful_ssh_mode;
         if matches!(kind, SessionKind::Ssh | SessionKind::Telnet) {
             session.proxy_type = self.ssh_proxy_type.clone();
             session.proxy_host = self.proxy_host_input.read(cx).value().trim().to_string();
@@ -691,6 +679,7 @@ impl AxShell {
         if kind == SessionKind::Ssh {
             session.sftp_path = sftp_path;
             session.x11_forwarding = self.session_x11_forwarding;
+            session.legacy_ssh_compatibility = self.session_legacy_ssh_compatibility;
         }
         if kind == SessionKind::Serial {
             session.data_bits = self
@@ -793,6 +782,7 @@ impl AxShell {
         Self::set_input_value(&self.serial_stop_bits_input, "1", window, cx);
         Self::set_input_value(&self.serial_flow_control_input, "none", window, cx);
         self.session_x11_forwarding = true;
+        self.session_legacy_ssh_compatibility = false;
     }
 
     pub(crate) fn load_session_into_form(
@@ -908,10 +898,12 @@ impl AxShell {
             cx,
         );
         self.session_x11_forwarding = session.x11_forwarding;
+        self.session_legacy_ssh_compatibility = session.legacy_ssh_compatibility;
         self.ssh_advanced_options_visible = session.proxy_type != "none"
             || !session.sftp_path.trim().is_empty()
             || !session.shortcut.trim().is_empty()
-            || !session.x11_forwarding;
+            || !session.x11_forwarding
+            || session.legacy_ssh_compatibility;
         self.recording_session_shortcut = false;
         self.session_shortcut_error = None;
         self.session_import_error = None;

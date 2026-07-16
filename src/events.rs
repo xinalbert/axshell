@@ -7,7 +7,6 @@ use tokio::sync::mpsc::{self, error::TrySendError};
 
 use crate::{
     monitoring::SystemSnapshot,
-    session::SshConnectionMode,
     sftp::{
         PreviewData, RemoteEntry, TransferFile, TransferFileState, TransferInfo, TransferState,
     },
@@ -111,11 +110,6 @@ pub(crate) enum BackendEvent {
     Connected {
         tab_id: String,
     },
-    SshConnectionModeResolved {
-        tab_id: String,
-        session_id: String,
-        mode: SshConnectionMode,
-    },
     SftpEntries {
         tab_id: String,
         path: String,
@@ -153,6 +147,9 @@ pub(crate) enum BackendEvent {
         remote_path: String,
         local_path: String,
         result: Result<(), String>,
+    },
+    HostKeyVerification {
+        request: crate::backend::host_key::HostKeyVerificationRequest,
     },
     SftpOverwriteConflict {
         request: crate::sftp::SftpOverwriteRequest,
@@ -230,7 +227,6 @@ impl BackendEvent {
             Self::Output { tab_id, .. }
             | Self::Status { tab_id, .. }
             | Self::Connected { tab_id }
-            | Self::SshConnectionModeResolved { tab_id, .. }
             | Self::SftpEntries { tab_id, .. }
             | Self::SftpPreview { tab_id, .. }
             | Self::SftpStatus { tab_id, .. }
@@ -251,6 +247,7 @@ impl BackendEvent {
             | Self::TerminalTitleChanged { tab_id, .. }
             | Self::WorkingDirectoryChanged { tab_id, .. }
             | Self::WorkingDirectoryResolved { tab_id, .. } => Some(tab_id),
+            Self::HostKeyVerification { request } => Some(&request.tab_id),
             Self::SftpOverwriteConflict { request } => Some(&request.tab_id),
             Self::SyncFinished(_) => None,
         }

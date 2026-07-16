@@ -18,6 +18,7 @@ use tokio::{
 
 use crate::{
     app::RuntimeTaskTracker,
+    backend::host_key::HostKeyVerifier,
     config::ConfigStore,
     diagnostics::{mask_host, mask_value, sanitize_error, sanitize_error_with_values},
     events::{BackendEvent, BackendEventSender},
@@ -556,11 +557,15 @@ async fn query_remote_working_directory_with_handle(
 #[derive(Clone)]
 struct ClientHandler {
     x11: Option<Arc<X11ForwardingState>>,
+    host_key_verifier: HostKeyVerifier,
 }
 
 impl ClientHandler {
-    fn new(x11: Option<Arc<X11ForwardingState>>) -> Self {
-        Self { x11 }
+    fn new(x11: Option<Arc<X11ForwardingState>>, host_key_verifier: HostKeyVerifier) -> Self {
+        Self {
+            x11,
+            host_key_verifier,
+        }
     }
 }
 
@@ -569,9 +574,9 @@ impl Handler for ClientHandler {
 
     async fn check_server_key(
         &mut self,
-        _server_public_key: &russh::keys::ssh_key::PublicKey,
+        server_public_key: &russh::keys::ssh_key::PublicKey,
     ) -> Result<bool, Self::Error> {
-        Ok(true)
+        self.host_key_verifier.verify(server_public_key).await
     }
 
     fn server_channel_open_x11(

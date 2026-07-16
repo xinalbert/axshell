@@ -7,11 +7,12 @@ use tokio::time::sleep;
 use crate::{
     backend::{
         auth::{load_session_private_key, private_keys_with_algs},
+        host_key::HostKeyVerifier,
         proxy::{self, ProxyStream},
     },
     diagnostics::{mask_host, mask_path, mask_value, sanitize_error_with_values},
     events::{BackendEvent, BackendEventSender},
-    session::{AuthMethod, Session, SshConnectionMode, ordered_ssh_connection_modes},
+    session::{AuthMethod, Session, SshConnectionMode},
 };
 
 use super::{ClientHandler, X11ForwardingState, legacy};
@@ -67,8 +68,8 @@ pub(super) async fn connect_and_authenticate(
         })
         .await;
 
-    let (mut handle, connected_mode) =
-        connect_with_mode_priority(tab_id, session, &addr, events, x11.clone()).await?;
+    let mut handle =
+        connect_with_selected_mode(tab_id, session, &addr, events, x11.clone()).await?;
 
     tracing::debug!(
         component = "ssh",
@@ -222,107 +223,54 @@ pub(super) async fn connect_and_authenticate(
             ),
         })
         .await;
-    let _ = events
-        .send(BackendEvent::SshConnectionModeResolved {
-            tab_id: tab_id.to_string(),
-            session_id: session.id.clone(),
-            mode: connected_mode,
-        })
-        .await;
-
     Ok(handle)
 }
 
-async fn connect_with_mode_priority(
+async fn connect_with_selected_mode(
     tab_id: &str,
     session: &Session,
     addr: &str,
     events: &BackendEventSender,
     x11: Option<Arc<X11ForwardingState>>,
-) -> Result<(russh::client::Handle<ClientHandler>, SshConnectionMode)> {
-    let modes = ordered_ssh_connection_modes(session.last_successful_ssh_mode);
-    let mut failures = Vec::new();
-
-    for (index, mode) in modes.iter().copied().enumerate() {
-        if index > 0 {
-            let _ = events
-                .send(BackendEvent::Status {
-                    tab_id: tab_id.to_string(),
-                    text: format!("retrying SSH connection in {} mode", mode.label()),
-                })
-                .await;
-        }
-
-        match connect_with_mode(tab_id, session, addr, mode, events, x11.clone()).await {
-            Ok(handle) => {
-                if mode == SshConnectionMode::Legacy {
-                    tracing::warn!(
-                        component = "ssh",
-                        operation = "connect",
-                        host = %mask_host(&session.host),
-                        port = session.port,
-                        mode = mode.label(),
-                        "Connected using legacy SSH compatibility mode"
-                    );
-                    let _ = events
-                        .send(BackendEvent::Status {
-                            tab_id: tab_id.to_string(),
-                            text: format!(
-                                "connected to {addr} using legacy SSH compatibility mode"
-                            ),
-                        })
-                        .await;
-                } else if session.last_successful_ssh_mode == Some(SshConnectionMode::Legacy) {
-                    let _ = events
-                        .send(BackendEvent::Status {
-                            tab_id: tab_id.to_string(),
-                            text: format!("connected to {addr} using default SSH mode"),
-                        })
-                        .await;
-                }
-                return Ok((handle, mode));
-            }
-            Err(err) => {
-                let details = legacy::negotiation_error_details(&err);
-                let failure = details.clone().unwrap_or_else(|| format!("{err:#}"));
-                let error = sanitize_session_error(&failure, session);
-                tracing::warn!(
-                    component = "ssh",
-                    operation = "connect_mode",
-                    host = %mask_host(&session.host),
-                    port = session.port,
-                    user = %mask_value(&session.user),
-                    mode = mode.label(),
-                    error = %error,
-                    "SSH connection mode failed"
-                );
-                failures.push(format!("{} mode: {failure}", mode.label()));
-
-                let is_transport_error = is_retryable_transport_error(&err);
-                let should_try_next = index + 1 < modes.len()
-                    && !is_transport_error
-                    && (details.is_some() || session.last_successful_ssh_mode == Some(mode));
-                if !should_try_next {
-                    return Err(anyhow!("SSH connection failed. {}", failures.join(". ")));
-                }
-
-                let next = modes[index + 1];
-                let reason = legacy::negotiation_error_short_reason(&err)
-                    .map(|reason| format!("SSH negotiation failed ({reason})"))
-                    .unwrap_or_else(|| "SSH connection failed with cached mode".to_string());
-                let _ = events
-                    .send(BackendEvent::Status {
-                        tab_id: tab_id.to_string(),
-                        text: format!("{} {reason}, retrying {} mode", mode.label(), next.label()),
-                    })
-                    .await;
-            }
-        }
+) -> Result<russh::client::Handle<ClientHandler>> {
+    let mode = session.ssh_connection_mode();
+    if mode == SshConnectionMode::Legacy {
+        tracing::warn!(
+            component = "ssh",
+            operation = "connect",
+            host = %mask_host(&session.host),
+            port = session.port,
+            "Using explicitly enabled legacy SSH compatibility algorithms"
+        );
+        let _ = events
+            .send(BackendEvent::Status {
+                tab_id: tab_id.to_string(),
+                text: format!("connecting to {addr} with explicitly enabled legacy SSH algorithms"),
+            })
+            .await;
     }
 
-    Err(anyhow!(
-        "SSH connection failed before any mode was attempted"
-    ))
+    match connect_with_mode(tab_id, session, addr, mode, events, x11).await {
+        Ok(handle) => Ok(handle),
+        Err(err) => {
+            let failure =
+                legacy::negotiation_error_details(&err).unwrap_or_else(|| format!("{err:#}"));
+            tracing::warn!(
+                component = "ssh",
+                operation = "connect_mode",
+                host = %mask_host(&session.host),
+                port = session.port,
+                user = %mask_value(&session.user),
+                mode = mode.label(),
+                error = %sanitize_session_error(&failure, session),
+                "SSH connection mode failed without a downgrade retry"
+            );
+            Err(anyhow!(
+                "SSH connection failed in {} mode: {failure}",
+                mode.label()
+            ))
+        }
+    }
 }
 
 async fn connect_with_mode(
@@ -338,7 +286,10 @@ async fn connect_with_mode(
     client::connect_stream(
         Arc::new(legacy::ssh_client_config(mode)),
         stream,
-        ClientHandler::new(x11),
+        ClientHandler::new(
+            x11,
+            HostKeyVerifier::new(tab_id, &session.host, session.port, events.clone()),
+        ),
     )
     .await
     .with_context(|| format!("connect {addr} failed in {} mode", mode.label()))

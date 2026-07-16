@@ -9,13 +9,20 @@ use directories::BaseDirs;
 use gpui_component::ThemeMode;
 use uuid::Uuid;
 
-use crate::session::{Session, SshConnectionMode};
+use crate::session::Session;
 
 use super::model::*;
 
 pub struct ConfigStore {
     path: PathBuf,
     cache: ConfigFile,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum HostKeyTrust {
+    Trusted,
+    Unknown,
+    Changed,
 }
 
 fn normalize_local_shell_profiles(config: &mut ConfigFile) {
@@ -260,6 +267,37 @@ impl ConfigStore {
     pub fn replace_sessions(&mut self, sessions: Vec<Session>) {
         self.cache.sessions = sessions;
         normalize_last_local_sftp_paths(&mut self.cache);
+    }
+
+    pub(crate) fn host_key_trust(&self, candidate: &TrustedHostKey) -> HostKeyTrust {
+        let known = self
+            .cache
+            .trusted_host_keys
+            .iter()
+            .filter(|key| same_host_key_target(key, candidate))
+            .collect::<Vec<_>>();
+        if known.is_empty() {
+            return HostKeyTrust::Unknown;
+        }
+        if known
+            .iter()
+            .any(|key| key.public_key == candidate.public_key)
+        {
+            HostKeyTrust::Trusted
+        } else {
+            HostKeyTrust::Changed
+        }
+    }
+
+    pub(crate) fn trust_host_key(&mut self, candidate: TrustedHostKey) -> bool {
+        if self.host_key_trust(&candidate) == HostKeyTrust::Trusted {
+            return false;
+        }
+        self.cache.trusted_host_keys.retain(|key| {
+            !same_host_key_target(key, &candidate) || key.algorithm != candidate.algorithm
+        });
+        self.cache.trusted_host_keys.push(candidate);
+        true
     }
 
     pub fn sync_endpoint(&self) -> &str {
@@ -1352,21 +1390,6 @@ impl ConfigStore {
         }
     }
 
-    pub fn set_session_last_successful_ssh_mode(
-        &mut self,
-        id: &str,
-        mode: SshConnectionMode,
-    ) -> bool {
-        let Some(session) = self.cache.sessions.iter_mut().find(|s| s.id == id) else {
-            return false;
-        };
-        if session.last_successful_ssh_mode == Some(mode) {
-            return false;
-        }
-        session.last_successful_ssh_mode = Some(mode);
-        true
-    }
-
     pub fn remove(&mut self, id: &str) {
         self.cache.sessions.retain(|s| s.id != id);
         self.cache.last_local_sftp_paths.remove(id);
@@ -1403,6 +1426,14 @@ impl ConfigStore {
             );
         }
     }
+}
+
+fn same_host_key_target(left: &TrustedHostKey, right: &TrustedHostKey) -> bool {
+    left.port == right.port
+        && left
+            .host
+            .trim_end_matches('.')
+            .eq_ignore_ascii_case(right.host.trim_end_matches('.'))
 }
 
 fn copy_dir_recursive(from: &Path, to: &Path) -> Result<()> {
@@ -2168,5 +2199,82 @@ mod local_sftp_path_tests {
 
         assert_eq!(config.last_local_sftp_path("keep"), Some("/tmp/keep"));
         assert_eq!(config.last_local_sftp_path("remove"), None);
+    }
+}
+
+#[cfg(test)]
+mod host_key_trust_tests {
+    use crate::config::TrustedHostKey;
+
+    use super::{ConfigStore, HostKeyTrust};
+
+    fn key(host: &str, port: u16, algorithm: &str, public_key: &str) -> TrustedHostKey {
+        TrustedHostKey {
+            host: host.to_string(),
+            port,
+            algorithm: algorithm.to_string(),
+            public_key: public_key.to_string(),
+            fingerprint: format!("SHA256:{public_key}"),
+        }
+    }
+
+    #[test]
+    fn unknown_host_key_is_not_trusted() {
+        let config = ConfigStore::in_memory();
+
+        assert_eq!(
+            config.host_key_trust(&key("example.com", 22, "ssh-ed25519", "key-a")),
+            HostKeyTrust::Unknown
+        );
+    }
+
+    #[test]
+    fn trusted_key_normalizes_hostname_but_keeps_port_specific() {
+        let mut config = ConfigStore::in_memory();
+        assert!(config.trust_host_key(key("Example.COM.", 22, "ssh-ed25519", "key-a")));
+
+        assert_eq!(
+            config.host_key_trust(&key("example.com", 22, "ssh-ed25519", "key-a")),
+            HostKeyTrust::Trusted
+        );
+        assert_eq!(
+            config.host_key_trust(&key("example.com", 2222, "ssh-ed25519", "key-a")),
+            HostKeyTrust::Unknown
+        );
+    }
+
+    #[test]
+    fn different_key_for_known_target_is_changed() {
+        let mut config = ConfigStore::in_memory();
+        assert!(config.trust_host_key(key("example.com", 22, "ssh-ed25519", "key-a")));
+
+        assert_eq!(
+            config.host_key_trust(&key("example.com", 22, "ssh-ed25519", "key-b")),
+            HostKeyTrust::Changed
+        );
+    }
+
+    #[test]
+    fn accepting_changed_key_replaces_prior_key_for_same_algorithm() {
+        let mut config = ConfigStore::in_memory();
+        let previous = key("example.com", 22, "ssh-ed25519", "key-a");
+        let replacement = key("example.com", 22, "ssh-ed25519", "key-b");
+        assert!(config.trust_host_key(previous.clone()));
+        assert!(config.trust_host_key(replacement.clone()));
+
+        assert_eq!(config.host_key_trust(&replacement), HostKeyTrust::Trusted);
+        assert_eq!(config.host_key_trust(&previous), HostKeyTrust::Changed);
+    }
+
+    #[test]
+    fn accepting_new_algorithm_preserves_trusted_algorithm() {
+        let mut config = ConfigStore::in_memory();
+        let ed25519 = key("example.com", 22, "ssh-ed25519", "key-a");
+        let rsa = key("example.com", 22, "rsa-sha2-512", "key-b");
+        assert!(config.trust_host_key(ed25519.clone()));
+        assert!(config.trust_host_key(rsa.clone()));
+
+        assert_eq!(config.host_key_trust(&ed25519), HostKeyTrust::Trusted);
+        assert_eq!(config.host_key_trust(&rsa), HostKeyTrust::Trusted);
     }
 }

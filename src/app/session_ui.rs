@@ -61,14 +61,11 @@ mod tests {
         app::session_ui::{
             should_prompt_for_terminal_password_before_connect, should_use_terminal_password_prompt,
         },
-        session::{Session, SshConnectionMode},
+        session::Session,
     };
 
     fn password_session(password: &str) -> Session {
-        let mut session =
-            Session::password("example.com".into(), 22, "root".into(), password.into());
-        session.last_successful_ssh_mode = Some(SshConnectionMode::Default);
-        session
+        Session::password("example.com".into(), 22, "root".into(), password.into())
     }
 
     #[test]

@@ -133,6 +133,7 @@ pub(crate) struct AxShell {
     pub(crate) session_kind: SessionKind,
     pub(crate) available_serial_ports: Vec<String>,
     pub(crate) session_x11_forwarding: bool,
+    pub(crate) session_legacy_ssh_compatibility: bool,
     pub(crate) ssh_advanced_options_visible: bool,
     pub(crate) session_shortcut: String,
     pub(crate) recording_session_shortcut: bool,
@@ -210,6 +211,8 @@ pub(crate) struct AxShell {
     pub(crate) sftp_edit_close_group_id: Option<String>,
     pub(crate) sftp_edit_upload_requests: VecDeque<SftpEditUploadRequest>,
     pub(crate) sftp_edit_upload_request: Option<SftpEditUploadRequest>,
+    pub(crate) host_key_verification_requests:
+        VecDeque<crate::backend::host_key::HostKeyVerificationRequest>,
     pub(crate) sftp_overwrite_requests: VecDeque<crate::sftp::SftpOverwriteRequest>,
     pub(crate) sftp_replace_all_for_run: bool,
     pub(crate) sftp_new_folder_input: Entity<InputState>,

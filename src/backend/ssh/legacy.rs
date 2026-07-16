@@ -68,16 +68,6 @@ where
     }
 }
 
-pub(crate) fn negotiation_error_short_reason(err: &anyhow::Error) -> Option<String> {
-    match russh_error_from_anyhow(err)? {
-        RusshError::NoCommonAlgo { kind, .. } => Some(format!(
-            "no common {} algorithm",
-            algorithm_kind_label(kind)
-        )),
-        _ => None,
-    }
-}
-
 pub(crate) fn negotiation_error_details(err: &anyhow::Error) -> Option<String> {
     match russh_error_from_anyhow(err)? {
         RusshError::NoCommonAlgo { kind, ours, theirs } => Some(format!(
