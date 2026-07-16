@@ -2445,3 +2445,11 @@
 - 执行内容：以双时钟 10 秒 event-pump 间隙触发可能恢复；以 monitoring generation 忽略旧采样，以 terminal backend generation 拒绝用户重连后的旧健康检查事件。SSH 健康检查最多 5 秒且只针对当前可见 terminal tab；空闲 SFTP 标记为按需重建，带 work pin 或活动/暂停传输的 worker 不主动处置。未新增依赖，未修改 `Cargo.toml`、`Cargo.lock` 或 CI。
 - 验证结果：受影响 Rust 文件 `rustfmt --edition 2024` 通过；`cargo test --quiet resume` 4 项通过；`cargo check` 通过；完整 `cargo test --quiet` 194 项通过；`git diff --check` 与 tracking docs validator 通过。仅保留依赖 `block v0.1.6` 的 future-incompat warning。
 - 风险/待办：仍须在 macOS、Windows、Linux 实机验证睡眠、可用时休眠、断网、活动 SSH、空闲 SFTP 与带 pin 传输；随后以 `PowerEvent::Suspend/Resume` 适配原生事件，但保留本轮通用兜底。
+
+## 2026-07-16 串口与 Telnet 会话环境验证
+
+- 时间：2026-07-16 17:00 +0800
+- 变化摘要：新增 `serialport 4.9.0` 依赖，支持串口端口枚举和非 UI 线程设备 I/O；Telnet 复用现有 Tokio TCP/SOCKS5/HTTP proxy transport，无额外网络依赖。Linux lockfile 引入 `libudev`/`libudev-sys`，CI 已安装 `libudev-dev`。
+- 受影响文件：`Cargo.toml`，`Cargo.lock`，`src/session.rs`，`src/backend/serial.rs`，`src/backend/telnet.rs`，`src/terminal/`，`src/app/`，`locales/`，`docs/project-env-audit/`，`docs/project-implementation-tracker/`。
+- 更新后的命令或环境：仓库仍使用 Rust 2024 / Cargo，MSRV 为 Rust 1.88；本机 `rustc 1.96.1` / `cargo 1.96.1`。CI 覆盖 Windows、Linux x86_64/aarch64 与 macOS x86_64/aarch64 release build，Linux runner 的现有 `libudev-dev` 满足新增 crate 编译前提。
+- 验证结果：受影响 Rust 文件 `rustfmt --edition 2024` 通过；`cargo test --quiet` 220 项通过；`cargo check` 通过；`git diff --check` 和 tracking docs validator 通过。仅保留依赖 `block v0.1.6` future-incompat warning；实体串口设备、权限/占用、设备拔出、Telnet server 协商和断线重试仍需目标平台 GUI 验收。

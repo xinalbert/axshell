@@ -179,3 +179,13 @@
 - 关键结论：KDE 对慢速 URL 以文件名扩展名推断 MIME，再使用 MIME 图标名缓存；Nautilus 将已获得的 `GIcon` 保存在文件对象上，并把自定义/缩略图作为额外分支；Windows Shell 支持虚拟扩展名加 `SHGFI_USEFILEATTRIBUTES`，无需访问真实文件，并明确建议从后台线程调用。三者均不要求为远端路径同步读取本地文件系统。
 - 对实施计划的影响：AxShell 缓存固定为目录、通用文件和受控扩展名，并序列化图像数据到独立配置文件；缓存缺失、损坏、平台或 Linux 主题变更时才在启动阶段预热。SFTP 行渲染只查询内存映射。
 - 未解决问题：KDE/GNOME 会处理本地自定义目录图标和缩略图；AxShell 本轮故意不支持这两类路径相关资源，需在真实三端 GUI 验收系统主题、缩放和回退视觉效果。
+
+## 2026-07-16 xiaoxingshell 串口与 Telnet 参考实现
+
+- 时间：2026-07-16 16:30 +0800
+- 检索问题：参考 `xiaoxinghaha/xiaoxingshell`，确定 AxShell 串口与 Telnet 会话的最小后端模型、会话参数和新建表单端口检测时机。
+- 检索原因：用户明确要求以该项目为参考，并要求新建串口会话自动检测当前已连接端口。
+- 来源列表：xiaoxingshell repository tree <https://github.com/xiaoxinghaha/xiaoxingshell>；串口实现 <https://github.com/xiaoxinghaha/xiaoxingshell/blob/main/src/serial.rs>；Telnet 实现 <https://github.com/xiaoxinghaha/xiaoxingshell/blob/main/src/telnet.rs>；会话表单 <https://github.com/xiaoxinghaha/xiaoxingshell/blob/main/ui/session_dialog.slint>。
+- 关键结论：参考项目将串口作为独立同步 I/O 路径，配置波特率和基本线路参数；Telnet 作为 TCP 字节流处理并处理 Telnet 控制字节。端口枚举适合在会话创建/编辑流程中触发，而不是持续运行于 UI 列表渲染。
+- 对实施计划的影响：AxShell 使用 `serialport` worker 线程并复用既有 backend event/terminal byte 渲染；Telnet 复用 Tokio 与代理 transport，加入 IAC 转义、NAWS、SGA 和保守 RFC 854 协商。串口端口枚举限制为表单打开、切换到串口和手动刷新；长候选下拉复用本地 lazy `fast_menu`。
+- 未解决问题：参考项目与目标服务器/串口设备的具体兼容范围不能替代 AxShell 的实际三平台验收；串口权限、占用、设备拔出与 Telnet 服务端私有协商仍待手工验证。
