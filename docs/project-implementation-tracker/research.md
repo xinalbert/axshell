@@ -1,5 +1,15 @@
 # 外部检索记录
 
+## 2026-07-17 GPUI 多窗口渲染与内存边界
+
+- 时间：2026-07-17 10:17 +0800
+- 检索问题：独立终端窗口能否通过共享 renderer 消除重复内存，以及哪些资源应跨窗口共享或独立。
+- 检索原因：macOS sample profile 显示显著 `IOSurface` 与 malloc footprint；实施必须区分原生 surface 的必要成本和 AxShell 可避免的状态复制。
+- 来源列表：Apple `CAMetalLayer` <https://developer.apple.com/documentation/quartzcore/cametallayer> 与 `maximumDrawableCount` <https://developer.apple.com/documentation/quartzcore/cametallayer/maximumdrawablecount>；锁定 Zed/GPUI `f9c9947` 的 macOS `platform.rs`、`window.rs`、`metal_renderer.rs` <https://github.com/zed-industries/zed/tree/main/crates/gpui_macos/src>；Windows `platform.rs`、`window.rs`、`directx_renderer.rs` <https://github.com/zed-industries/zed/tree/main/crates/gpui_windows/src> 与 Microsoft `CreateSwapChainForHwnd` <https://learn.microsoft.com/windows/win32/api/dxgi/nf-dxgi-idxgifactory2-createswapchainforhwnd>；Linux X11/Wayland window backends <https://github.com/zed-industries/zed/tree/main/crates/gpui_linux/src>、`WgpuRenderer` <https://github.com/zed-industries/zed/tree/main/crates/gpui_wgpu/src> 与 wgpu `Surface` <https://docs.rs/wgpu/latest/wgpu/struct.Surface.html>；Zed PR #44382 <https://github.com/zed-industries/zed/pull/44382>、#45369 <https://github.com/zed-industries/zed/pull/45369>。
+- 关键结论：macOS 每个 renderer 建立自己的 `CAMetalLayer`、最多 3 个 drawable、command queue、pipeline/atlas/texture cache；Windows 共享 `DirectXDevices`，但每个 HWND 建立自己的 `IDXGISwapChain1`、render target 与 MSAA texture；Linux 共享 `GpuContext`/device/queue，但每个 native window 建立自己的 `wgpu::Surface` 与 renderer resources。跨窗口可共享设备/上下文，不能共享呈现表面。PR #44382（未合并）还表明共享 instance buffer pool 的高水位可能放大内存；PR #45369 的 dirty/input 门控只降低空闲 presentation，不消除 surface 基线。
+- 对实施计划的影响：本轮不尝试共享/重写 GPUI surface；实现无进程表、按需 local sampler，独立窗口跳过不显示的监控/图标/本地目录预热，并清理关闭主窗口后残留的 global 强引用。保持已有跨平台帧节奏策略。
+- 未解决问题：当前锁定 GPUI revision 是否适合 upstream renderer buffer patch；真实 Windows/Linux swapchain、GPU texture 与 buffer 增量仍需目标平台实机或 CI profile。
+
 ## 2026-07-15 SFTP 初始目录与终端目录关联
 
 - 时间：2026-07-15 16:10 +0800
