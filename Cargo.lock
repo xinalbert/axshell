@@ -679,6 +679,7 @@ dependencies = [
  "open",
  "portable-pty",
  "rand 0.8.6",
+ "raw-window-handle",
  "reqwest",
  "rfd",
  "russh",

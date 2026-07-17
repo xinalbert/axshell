@@ -32,6 +32,36 @@ fn default_port_for_session_kind(kind: SessionKind) -> u16 {
     }
 }
 
+/// Route detached-window closure through AppKit so its CAMetalLayer drawables
+/// are released before GPUI removes the window from its registry.
+#[cfg(target_os = "macos")]
+fn close_window_through_appkit(window: &Window) -> bool {
+    use objc::{msg_send, runtime::Object, sel, sel_impl};
+    use raw_window_handle::RawWindowHandle;
+
+    let Ok(handle) = raw_window_handle::HasWindowHandle::window_handle(window) else {
+        return false;
+    };
+    let RawWindowHandle::AppKit(handle) = handle.as_raw() else {
+        return false;
+    };
+
+    unsafe {
+        let ns_view = handle.ns_view.as_ptr().cast::<Object>();
+        let ns_window: *mut Object = msg_send![ns_view, window];
+        if ns_window.is_null() {
+            return false;
+        }
+        let _: () = msg_send![ns_window, performClose: std::ptr::null_mut::<Object>()];
+    }
+    true
+}
+
+#[cfg(not(target_os = "macos"))]
+fn close_window_through_appkit(_: &Window) -> bool {
+    false
+}
+
 impl AxShell {
     pub(crate) fn return_workspace_to_main_window(
         &mut self,
@@ -76,7 +106,13 @@ impl AxShell {
             .is_some();
 
         if restored {
-            window.remove_window();
+            // `performClose:` invokes the GPUI close callback, which updates
+            // this window. Defer it until this transfer update has completed.
+            window.defer(cx, |window, _| {
+                if !close_window_through_appkit(window) {
+                    window.remove_window();
+                }
+            });
             return;
         }
 
