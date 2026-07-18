@@ -1,5 +1,15 @@
 # 外部检索记录
 
+## 2026-07-18 Zed terminal overlay 与布局分离
+
+- 时间：2026-07-18 15:40 +0800
+- 检索问题：高频本地输入 overlay 应如何避免使已确认终端 cell 的文本布局反复失效，同时保持 IME 绘制和 cursor 语义正确。
+- 检索原因：用户允许联网检索，且 P9 的 cache-key 收窄必须以 GPUI 上游终端的实际 prepaint / paint 边界验证，不能只凭本地推断移除状态。
+- 来源列表：Zed `terminal_element.rs` main commit `9d7ab044366fb266cecb30b214aea8b7b94c032d` <https://github.com/zed-industries/zed/blob/9d7ab044366fb266cecb30b214aea8b7b94c032d/crates/terminal_view/src/terminal_element.rs>；同文件的 `LayoutState`、`layout_grid`、`Element::prepaint` 和 `Element::paint`；AxShell `src/terminal/element.rs`。
+- 关键结论：Zed 的 terminal prepaint 将已确认 cell 生成 `batched_text_runs` / rects / cursor 等 layout state；paint 在确认 cell 之后才读取 IME marked text、单独 shape 并覆盖绘制。marked text 不参与 cell grid 的 `layout_grid` 输入。AxShell 的 `TerminalComposition` 同样只在 `paint_composition` 消费，因此不应进入 `GridLayoutKey`；selection、style 和每行 source/highlight 身份仍必须保留为 cache 失效依据。
+- 对实施计划的影响：P9 仅从 `GridLayoutKey` 删除 composition 并替换回归测试，不改 `TerminalComposition`、IME、cursor、TerminalElement paint 顺序、backend 或输入协议；这样每个本地字符会重画短暂 overlay，但继续复用已确认可见行 layout。
+- 未解决问题：Zed 当前实现没有采用与 AxShell 相同的 `with_element_state` 行级缓存，因此无法提供直接的 frame-time 对比；真实长 scrollback / 高频输入仍需本机 GUI 采样验证。
+
 ## 2026-07-18 RustSec 依赖公告与 CI 审计边界
 
 - 时间：2026-07-18 12:40 +0800

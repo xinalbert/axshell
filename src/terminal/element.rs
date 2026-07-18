@@ -297,11 +297,11 @@ impl From<ViewportSelection> for SelectionKey {
     }
 }
 
+// IME and local input composition are painted after cached grid rows.
 #[derive(Clone, PartialEq, Eq)]
 struct GridLayoutKey {
     style: GridStyleKey,
     selection: Option<SelectionKey>,
-    composition: Option<TerminalComposition>,
 }
 
 #[derive(Clone, Default)]
@@ -659,7 +659,6 @@ impl TerminalElement {
         let key = GridLayoutKey {
             style: style.clone(),
             selection: self.selection_key(),
-            composition: self.composition.clone(),
         };
         let previous = cache.filter(|cache| cache.key == key);
         let highlights = self.row_highlights();
@@ -1769,11 +1768,10 @@ mod tests {
     }
 
     #[test]
-    fn grid_layout_key_tracks_state_that_invalidates_shaped_rows() {
+    fn grid_layout_key_tracks_only_state_that_changes_shaped_rows() {
         let base = GridLayoutKey {
             style: style_key(8.0),
             selection: None,
-            composition: None,
         };
 
         let selection = GridLayoutKey {
@@ -1786,25 +1784,12 @@ mod tests {
             })),
             ..base.clone()
         };
-        let composition = GridLayoutKey {
-            composition: Some(crate::terminal::TerminalComposition {
-                tab_id: "tab".to_string(),
-                text: "ime".to_string(),
-                selected_range_utf16: Some(0..1),
-                cursor_utf16: None,
-                underline: true,
-                anchor_row: 1,
-                anchor_col: 2,
-            }),
-            ..base.clone()
-        };
         let cell_width = GridLayoutKey {
             style: style_key(9.0),
             ..base.clone()
         };
 
         assert!(base != selection);
-        assert!(base != composition);
         assert!(base != cell_width);
     }
 

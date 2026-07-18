@@ -2485,3 +2485,27 @@
 - 受影响文件：`src/session.rs`，`src/app.rs`，`src/app/terminal.rs`，`src/app/actions/terminal.rs`，`src/app/actions/session.rs`，`src/app/dialogs/ssh.rs`，`src/app/lifecycle/event_loop.rs`，`src/app/workspace.rs`，`src/app/lifecycle/init.rs`，`src/terminal/tab.rs`，`src/terminal/element.rs`，`locales/`，`docs/project-env-audit/`，`docs/project-implementation-tracker/`。
 - 更新后的命令或环境：继续使用 Rust 2024 / Cargo，未新增依赖或外部服务；已执行受影响 Rust 文件的 `rustfmt --edition 2024`、`cargo check`、`cargo test --quiet local_input`、`cargo test --quiet input_feedback`、session/gate 定向测试、完整 `cargo test --quiet`、`git diff --check` 和 tracking docs validator。
 - 验证结果：`cargo check` 通过；定向测试共 8 项通过；完整 `cargo test --quiet` 238 项通过；仅保留既有依赖 `block v0.1.6` future-incompat warning。真实 SSH、100/250/500 ms RTT 注入、IME、全屏程序和三平台 GUI 仍需手工验收。
+
+## 2026-07-18 P9 terminal layout cache 施工前预检
+
+- 时间：2026-07-18 15:40 +0800
+- 变化摘要：运行环境、MSRV、Cargo 依赖图和五平台 CI 均未变；施工范围从 P8 会话级 overlay 切换为 `TerminalElement` 的局部 cache-key 修复。composition 只在 paint 阶段绘制，却被纳入行 layout key，导致本地输入每次更新都重新 shape 可见行。
+- 受影响文件：`src/terminal/element.rs`，`docs/project-env-audit/`，`docs/project-implementation-tracker/`。
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo，`rustc 1.96.1` / `cargo 1.96.1` 满足 `rust-version = 1.88.0`；计划运行 `rustfmt --edition 2024 src/terminal/element.rs`、TerminalElement 定向测试、`cargo check`、`cargo test --quiet`、`git diff --check` 和 tracking docs validator。不新增依赖，不修改 `Cargo.toml` / `Cargo.lock`，不联网或使用多 agent。
+- 验证结果：确认 `layout_row` 不读取 composition，selection/style/highlight/snapshot 仍是 shape cache 的实际依赖；真实 GUI frame-time 仍需实现后手工验收。
+
+## 2026-07-18 P9 上游 terminal 绘制模型核对
+
+- 时间：2026-07-18 15:40 +0800
+- 变化摘要：用户允许联网检索后，核对 Zed main commit `9d7ab044366fb266cecb30b214aea8b7b94c032d` 的 terminal element；其确认 cell 在 prepaint 构建 layout，IME marked text 在 paint 独立 shape / 覆盖绘制。该事实支持 AxShell 从行 layout cache key 移除 composition，而不修改输入或确认 terminal buffer。
+- 受影响文件：`docs/project-implementation-tracker/research.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/changes/2026/07.md`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`。
+- 更新后的命令或环境：Rust/Cargo、依赖、manifest/lock 和 CI 不变；P9 继续使用既定格式化、定向测试、`cargo check`、完整测试和 tracking validator。
+- 验证结果：未发现需要新增依赖、使用 renderer 私有 API 或扩大 P9 范围的上游约束；真实 GUI frame-time 仍待 P9 代码完成后手工确认。
+
+## 2026-07-18 P9 terminal layout cache 完成环境验证
+
+- 时间：2026-07-18 15:48 +0800
+- 变化摘要：`GridLayoutKey` 已排除只在 paint 阶段消费的 composition，因此本地输入 overlay 更新不再令全部可见确认行重新 shape；终端 composition、IME、cursor 和 backend 输入路径保持不变。运行环境、MSRV、Cargo 依赖图、manifest/lock 和五平台 CI 均未改变。
+- 受影响文件：`src/terminal/element.rs`，`docs/project-env-audit/current.md`，`docs/project-env-audit/changes.md`，`docs/project-implementation-tracker/current.md`，`docs/project-implementation-tracker/changes/2026/07.md`，`docs/project-implementation-tracker/project-map.md`。
+- 更新后的命令或环境：继续使用 Rust 2024 / Cargo，未增加依赖或外部服务；验证使用 `rustfmt --edition 2024 src/terminal/element.rs`、`cargo test --quiet grid_layout_key`、`cargo check`、完整 `cargo test --quiet`、`git diff --check` 与 tracking docs validator。
+- 验证结果：`rustfmt`、定向测试（1 passed）、`cargo check`、完整测试（238 passed）、`git diff --check` 和 tracking docs validator 通过，仅保留既有 `block v0.1.6` future-incompat warning。真实 SSH 的长 scrollback、快速输入、IME、selection 与字体变更仍需手工验收。
